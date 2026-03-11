@@ -19,13 +19,21 @@ It also ships one flagship workflow:
 
 ### Option A: x402 Pay-per-call (Recommended for agents)
 
-**No API key needed.** Pay $0.01 USDC per request on Base. Your agent's wallet handles payment automatically via the [x402 protocol](https://www.x402.org/).
+**No API key needed.** Pay $0.01 USDC per request on Base via the [x402 protocol](https://www.x402.org/). The CLI handles the payment handshake automatically using your wallet's private key.
+
+Setup:
+
+```bash
+export WALLET_PRIVATE_KEY="0x..."   # EVM wallet with USDC on Base
+```
+
+Then use the `--x402` flag:
 
 ```bash
 zerion-cli wallet analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --x402
 ```
 
-Or set the environment variable:
+Or enable x402 globally:
 
 ```bash
 export ZERION_X402=true
@@ -95,6 +103,7 @@ Start here:
 
 ```bash
 npm install -g zerion-cli
+export WALLET_PRIVATE_KEY="0x..."
 zerion-cli wallet analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --x402
 ```
 

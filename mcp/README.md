@@ -27,10 +27,11 @@ Two options:
 No API key needed. Pay $0.01 USDC per request on Base via the [x402 protocol](https://www.x402.org/).
 
 ```bash
+export WALLET_PRIVATE_KEY="0x..."   # EVM wallet with USDC on Base
 export ZERION_X402=true
 ```
 
-Your agent's wallet handles payment automatically.
+The CLI signs the payment automatically using `@x402/fetch` and `@x402/evm`. Your wallet must hold USDC on Base.
 
 ### Option 2: API Key
 

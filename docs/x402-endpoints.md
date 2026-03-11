@@ -1,6 +1,16 @@
 # x402 Endpoints
 
-Pay-per-call API endpoints using the [x402 protocol](https://www.x402.org/). No API key required - your agent's wallet handles payment automatically ($0.01 USDC per request on Base).
+Pay-per-call API endpoints using the [x402 protocol](https://www.x402.org/). No API key required ($0.01 USDC per request on Base).
+
+## Prerequisites
+
+Set `WALLET_PRIVATE_KEY` to an EVM private key whose address holds USDC on Base:
+
+```bash
+export WALLET_PRIVATE_KEY="0x..."
+```
+
+The CLI uses [`@x402/fetch`](https://www.npmjs.com/package/@x402/fetch) and [`@x402/evm`](https://www.npmjs.com/package/@x402/evm) to handle the 402 payment handshake automatically.
 
 ## Base URL
 

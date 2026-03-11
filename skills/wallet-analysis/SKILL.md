@@ -58,7 +58,7 @@ zerion-cli wallet pnl <wallet> [--x402]
 
 Two options:
 
-1. **x402 pay-per-call** - No signup, pay $0.01 USDC per request on Base. Use `--x402` flag or `ZERION_X402=true`.
+1. **x402 pay-per-call** - No signup, pay $0.01 USDC per request on Base. Set `WALLET_PRIVATE_KEY` to an EVM private key with USDC on Base, then use the `--x402` flag or `ZERION_X402=true`.
 2. **API key** - Get from [dashboard.zerion.io](https://dashboard.zerion.io). Higher rate limits for production.
 
 ## Output
