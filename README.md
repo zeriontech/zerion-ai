@@ -57,7 +57,23 @@ export ZERION_X402=true
 zerion-cli wallet analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 ```
 
-## 2. Choose your integration path
+## 2. Install skills (Claude Code, Cursor, OpenClaw)
+
+```bash
+npx skills add zeriontech/zerion-ai
+```
+
+This installs 3 skills into your agent:
+
+| Skill | Description |
+|-------|-------------|
+| **wallet-analysis** | Analyze wallets: portfolio, positions, transactions, PnL |
+| **chains** | List supported blockchain networks |
+| **zerion-cli** | CLI setup, authentication, and troubleshooting |
+
+The skills reference `zerion-cli` which runs via `npx zerion-cli` (no global install needed).
+
+## 3. Choose your integration path
 
 ### MCP clients
 
@@ -83,7 +99,7 @@ Start here:
 - [OpenClaw example](./examples/openclaw/README.md)
 - [CLI usage](./cli/README.md)
 
-## 3. Run the first wallet analysis
+## 4. Run the first wallet analysis
 
 ### MCP quickstart
 
@@ -152,9 +168,12 @@ This repo uses the same public wallets across examples:
 
 ## What ships in this repo
 
-- [`mcp/`](./mcp/README.md): hosted Zerion MCP setup plus the wallet-analysis tool catalog this repo relies on
-- [`skills/wallet-analysis/`](./skills/wallet-analysis/README.md): the flagship read-only skill
-- [`cli/`](./cli/README.md): `zerion-cli` JSON-first CLI
+- [`skills/`](./skills/): 3 agent skills installable via `npx skills add zeriontech/zerion-ai`
+  - [`wallet-analysis/`](./skills/wallet-analysis/SKILL.md): portfolio, positions, transactions, and PnL analysis
+  - [`chains/`](./skills/chains/SKILL.md): supported blockchain networks reference
+  - [`zerion-cli/`](./skills/zerion-cli/SKILL.md): CLI setup, auth, and troubleshooting
+- [`mcp/`](./mcp/README.md): hosted Zerion MCP setup plus the tool catalog
+- [`cli/`](./cli/README.md): `zerion-cli` JSON-first CLI (published to npm)
 - [`examples/`](./examples/): Cursor, Claude, OpenAI Agents SDK, raw HTTP, and OpenClaw setups
 
 ## Failure modes to expect
