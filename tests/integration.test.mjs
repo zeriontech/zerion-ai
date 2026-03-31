@@ -155,7 +155,7 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       const result = await new Promise((resolve) => {
         execFile(
           "node",
-          [BIN, "chains", "list"],
+          [BIN, "wallet", "pnl", VITALIK],
           { env: { ...process.env, ZERION_API_KEY: "zk_dev_invalid_key_12345" }, timeout: 15000 },
           (error, stdout, stderr) => {
             resolve({ code: error?.code ?? 0, stderr });
