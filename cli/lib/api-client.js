@@ -6,7 +6,7 @@ import { API_BASE } from "./constants.js";
 import { getApiKey } from "./config.js";
 import { getX402Fetch } from "./x402.js";
 
-function basicAuthHeader(key) {
+export function basicAuthHeader(key) {
   return `Basic ${Buffer.from(`${key}:`).toString("base64")}`;
 }
 

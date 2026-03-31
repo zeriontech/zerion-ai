@@ -29,12 +29,13 @@ register("wallet", "export", walletExport);
 // --- Wallet read features (portfolio, positions, PnL, history, analyze) ---
 
 import walletAnalyze from "./commands/wallet-analyze.js";
+import walletPositions from "./commands/wallet-positions.js";
 import portfolio from "./commands/portfolio.js";
 import pnl from "./commands/pnl.js";
 import history from "./commands/history.js";
 register("wallet", "analyze", walletAnalyze);
 register("wallet", "portfolio", portfolio);
-register("wallet", "positions", portfolio); // alias — positions uses same handler with position filter
+register("wallet", "positions", walletPositions);
 register("wallet", "transactions", history);
 register("wallet", "pnl", pnl);
 registerSingle("portfolio", portfolio);

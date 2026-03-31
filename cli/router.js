@@ -28,6 +28,7 @@ function printUsage() {
       "wallet export": "Export wallet mnemonic (recovery phrase)",
       "wallet analyze <address>": "Full wallet analysis (portfolio, positions, txs, PnL)",
       "wallet portfolio <address>": "View portfolio value and positions",
+      "wallet positions <address>": "View token + DeFi positions (--positions all|simple|defi)",
       "wallet transactions <address>": "View transaction history",
       "wallet pnl <address>": "View profit & loss",
       "search <query>": "Search for tokens",

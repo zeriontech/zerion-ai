@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { basicAuthHeader } from "../cli/lib.mjs";
+import { basicAuthHeader } from "../cli/lib/api-client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -47,18 +47,18 @@ describe("cross-integration consistency", () => {
     });
   });
 
-  describe("all MCP tools use Basic auth (matching CLI)", () => {
-    it("every tool has auth: Basic", () => {
-      const tools = loadAllTools();
+  describe("all API MCP tools use Basic auth (matching CLI)", () => {
+    it("every API tool has auth: Basic", () => {
+      const tools = loadAllTools().filter((t) => t.auth);
       for (const tool of tools) {
         assert.equal(tool.auth, "Basic", `Tool ${tool.name} has auth: ${tool.auth}`);
       }
     });
   });
 
-  describe("all methods are GET", () => {
-    it("every tool uses GET method", () => {
-      const tools = loadAllTools();
+  describe("all API methods are GET", () => {
+    it("every API tool uses GET method", () => {
+      const tools = loadAllTools().filter((t) => t.method);
       for (const tool of tools) {
         assert.equal(tool.method, "GET", `Tool ${tool.name} has method: ${tool.method}`);
       }

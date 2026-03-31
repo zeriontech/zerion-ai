@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseFlags, basicAuthHeader, validateChain, validatePositions, resolvePositionFilter, summarizeAnalyze, CHAIN_IDS, POSITION_FILTERS } from "../cli/lib.mjs";
+import { parseFlags } from "../cli/lib/flags.js";
+import { basicAuthHeader } from "../cli/lib/api-client.js";
+import { validateChain, validatePositions, resolvePositionFilter, CHAIN_IDS, POSITION_FILTERS } from "../cli/lib/validate.js";
+import { summarizeAnalyze } from "../cli/lib/analyze.js";
 
 describe("parseFlags", () => {
   it("returns empty rest and flags for empty argv", () => {
