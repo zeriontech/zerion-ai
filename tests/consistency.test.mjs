@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { basicAuthHeader } from "../cli/lib/api-client.js";
+import { basicAuthHeader } from "../cli/lib/api/client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");

@@ -1,6 +1,6 @@
 ---
 name: wallet-trading
-description: "Trade crypto tokens: swap, bridge, buy, sell across 14 chains. Manage wallets, agent tokens, and security policies."
+description: "Trade crypto tokens: swap, bridge across 14 chains. Manage wallets, agent tokens, and security policies."
 compatibility: "Requires zerion-cli (`npx zerion-cli` or `npm install -g zerion-cli`). Set ZERION_API_KEY. Trading requires OWS wallet setup."
 license: MIT
 allowed-tools: Bash
@@ -39,11 +39,10 @@ Get yours at [dashboard.zerion.io](https://dashboard.zerion.io).
 Use this skill when the user asks about:
 - Swapping or trading tokens
 - Bridging tokens across chains
-- Buying or selling tokens
 - Creating or managing wallets
+- Backing up or syncing wallets
 - Setting up agent tokens for unattended trading
 - Configuring security policies (chain locks, allowlists, expiry)
-- Exporting wallets to the Zerion mobile app
 
 ## Wallet management
 
@@ -98,13 +97,6 @@ zerion-cli bridge ETH arbitrum 0.1 --yes
 
 # Bridge + swap (bridge ETH to Arbitrum, receive USDC)
 zerion-cli bridge ETH arbitrum 0.1 --to-token USDC --yes
-```
-
-### Buy/sell shortcuts
-
-```bash
-zerion-cli buy PEPE 0.01 --yes    # Buy PEPE with 0.01 ETH
-zerion-cli sell PEPE 1000 --yes   # Sell 1000 PEPE for ETH
 ```
 
 ### Search tokens
@@ -180,11 +172,12 @@ zerion-cli analyze vitalik
 zerion-cli watch remove vitalik
 ```
 
-## Export to Zerion app
+## Wallet backup & sync
 
 ```bash
-zerion-cli export --wallet test-bot   # QR code for iOS app (watch-only)
-zerion-cli export --all               # Export all wallets
+zerion-cli wallet backup --wallet test-bot   # Export recovery phrase (mnemonic)
+zerion-cli wallet sync --wallet test-bot     # QR code to sync with Zerion iOS app
+zerion-cli wallet sync --all                 # Sync all wallets
 ```
 
 ## Output modes

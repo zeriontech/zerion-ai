@@ -122,7 +122,10 @@ zerion-cli wallet import --name <name> --key-file <path>  # Import from file (sa
 zerion-cli wallet import --name <name> --mnemonic   # Import from seed phrase
 zerion-cli wallet list                              # List all wallets
 zerion-cli wallet fund                              # Show deposit addresses
-zerion-cli wallet export --wallet <name>            # Export mnemonic for recovery
+zerion-cli wallet backup --wallet <name>            # Export recovery phrase (mnemonic)
+zerion-cli wallet delete <name>                     # Permanently delete a wallet
+zerion-cli wallet sync --wallet <name>              # Sync wallet to Zerion app via QR
+zerion-cli wallet sync --all                        # Sync all wallets to Zerion app
 ```
 
 ### Wallet analysis (read — supports --x402)
@@ -152,10 +155,9 @@ zerion-cli swap <from> <to> <amount> --yes          # Execute
 zerion-cli swap <from> <to> <amount> --to-chain <chain> --yes  # Cross-chain
 zerion-cli bridge <token> <chain> <amount> --yes    # Bridge
 zerion-cli bridge <token> <chain> <amount> --to-token <tok> --yes  # Bridge + swap
-zerion-cli buy <token> <amount> --yes               # Buy with ETH
-zerion-cli sell <token> <amount> --yes              # Sell for ETH
 zerion-cli search <query>                           # Token search
 zerion-cli swap tokens [chain]                      # List swap-available tokens
+zerion-cli chains                                   # List supported chains
 ```
 
 ### Agent tokens
@@ -186,10 +188,8 @@ zerion-cli watch remove <name>                      # Remove
 zerion-cli analyze <name|address>                   # Analyze trading activity
 ```
 
-### Export & config
+### Config
 ```
-zerion-cli export --wallet <name>                   # QR code for Zerion iOS app
-zerion-cli export --all                             # Export all wallets
 zerion-cli config set apiKey <key>                  # Set API key
 zerion-cli config set defaultWallet <name>          # Set default wallet
 zerion-cli config set defaultChain <chain>          # Set default chain

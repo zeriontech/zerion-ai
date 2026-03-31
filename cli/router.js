@@ -3,8 +3,8 @@
  * Pattern: zerion <scope> <action> [args...] [--flags]
  */
 
-import { parseFlags } from "./lib/flags.js";
-import { printError } from "./lib/output.js";
+import { parseFlags } from "./lib/util/flags.js";
+import { printError } from "./lib/util/output.js";
 
 const commands = new Map();
 
@@ -27,8 +27,10 @@ function printUsage() {
       "wallet import --name <name> --mnemonic": "Import from seed phrase",
       "wallet list": "List all wallets",
       "wallet fund": "Show deposit addresses for funding",
-      "wallet export --wallet <name>": "Export wallet mnemonic (recovery phrase)",
+      "wallet backup --wallet <name>": "Export recovery phrase (mnemonic backup)",
       "wallet delete <name>": "Permanently delete a wallet (requires passphrase)",
+      "wallet sync --wallet <name>": "Sync wallet to Zerion app via QR code",
+      "wallet sync --all": "Sync all wallets to Zerion app",
     },
     wallet_analysis: {
       "wallet analyze <address>": "Full analysis (portfolio, positions, txs, PnL in parallel)",
@@ -43,8 +45,6 @@ function printUsage() {
       "swap tokens [chain]": "List tokens available for swap",
       "bridge <token> <chain> <amount>": "Bridge tokens cross-chain",
       "bridge <token> <chain> <amount> --to-token <tok>": "Bridge + swap on destination",
-      "buy <token> <amount>": "Buy token with ETH",
-      "sell <token> <amount>": "Sell token for ETH",
       "search <query>": "Search for tokens by name or symbol",
     },
     agent_tokens: {
@@ -66,8 +66,6 @@ function printUsage() {
       "analyze <name|address>": "Analyze wallet trading activity",
     },
     other: {
-      "export --wallet <name>": "Export wallet to Zerion app via QR code",
-      "export --all": "Export all wallets",
       "chains": "List supported chains",
       "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage)",
       "config list": "Show current configuration",

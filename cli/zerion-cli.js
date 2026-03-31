@@ -6,7 +6,7 @@
  */
 
 import { register, registerSingle, dispatch } from "./router.js";
-import { printError, setPrettyMode } from "./lib/output.js";
+import { printError, setPrettyMode } from "./lib/util/output.js";
 
 // Enable --pretty if flag present or auto-detect TTY
 if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.includes("--json"))) {
@@ -15,86 +15,74 @@ if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.
 
 // --- Wallet management (lazy-loaded: OWS, Solana, qrcode) ---
 
-import walletCreate from "./commands/wallet-create.js";
-import walletImport from "./commands/wallet-import.js";
-import walletList from "./commands/wallet-list.js";
-import walletFund from "./commands/wallet-fund.js";
-import walletExport from "./commands/wallet-export.js";
-import walletDelete from "./commands/wallet-delete.js";
+import walletCreate from "./commands/wallet/create.js";
+import walletImport from "./commands/wallet/import.js";
+import walletList from "./commands/wallet/list.js";
+import walletFund from "./commands/wallet/fund.js";
+import walletBackup from "./commands/wallet/backup.js";
+import walletDelete from "./commands/wallet/delete.js";
+import walletSync from "./commands/wallet/sync.js";
+import watch from "./commands/wallet/watch.js";
 register("wallet", "create", walletCreate);
 register("wallet", "import", walletImport);
 register("wallet", "list", walletList);
 register("wallet", "fund", walletFund);
-register("wallet", "export", walletExport);
+register("wallet", "backup", walletBackup);
 register("wallet", "delete", walletDelete);
+register("wallet", "sync", walletSync);
+registerSingle("watch", watch);
 
-// --- Wallet read features (portfolio, positions, PnL, history, analyze) ---
+// --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---
 
-import walletAnalyze from "./commands/wallet-analyze.js";
-import walletPositions from "./commands/wallet-positions.js";
-import portfolio from "./commands/portfolio.js";
-import pnl from "./commands/pnl.js";
-import history from "./commands/history.js";
-register("wallet", "analyze", walletAnalyze);
+import walletOverview from "./commands/analytics/overview.js";
+import positions from "./commands/analytics/positions.js";
+import portfolio from "./commands/analytics/portfolio.js";
+import pnl from "./commands/analytics/pnl.js";
+import history from "./commands/analytics/history.js";
+register("wallet", "analyze", walletOverview);
 register("wallet", "portfolio", portfolio);
-register("wallet", "positions", walletPositions);
+register("wallet", "positions", positions);
 register("wallet", "transactions", history);
 register("wallet", "pnl", pnl);
 registerSingle("portfolio", portfolio);
+registerSingle("positions", positions);
 registerSingle("pnl", pnl);
 registerSingle("history", history);
 
-// --- Token search ---
+// --- Trading (swap, bridge, search, chains) ---
 
-import search from "./commands/search.js";
-registerSingle("search", search);
-
-// --- Chains ---
-
-import chainsCmd from "./commands/chains.js";
-registerSingle("chains", chainsCmd);
-register("chains", "list", chainsCmd);
-
-// --- Trading (swap/bridge/buy/sell) ---
-
-import swap from "./commands/swap.js";
-import bridge from "./commands/bridge.js";
-import buy from "./commands/buy.js";
-import sell from "./commands/sell.js";
-import swapTokens from "./commands/swap-tokens.js";
+import swap from "./commands/trading/swap.js";
+import bridge from "./commands/trading/bridge.js";
+import swapTokens from "./commands/trading/list-tokens.js";
+import search from "./commands/trading/search.js";
+import chainsCmd from "./commands/trading/chains.js";
 registerSingle("swap", swap);
 register("swap", "tokens", swapTokens);
 registerSingle("bridge", bridge);
-registerSingle("buy", buy);
-registerSingle("sell", sell);
+registerSingle("search", search);
+registerSingle("chains", chainsCmd);
+register("chains", "list", chainsCmd);
 
-// --- Export to Zerion app ---
+// --- Watchlist analysis ---
 
-import exportCmd from "./commands/export.js";
-registerSingle("export", exportCmd);
-
-// --- Watchlist + analysis ---
-
-import watch from "./commands/watch.js";
-import analyze from "./commands/analyze.js";
-registerSingle("watch", watch);
+import analyze from "./commands/analytics/activity.js";
 registerSingle("analyze", analyze);
 
 // --- Agent tokens ---
 
-import agentCreateToken from "./commands/agent-create-token.js";
-import agentListTokens from "./commands/agent-list-tokens.js";
-import agentRevokeToken from "./commands/agent-revoke-token.js";
+import agentCreateToken from "./commands/agent/create-token.js";
+import agentListTokens from "./commands/agent/list-tokens.js";
+import agentRevokeToken from "./commands/agent/revoke-token.js";
 register("agent", "create-token", agentCreateToken);
 register("agent", "list-tokens", agentListTokens);
 register("agent", "revoke-token", agentRevokeToken);
 
 // --- Agent policies ---
 
-import agentCreatePolicy from "./commands/agent-create-policy.js";
-import agentListPolicies from "./commands/agent-list-policies.js";
-import agentShowPolicy from "./commands/agent-show-policy.js";
-import agentDeletePolicy from "./commands/agent-delete-policy.js";
+import agentCreatePolicy from "./commands/agent/create-policy.js";
+import agentListPolicies from "./commands/agent/list-policies.js";
+import agentShowPolicy from "./commands/agent/show-policy.js";
+import agentDeletePolicy from "./commands/agent/delete-policy.js";
 register("agent", "create-policy", agentCreatePolicy);
 register("agent", "list-policies", agentListPolicies);
 register("agent", "show-policy", agentShowPolicy);
@@ -102,7 +90,7 @@ register("agent", "delete-policy", agentDeletePolicy);
 
 // --- Config ---
 
-import configCmd from "./commands/config-cmd.js";
+import configCmd from "./commands/config.js";
 registerSingle("config", configCmd);
 
 // --- Dispatch ---

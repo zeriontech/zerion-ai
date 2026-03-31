@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseFlags } from "../cli/lib/flags.js";
+import { parseFlags } from "../cli/lib/util/flags.js";
 
 describe("parseFlags (wallet-cli)", () => {
   it("parses --key value (space-separated)", () => {

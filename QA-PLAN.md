@@ -43,20 +43,20 @@ This plan covers all wallet management, agent token/policy lifecycle, trading wi
 
 ---
 
-## 3. Wallet Export — Full Security Gate
+## 3. Wallet Backup — Full Security Gate
 
 | # | Test Case | Command / Steps | Expected Result |
 |---|-----------|----------------|-----------------|
-| 3.1 | Export with correct passphrase | `zerion-cli wallet export qa-1` | Shows warning, prompts masked passphrase, displays mnemonic on stderr |
+| 3.1 | Backup with correct passphrase | `zerion-cli wallet backup qa-1` | Shows warning, prompts masked passphrase, displays mnemonic on stderr |
 | 3.2 | Wrong passphrase rejected | Enter wrong passphrase at prompt | Error: `Failed to export wallet` |
-| 3.3 | Mnemonic only on stderr | `zerion-cli wallet export qa-1 2>/dev/null` | Nothing visible (mnemonic suppressed with stderr) |
-| 3.4 | Mnemonic never on stdout | `zerion-cli wallet export qa-1 > out.txt` (enter passphrase) | `out.txt` is empty — mnemonic only on stderr |
-| 3.5 | Agent mode blocked | `ZERION_AGENT_TOKEN=x zerion-cli wallet export qa-1` | Error: `wallet export is not available in agent mode` |
-| 3.6 | Non-TTY blocked | `echo "pass" \| zerion-cli wallet export qa-1` | Error: `wallet export requires an interactive terminal` |
-| 3.7 | No wallet specified | `zerion-cli wallet export` (no default set) | Error: `No wallet specified` |
-| 3.8 | Unknown wallet name | `zerion-cli wallet export nonexistent` | Error: `Failed to export wallet` |
-| 3.9 | `--passphrase` flag ignored | `zerion-cli wallet export qa-1 --passphrase test` | Still prompts interactively |
-| 3.10 | Full pipe blocked | `zerion-cli wallet export qa-1 > out.txt 2>&1` | Fails at TTY check — no output at all |
+| 3.3 | Mnemonic only on stderr | `zerion-cli wallet backup qa-1 2>/dev/null` | Nothing visible (mnemonic suppressed with stderr) |
+| 3.4 | Mnemonic never on stdout | `zerion-cli wallet backup qa-1 > out.txt` (enter passphrase) | `out.txt` is empty — mnemonic only on stderr |
+| 3.5 | Agent mode blocked | `ZERION_AGENT_TOKEN=x zerion-cli wallet backup qa-1` | Error: `wallet export is not available in agent mode` |
+| 3.6 | Non-TTY blocked | `echo "pass" \| zerion-cli wallet backup qa-1` | Error: `wallet export requires an interactive terminal` |
+| 3.7 | No wallet specified | `zerion-cli wallet backup` (no default set) | Error: `No wallet specified` |
+| 3.8 | Unknown wallet name | `zerion-cli wallet backup nonexistent` | Error: `Failed to export wallet` |
+| 3.9 | `--passphrase` flag ignored | `zerion-cli wallet backup qa-1 --passphrase test` | Still prompts interactively |
+| 3.10 | Full pipe blocked | `zerion-cli wallet backup qa-1 > out.txt 2>&1` | Fails at TTY check — no output at all |
 
 ---
 
@@ -120,9 +120,7 @@ This plan covers all wallet management, agent token/policy lifecycle, trading wi
 |---|-----------|----------------|-----------------|
 | 7.1 | Swap quote (no execute) | `zerion-cli swap ETH USDC 0.01 --chain base` | Shows quote, no execution |
 | 7.2 | Swap with agent token | `ZERION_AGENT_TOKEN=<token> zerion-cli swap ETH USDC 0.01 --chain base --yes` | Signs and broadcasts via agent token |
-| 7.3 | Buy with agent token | `ZERION_AGENT_TOKEN=<token> zerion-cli buy USDC 0.01 --chain base --yes` | Executes buy |
-| 7.4 | Sell with agent token | `ZERION_AGENT_TOKEN=<token> zerion-cli sell USDC 10 --chain base --yes` | Executes sell |
-| 7.5 | Bridge with agent token | `ZERION_AGENT_TOKEN=<token> zerion-cli bridge ETH base 0.01 --yes` | Executes bridge |
+| 7.3 | Bridge with agent token | `ZERION_AGENT_TOKEN=<token> zerion-cli bridge ETH base 0.01 --yes` | Executes bridge |
 | 7.6 | Policy blocks wrong chain | Token bound to base-only policy, swap on ethereum | Blocked by policy |
 | 7.7 | Expired token rejected | Use token past expiry | Error: token expired/invalid |
 | 7.8 | Revoked token rejected | Use a revoked token | Error: invalid token |
@@ -155,8 +153,8 @@ This plan covers all wallet management, agent token/policy lifecycle, trading wi
 |   |                  | 4. `ZERION_AGENT_TOKEN=<token> zerion-cli swap ETH USDC 0.01 --chain base --yes` | Trade executes |
 | 9.2 | Passphrase roundtrip | Create wallet with passphrase "MyPass!23", then export with same | Mnemonic displayed |
 | 9.3 | Wrong passphrase on export | Create with "X", export with "Y" | Export fails |
-| 9.4 | Agent can't export | Set `ZERION_AGENT_TOKEN`, attempt `wallet export` | Blocked with `agent_blocked` |
-| 9.5 | Script can't extract seed | `zerion-cli wallet export qa-1 > captured.txt 2>&1` | Fails at TTY check — nothing captured |
+| 9.4 | Agent can't backup | Set `ZERION_AGENT_TOKEN`, attempt `wallet backup` | Blocked with `agent_blocked` |
+| 9.5 | Script can't extract seed | `zerion-cli wallet backup qa-1 > captured.txt 2>&1` | Fails at TTY check — nothing captured |
 | 9.6 | Wallet list pagination | Create 25 wallets, list with default, then with offset | First call: 20 wallets + `hasMore`, second: remaining 5 |
 | 9.7 | Wallet list search | Create wallets "bot-1", "bot-2", "personal" | `--search bot` returns only bot-1 and bot-2 |
 | 9.8 | Token revoke stops trading | Create token, trade (success), revoke, trade again | Second trade fails |
@@ -171,7 +169,7 @@ These tests verify the security hardening is not accidentally removed in future 
 | # | Test Case | What to verify |
 |---|-----------|---------------|
 | 10.1 | No passphrase in process args | Run `ps aux \| grep zerion` during wallet create | Passphrase never appears in process list |
-| 10.2 | No mnemonic on stdout | `zerion-cli wallet export qa-1 \| cat` | Pipe fails (TTY check) — cat receives nothing |
+| 10.2 | No mnemonic on stdout | `zerion-cli wallet backup qa-1 \| cat` | Pipe fails (TTY check) — cat receives nothing |
 | 10.3 | Config file permissions | `ls -la ~/.zerion-cli/config.json` | Permissions are `600` (owner read/write only) |
 | 10.4 | API key masked in config list | `zerion-cli config list` | API key shows first 10 chars + "..." |
 | 10.5 | Agent token shown once only | Create token, then `agent list-tokens` | List shows id/name but NOT the token secret |

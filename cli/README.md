@@ -27,12 +27,28 @@ The CLI converts the raw key into the HTTP Basic Auth header described in Zerion
 ## Commands
 
 ```bash
+# Wallet management
+zerion-cli wallet create --name <name>
+zerion-cli wallet import --name <name> --key
+zerion-cli wallet list
+zerion-cli wallet fund
+zerion-cli wallet backup --wallet <name>
+zerion-cli wallet delete <name>
+zerion-cli wallet sync --wallet <name>
+
+# Analytics
 zerion-cli wallet analyze <address> [--positions all|simple|defi]
 zerion-cli wallet portfolio <address>
 zerion-cli wallet positions <address> [--chain ethereum] [--positions all|simple|defi]
 zerion-cli wallet transactions <address> [--limit 25] [--chain ethereum]
 zerion-cli wallet pnl <address>
-zerion-cli chains list
+
+# Trading
+zerion-cli swap <from> <to> <amount> [--yes]
+zerion-cli bridge <token> <chain> <amount> [--yes]
+zerion-cli search <query>
+zerion-cli swap tokens [chain]
+zerion-cli chains
 ```
 
 All commands print JSON to stdout.
