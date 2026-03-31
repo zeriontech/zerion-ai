@@ -123,23 +123,11 @@ export function revokeAgentToken(idOrName) {
 
 /**
  * Get the agent token from environment (for unattended agent signing).
- * Validates the token is still active before returning it.
- * Falls back to null if not set or revoked.
+ * Returns the token string or null if not set.
+ * OWS validates the token at signing time — if revoked, signing will fail.
  */
 export function getAgentToken() {
-  const token = process.env.ZERION_AGENT_TOKEN || null;
-  if (!token) return null;
-
-  // Validate the token is still active in OWS
-  const activeTokens = ows.listApiKeys();
-  const isValid = activeTokens.some((k) => k.token === token || k.id === token);
-  if (!isValid) {
-    throw new Error(
-      "ZERION_AGENT_TOKEN is set but the token has been revoked or is invalid. " +
-      "Unset it (unset ZERION_AGENT_TOKEN) or create a new one (zerion-cli agent create-token)."
-    );
-  }
-  return token;
+  return process.env.ZERION_AGENT_TOKEN || null;
 }
 
 /**
