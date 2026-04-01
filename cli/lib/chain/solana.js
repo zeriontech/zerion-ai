@@ -4,8 +4,6 @@
 
 import {
   Connection,
-  Transaction,
-  VersionedTransaction,
   sendAndConfirmRawTransaction,
 } from "@solana/web3.js";
 import { getSolanaRpcUrl } from "./registry.js";
@@ -40,9 +38,6 @@ export async function signAndBroadcastSolana(swapTxData, walletName, passphrase)
   let signedTxBytes;
 
   try {
-    // Try as base64 (some APIs return base64)
-    const txBase64 = txBuffer.toString("base64");
-
     // Sign with OWS — pass the raw tx bytes as hex for OWS to sign
     const signResult = ows.signSolanaTransaction(walletName, txData, passphrase);
 

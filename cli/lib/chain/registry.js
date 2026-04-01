@@ -77,11 +77,3 @@ export function getViemChain(zerionId) {
   return chain ? chain.viemChain : null;
 }
 
-export function validateChain(zerionId) {
-  if (CHAIN_MAP.has(zerionId)) return null;
-  return {
-    code: "chain_not_supported",
-    message: `Chain "${zerionId}" is not supported`,
-    supportedChains: SUPPORTED_CHAINS,
-  };
-}

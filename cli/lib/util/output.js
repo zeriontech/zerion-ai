@@ -12,11 +12,6 @@ export function print(value, prettyFormatter) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-export function printQuiet(value) {
-  const output = typeof value === "string" ? value : JSON.stringify(value);
-  process.stdout.write(`${output}\n`);
-}
-
 export function printError(code, message, details = {}) {
   process.stderr.write(
     `${JSON.stringify({ error: { code, message, ...details } }, null, 2)}\n`
