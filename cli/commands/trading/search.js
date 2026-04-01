@@ -7,7 +7,7 @@ export default async function search(args, flags) {
 
   if (!query) {
     printError("missing_query", "Provide a search query", {
-      suggestion: "zerion-cli search ethereum, zerion search USDC, zerion search 0xA0b8...",
+      suggestion: "zerion-cli search ethereum, zerion-cli search USDC, zerion-cli search 0xA0b8...",
     });
     process.exit(1);
   }
