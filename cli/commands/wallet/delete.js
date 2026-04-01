@@ -24,7 +24,7 @@ export default async function walletDelete(args, flags) {
 
   if (!walletName) {
     printError("no_wallet", "No wallet specified", {
-      suggestion: "Usage: zerion wallet delete <name>",
+      suggestion: "Usage: zerion-cli wallet delete <name>",
     });
     process.exit(1);
   }
@@ -35,7 +35,7 @@ export default async function walletDelete(args, flags) {
     wallet = ows.getWallet(walletName);
   } catch {
     printError("not_found", `Wallet "${walletName}" not found`, {
-      suggestion: "List wallets: zerion wallet list",
+      suggestion: "List wallets: zerion-cli wallet list",
     });
     process.exit(1);
   }

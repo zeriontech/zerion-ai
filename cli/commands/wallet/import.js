@@ -17,7 +17,7 @@ async function resolveSecretInput(flags, flagName, fileFlagName, prompt) {
   if (typeof flags[flagName] === "string" && flags[flagName].length > 0) {
     process.stderr.write(
       `⚠️  ${flagName} passed via CLI flag — visible in shell history and process list.\n` +
-      `   Prefer: zerion wallet import --${flagName} (interactive) or --${fileFlagName} <path>\n\n`
+      `   Prefer: zerion-cli wallet import --${flagName} (interactive) or --${fileFlagName} <path>\n\n`
     );
     return flags[flagName];
   }
@@ -34,7 +34,7 @@ export default async function walletImport(args, flags) {
     printError(
       "missing_input",
       "Provide --key, --key-file, --mnemonic, or --mnemonic-file",
-      { suggestion: "zerion-cli wallet import --key (prompts securely)\nzerion wallet import --key-file ./key.txt\nzerion wallet import --mnemonic (prompts securely)" }
+      { suggestion: "zerion-cli wallet import --key (prompts securely)\nzerion-cli wallet import --key-file ./key.txt\nzerion-cli wallet import --mnemonic (prompts securely)" }
     );
     process.exit(1);
   }

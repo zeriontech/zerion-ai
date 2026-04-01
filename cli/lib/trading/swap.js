@@ -52,10 +52,10 @@ export async function getSwapQuote({
     const err = new Error(
       `No swap route found for ${amount} ${fromResolved.symbol} → ${toResolved.symbol} on ${fromChain}. ` +
       `Minimum swap is ~$1. ` +
-      `Check your balance and chain with: zerion portfolio`
+      `Check your balance and chain with: zerion-cli portfolio`
     );
     err.code = "no_route";
-    err.suggestion = `Try: zerion swap ETH USDC 0.001 --chain ${fromChain}`;
+    err.suggestion = `Try: zerion-cli swap ETH USDC 0.001 --chain ${fromChain}`;
     throw err;
   }
 

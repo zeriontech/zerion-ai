@@ -7,7 +7,7 @@ export default async function walletBackup(args, flags) {
   // Block backup when running as an agent — agents should never access the mnemonic
   if (process.env.ZERION_AGENT_TOKEN) {
     printError("agent_blocked", "wallet backup is not available in agent mode", {
-      suggestion: "Agents use scoped tokens, not raw keys. See: zerion agent create-token",
+      suggestion: "Agents use scoped tokens, not raw keys. See: zerion-cli agent create-token",
     });
     process.exit(1);
   }
@@ -24,7 +24,7 @@ export default async function walletBackup(args, flags) {
 
   if (!walletName) {
     printError("no_wallet", "No wallet specified", {
-      suggestion: "Use --wallet <name> or set default: zerion config set defaultWallet <name>",
+      suggestion: "Use --wallet <name> or set default: zerion-cli config set defaultWallet <name>",
     });
     process.exit(1);
   }
@@ -50,7 +50,7 @@ export default async function walletBackup(args, flags) {
     process.stderr.write("  ⚠️  Write this down and store it offline. It will not be shown again.\n\n");
   } catch (err) {
     printError("ows_error", `Failed to backup wallet: ${err.message}`, {
-      suggestion: "Check wallet name and passphrase. List wallets: zerion wallet list",
+      suggestion: "Check wallet name and passphrase. List wallets: zerion-cli wallet list",
     });
     process.exit(1);
   }

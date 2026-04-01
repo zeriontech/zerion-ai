@@ -48,7 +48,7 @@ export async function resolveToken(query, chainId) {
   if (results.length === 0) {
     const err = new Error(`Could not resolve token "${query}"`);
     err.code = "invalid_token";
-    err.suggestion = `Try: zerion search ${query}`;
+    err.suggestion = `Try: zerion-cli search ${query}`;
     throw err;
   }
 

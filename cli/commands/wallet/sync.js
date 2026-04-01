@@ -10,7 +10,7 @@ export default async function walletSync(args, flags) {
       wallets = ows.listWallets();
       if (wallets.length === 0) {
         printError("no_wallets", "No wallets found", {
-          suggestion: "Create one first: zerion wallet create",
+          suggestion: "Create one first: zerion-cli wallet create",
         });
         process.exit(1);
       }
@@ -18,7 +18,7 @@ export default async function walletSync(args, flags) {
       const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");
       if (!walletName) {
         printError("no_wallet", "No wallet specified", {
-          suggestion: "Use --wallet <name>, --all, or set default: zerion config set defaultWallet <name>",
+          suggestion: "Use --wallet <name>, --all, or set default: zerion-cli config set defaultWallet <name>",
         });
         process.exit(1);
       }

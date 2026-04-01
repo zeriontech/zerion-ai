@@ -7,7 +7,7 @@ export default async function walletFund(args, flags) {
 
   if (!walletName) {
     printError("no_wallet", "No wallet specified", {
-      suggestion: "Use --wallet <name> or set default: zerion config set defaultWallet <name>",
+      suggestion: "Use --wallet <name> or set default: zerion-cli config set defaultWallet <name>",
     });
     process.exit(1);
   }
@@ -25,7 +25,7 @@ export default async function walletFund(args, flags) {
     });
   } catch (err) {
     printError("wallet_not_found", `Wallet "${walletName}" not found`, {
-      suggestion: "List wallets with: zerion wallet list",
+      suggestion: "List wallets with: zerion-cli wallet list",
     });
     process.exit(1);
   }

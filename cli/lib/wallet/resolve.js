@@ -46,7 +46,7 @@ export function resolveWallet(flags, args = []) {
   if (!walletName) {
     printError("no_wallet", "No wallet specified", {
       suggestion:
-        "Use --wallet <name>, --address <addr/ens>, or set default: zerion config set defaultWallet <name>",
+        "Use --wallet <name>, --address <addr/ens>, or set default: zerion-cli config set defaultWallet <name>",
     });
     process.exit(1);
   }
@@ -68,7 +68,7 @@ export function resolveWallet(flags, args = []) {
     printError(code, code === "wallet_not_found"
       ? `Wallet "${walletName}" not found`
       : `Wallet error: ${err.message}`, {
-      suggestion: "List wallets with: zerion wallet list",
+      suggestion: "List wallets with: zerion-cli wallet list",
     });
     process.exit(1);
   }

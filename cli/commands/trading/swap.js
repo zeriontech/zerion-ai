@@ -10,7 +10,7 @@ export default async function swap(args, flags) {
   const [fromToken, toToken, amount] = args;
 
   if (!fromToken || !toToken) {
-    printError("missing_args", "Usage: zerion swap <from> <to> [amount]", {
+    printError("missing_args", "Usage: zerion-cli swap <from> <to> [amount]", {
       example: "zerion-cli swap ETH USDC 0.1 --chain base",
     });
     process.exit(1);
@@ -18,7 +18,7 @@ export default async function swap(args, flags) {
 
   if (!amount) {
     printError("missing_amount", "Specify an amount to swap", {
-      example: `zerion swap ${fromToken} ${toToken} 0.1`,
+      example: `zerion-cli swap ${fromToken} ${toToken} 0.1`,
     });
     process.exit(1);
   }
@@ -42,7 +42,7 @@ export default async function swap(args, flags) {
     // 2. Check balance
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance for this swap`, {
-        suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,
+        suggestion: `Fund your wallet: zerion-cli wallet fund --wallet ${walletName}`,
       });
       process.exit(1);
     }
@@ -71,7 +71,7 @@ export default async function swap(args, flags) {
       const quoteData = {
         ...quoteSummary,
         action: "Confirm with --yes to execute",
-        command: `zerion swap ${fromToken} ${toToken} ${amount} ${chainFlags} --wallet ${walletName} --yes`,
+        command: `zerion-cli swap ${fromToken} ${toToken} ${amount} ${chainFlags} --wallet ${walletName} --yes`,
       };
       print(quoteData, formatSwapQuote);
       return;

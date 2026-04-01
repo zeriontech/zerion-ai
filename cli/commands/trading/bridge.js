@@ -9,7 +9,7 @@ export default async function bridge(args, flags) {
   const [token, targetChain, amount] = args;
 
   if (!token || !targetChain) {
-    printError("missing_args", "Usage: zerion bridge <token> <target-chain> [amount] [--to-token <token>]", {
+    printError("missing_args", "Usage: zerion-cli bridge <token> <target-chain> [amount] [--to-token <token>]", {
       example: "zerion-cli bridge USDC arbitrum 100 --from-chain ethereum",
       crossSwap: "zerion-cli bridge ETH arbitrum 0.01 --from-chain base --to-token USDC",
     });
@@ -18,7 +18,7 @@ export default async function bridge(args, flags) {
 
   if (!amount) {
     printError("missing_amount", "Specify an amount to bridge", {
-      example: `zerion bridge ${token} ${targetChain} 100`,
+      example: `zerion-cli bridge ${token} ${targetChain} 100`,
     });
     process.exit(1);
   }
@@ -41,7 +41,7 @@ export default async function bridge(args, flags) {
 
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance`, {
-        suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,
+        suggestion: `Fund your wallet: zerion-cli wallet fund --wallet ${walletName}`,
       });
       process.exit(1);
     }
@@ -65,7 +65,7 @@ export default async function bridge(args, flags) {
       print({
         ...quoteSummary,
         action: "Confirm with --yes to execute",
-        command: `zerion bridge ${token} ${targetChain} ${amount} --from-chain ${fromChain} --wallet ${walletName} --yes`,
+        command: `zerion-cli bridge ${token} ${targetChain} ${amount} --from-chain ${fromChain} --wallet ${walletName} --yes`,
       });
       return;
     }

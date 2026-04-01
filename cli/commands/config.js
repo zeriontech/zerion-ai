@@ -32,7 +32,7 @@ export default async function configCmd(args, flags) {
 
     case "set": {
       if (!key || !value) {
-        printError("missing_input", "Usage: zerion config set <key> <value>", {
+        printError("missing_input", "Usage: zerion-cli config set <key> <value>", {
           validKeys: VALID_KEYS,
         });
         process.exit(1);
@@ -51,7 +51,7 @@ export default async function configCmd(args, flags) {
     }
 
     default:
-      printError("invalid_action", "Usage: zerion config <list|get|set>", {
+      printError("invalid_action", "Usage: zerion-cli config <list|get|set>", {
         suggestion: "zerion-cli config list",
       });
       process.exit(1);

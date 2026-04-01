@@ -31,7 +31,7 @@ export default async function agentCreatePolicy(args, flags) {
   if (!name) {
     printError("missing_args", "Policy name required", {
       example:
-        'zerion agent create-policy --name "base-only" --chains base,arbitrum --expires 24h',
+        'zerion-cli agent create-policy --name "base-only" --chains base,arbitrum --expires 24h',
     });
     process.exit(1);
   }
@@ -109,7 +109,7 @@ export default async function agentCreatePolicy(args, flags) {
           : null,
       },
       created: true,
-      usage: `Attach to a token: zerion agent create-token --name <bot> --wallet <wallet> --policy ${policy.id}`,
+      usage: `Attach to a token: zerion-cli agent create-token --name <bot> --wallet <wallet> --policy ${policy.id}`,
     });
   } catch (err) {
     printError("ows_error", `Failed to create policy: ${err.message}`);

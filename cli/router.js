@@ -1,6 +1,6 @@
 /**
  * Command router — maps "scope action" to handler functions.
- * Pattern: zerion <scope> <action> [args...] [--flags]
+ * Pattern: zerion-cli <scope> <action> [args...] [--flags]
  */
 
 import { parseFlags } from "./lib/util/flags.js";
@@ -12,7 +12,7 @@ export function register(scope, action, handler) {
   commands.set(`${scope} ${action}`, handler);
 }
 
-// Also support single-word commands (e.g., "zerion search")
+// Also support single-word commands (e.g., "zerion-cli search")
 export function registerSingle(name, handler) {
   commands.set(name, handler);
 }
