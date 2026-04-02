@@ -8,6 +8,7 @@ import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { validateChain, validatePositions, resolvePositionFilter } from "../../lib/util/validate.js";
 import { isX402Enabled } from "../../lib/api/x402.js";
+import { formatPositions } from "../../lib/util/format.js";
 
 export default async function walletPositions(args, flags) {
   const useX402 = flags.x402 === true || isX402Enabled();
@@ -41,6 +42,8 @@ export default async function walletPositions(args, flags) {
         quantity: p.attributes.quantity?.float ?? null,
         value: p.attributes.value ?? 0,
         price: p.attributes.price ?? null,
+        change_absolute_1d: p.attributes.changes?.absolute_1d ?? null,
+        change_percent_1d: p.attributes.changes?.percent_1d ?? null,
       }))
       .filter((p) => p.value > 0)
       .sort((a, b) => b.value - a.value);
@@ -50,7 +53,7 @@ export default async function walletPositions(args, flags) {
       positions,
       count: positions.length,
       filter: flags.positions || "all",
-    });
+    }, formatPositions);
   } catch (err) {
     printError(err.code || "positions_error", err.message);
     process.exit(1);

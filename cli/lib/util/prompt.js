@@ -3,6 +3,8 @@
  */
 
 import { createInterface } from "node:readline";
+import { readFileSync, lstatSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
 
 export function readSecret(prompt, { mask = false } = {}) {
   return new Promise((resolve) => {
@@ -56,11 +58,48 @@ export function readSecret(prompt, { mask = false } = {}) {
 
 /**
  * Prompt for a passphrase with optional confirmation (enter twice).
- * Refuses to proceed if stdin is not a TTY (prevents silent scripted bypass).
+ * Refuses to proceed if stdin is not a TTY (prevents silent scripted bypass)
+ * — unless a passphrase file is provided for agent/script workflows.
  */
-export async function readPassphrase({ confirm = false } = {}) {
+export async function readPassphrase({ confirm = false, passphraseFile = null } = {}) {
+  // File-based passphrase for agent/script workflows (no TTY needed)
+  if (passphraseFile) {
+    const filePath = resolve(passphraseFile);
+
+    // Verify it exists and is a regular file (not a symlink, directory, device)
+    let lstat;
+    try {
+      lstat = lstatSync(filePath);
+    } catch (err) {
+      if (err.code === "ENOENT") throw new Error(`Passphrase file not found: ${filePath}`);
+      if (err.code === "EACCES") throw new Error(`Permission denied reading passphrase file: ${filePath}`);
+      throw new Error(`Cannot access passphrase file ${filePath}: ${err.message}`);
+    }
+    if (lstat.isSymbolicLink()) {
+      throw new Error(`Refusing to follow symlink for passphrase file: ${filePath}`);
+    }
+    if (!lstat.isFile()) {
+      throw new Error(`Passphrase path is not a regular file: ${filePath}`);
+    }
+
+    // Reject sensitive system paths (check after resolving to catch traversal)
+    const realPath = realpathSync(filePath);
+    if (/^\/(etc|proc|sys|dev)\//.test(realPath)) {
+      throw new Error(`Refusing to read system path as passphrase file: ${realPath}`);
+    }
+
+    const passphrase = readFileSync(filePath, "utf-8").trim();
+    if (!passphrase) {
+      throw new Error(`Passphrase file is empty: ${filePath}`);
+    }
+    return passphrase;
+  }
+
   if (!process.stdin.isTTY) {
-    throw new Error("Passphrase must be entered interactively (TTY required)");
+    throw new Error(
+      "Passphrase must be entered in an interactive terminal.\n" +
+      "For agent/script usage, pass --passphrase-file <path> to read from a file."
+    );
   }
 
   while (true) {
@@ -80,6 +119,21 @@ export async function readPassphrase({ confirm = false } = {}) {
 
     return passphrase;
   }
+}
+
+/**
+ * Simple y/n confirmation prompt. Returns true for yes, false for no.
+ */
+export function confirm(message) {
+  return new Promise((done) => {
+    process.stderr.write(message);
+    const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: false });
+    rl.once("line", (line) => {
+      rl.close();
+      done(line.trim().toLowerCase().startsWith("y"));
+    });
+    rl.once("close", () => done(false)); // treat EOF as "no"
+  });
 }
 
 /**

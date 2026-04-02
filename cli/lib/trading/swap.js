@@ -111,16 +111,22 @@ export async function getSwapQuote({
 
 /**
  * Execute a swap — handle approval if needed, sign, broadcast.
+ * @param {object} quote
+ * @param {string} walletName
+ * @param {string} passphrase
+ * @param {object} [options]
+ * @param {number} [options.timeout] - broadcast timeout in seconds
  */
-export async function executeSwap(quote, walletName, passphrase) {
+export async function executeSwap(quote, walletName, passphrase, { timeout } = {}) {
   const zerionChainId = quote.fromChain;
+  const isCrossChain = quote.fromChain !== quote.toChain;
 
   // Route: Solana vs EVM
   if (isSolana(zerionChainId)) {
     return executeSolanaSwap(quote, walletName, passphrase);
   }
 
-  return executeEvmSwap(quote, walletName, passphrase, zerionChainId);
+  return executeEvmSwap(quote, walletName, passphrase, zerionChainId, { timeout, isCrossChain });
 }
 
 async function executeSolanaSwap(quote, walletName, passphrase) {
@@ -141,7 +147,13 @@ async function executeSolanaSwap(quote, walletName, passphrase) {
   };
 }
 
-async function executeEvmSwap(quote, walletName, passphrase, zerionChainId) {
+async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { timeout, isCrossChain = false } = {}) {
+  // Snapshot destination balance before bridge (for delivery detection)
+  let preBalance = null;
+  if (isCrossChain) {
+    preBalance = await getDestinationBalance(quote);
+  }
+
   // 1. Handle ERC-20 approval if needed
   if (
     quote.preconditions.enough_allowance === false &&
@@ -182,8 +194,23 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId) {
     passphrase
   );
 
-  // 3. Broadcast and wait
-  const result = await broadcastAndWait(client, signedTxHex);
+  // 3. Broadcast and wait for source chain confirmation
+  const result = await broadcastAndWait(client, signedTxHex, { timeout, isCrossChain });
+
+  // 4. For cross-chain: poll destination chain for delivery
+  if (isCrossChain && result.status === "success") {
+    if (preBalance === null) {
+      result.bridgeDelivery = {
+        status: "unknown",
+        reason: "Could not snapshot destination balance before bridge. Check manually.",
+        suggestion: `zerion positions --chain ${quote.toChain}`,
+      };
+    } else {
+      const bridgeTimeout = timeout || 300; // 5 min default for bridge delivery
+      const delivery = await waitForBridgeDelivery(quote, preBalance, bridgeTimeout);
+      result.bridgeDelivery = delivery;
+    }
+  }
 
   return {
     ...result,
@@ -193,5 +220,120 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId) {
       fee: quote.fee,
       source: quote.liquiditySource,
     },
+  };
+}
+
+/**
+ * Fetch the balance of a token on a specific chain for a wallet address.
+ * Returns 0 if the token is not found or the API call fails.
+ */
+async function fetchTokenBalance(walletAddress, chainId, tokenSymbol) {
+  const response = await api.getPositions(walletAddress, { chainId });
+  const upperSymbol = tokenSymbol.toUpperCase();
+  const match = (response.data || []).find(
+    (p) => p.attributes.fungible_info?.symbol?.toUpperCase() === upperSymbol
+  );
+  return match?.attributes?.quantity?.float ?? 0;
+}
+
+/**
+ * Get the current balance of the destination token on the destination chain.
+ * Used as a "before" snapshot to detect bridge delivery.
+ */
+async function getDestinationBalance(quote) {
+  try {
+    return await fetchTokenBalance(
+      quote.transaction?.from || "",
+      quote.toChain,
+      quote.to.symbol
+    );
+  } catch (err) {
+    process.stderr.write(
+      `Warning: could not snapshot destination balance (${err.message}). ` +
+      `Bridge delivery detection may be inaccurate.\n`
+    );
+    return null;
+  }
+}
+
+/**
+ * Poll destination chain balance until it increases (bridge delivery) or timeout.
+ *
+ * Strategy: the quote includes `estimatedSeconds` from the bridge provider.
+ * We wait for that duration first (no point polling before the relay is expected),
+ * then poll every 10s. If no estimate, start polling after 10s.
+ */
+async function waitForBridgeDelivery(quote, preBalance, timeoutSeconds) {
+  const walletAddress = quote.transaction?.from;
+  if (!walletAddress) {
+    return { status: "unknown", reason: "no wallet address in quote" };
+  }
+
+  const estimatedWait = quote.estimatedSeconds || 0;
+  const initialDelay = Math.min(Math.max(estimatedWait, 10), timeoutSeconds / 2);
+  const pollInterval = 10_000;
+  const { toChain } = quote;
+  const tokenSymbol = quote.to.symbol;
+
+  process.stderr.write(
+    `Waiting for bridge delivery on ${toChain}` +
+    (estimatedWait ? ` (estimated ${estimatedWait}s)` : "") +
+    `, timeout ${timeoutSeconds}s...\n`
+  );
+
+  process.stderr.write(`Waiting ${initialDelay}s for relay before checking...\n`);
+  await new Promise((r) => setTimeout(r, initialDelay * 1000));
+
+  const deadline = Date.now() + (timeoutSeconds - initialDelay) * 1000;
+  let polls = 0;
+  let consecutiveErrors = 0;
+
+  while (Date.now() < deadline) {
+    polls++;
+
+    try {
+      const currentBalance = await fetchTokenBalance(walletAddress, toChain, tokenSymbol);
+      consecutiveErrors = 0;
+
+      // Use epsilon to avoid floating-point false positives/negatives
+      const EPSILON = 1e-9;
+      if (currentBalance - preBalance > EPSILON) {
+        const received = currentBalance - preBalance;
+        process.stderr.write(
+          `Bridge delivery confirmed: +${received.toFixed(6)} ${tokenSymbol} on ${toChain}\n`
+        );
+        return { status: "delivered", received, destinationChain: toChain, token: tokenSymbol, polls };
+      }
+
+      process.stderr.write(`Poll ${polls}: no change yet on ${toChain}...\n`);
+    } catch (err) {
+      consecutiveErrors++;
+      process.stderr.write(`Poll ${polls}: API error (${err.message}), retrying...\n`);
+      if (consecutiveErrors >= 5) {
+        process.stderr.write("Too many consecutive API errors. Giving up on delivery detection.\n");
+        return {
+          status: "error",
+          reason: `${consecutiveErrors} consecutive API failures`,
+          lastError: err.message,
+          suggestion: `zerion positions --chain ${toChain}`,
+        };
+      }
+    }
+
+    if (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, pollInterval));
+    }
+  }
+
+  process.stderr.write(
+    `Bridge delivery not confirmed within ${timeoutSeconds}s. ` +
+    `Funds may still arrive — check with: zerion positions --chain ${toChain}\n`
+  );
+  return {
+    status: "timeout",
+    destinationChain: toChain,
+    token: tokenSymbol,
+    polls,
+    suggestion: `zerion positions --chain ${toChain}`,
   };
 }

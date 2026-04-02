@@ -99,9 +99,44 @@ export function formatPortfolio(data) {
   return lines.join("\n");
 }
 
+export function formatPositions(data) {
+  const walletLabel = data.wallet.name || data.wallet.address.slice(0, 10) + "...";
+  const lines = [
+    `${BOLD}Positions${RESET} — ${walletLabel} (${data.count})\n`,
+    `  ${DIM}${pad("Token", 16)} ${pad("Chain", 12)} ${padStart("Value", 12)} ${padStart("24h", 18)} ${padStart("Amount", 16)}${RESET}`,
+    `  ${DIM}${"─".repeat(76)}${RESET}`,
+  ];
+  for (const p of data.positions) {
+    const change = formatChange(p);
+    lines.push(
+      `  ${pad(p.symbol || "?", 16)} ${pad(p.chain || "?", 12)} ${padStart(usd(p.value), 12)} ${padStart(change, 28)} ${padStart(p.quantity?.toFixed(4) || "-", 16)}`
+    );
+  }
+  return lines.join("\n");
+}
+
+function formatChange(position) {
+  if (position.change_percent_1d == null) {
+    return `${DIM}-${RESET}`;
+  }
+  const percent = pct(position.change_percent_1d);
+  if (position.change_absolute_1d == null) {
+    return percent;
+  }
+  const sign = position.change_absolute_1d >= 0 ? "+" : "";
+  return `${percent} (${sign}${usd(position.change_absolute_1d)})`;
+}
+
+function resolveTradeType(data) {
+  if (data.swap) return { label: "Swap", detail: data.swap };
+  if (data.bridge) return { label: "Bridge", detail: data.bridge };
+  if (data.buy) return { label: "Buy", detail: data.buy };
+  if (data.send) return { label: "Send", detail: data.send };
+  return { label: "Sell", detail: data.sell };
+}
+
 export function formatSwapQuote(data) {
-  const swap = data.swap || data.bridge || data.buy || data.sell;
-  const type = data.swap ? "Swap" : data.bridge ? "Bridge" : data.buy ? "Buy" : "Sell";
+  const { label: type, detail: swap } = resolveTradeType(data);
   const lines = [`${BOLD}${type} Quote${RESET}\n`];
 
   if (swap.input) lines.push(`  ${DIM}Input:${RESET}    ${swap.input}`);

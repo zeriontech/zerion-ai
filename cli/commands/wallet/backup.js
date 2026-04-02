@@ -14,7 +14,7 @@ export default async function walletBackup(args, flags) {
 
   // Require interactive terminal — prevents silent scripted extraction
   if (!process.stdin.isTTY) {
-    printError("tty_required", "wallet backup requires an interactive terminal", {
+    printError("not_interactive", "wallet backup requires an interactive terminal", {
       suggestion: "Run this command directly in your terminal, not from a script or pipe",
     });
     process.exit(1);

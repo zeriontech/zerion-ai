@@ -44,28 +44,28 @@ End-to-end flow to get an AI agent trading autonomously:
 # 1. Set API key
 export ZERION_API_KEY="zk_dev_..."
 
-# 2. Create a wallet
-zerion wallet create --name agent-bot
+# 2. Create wallet + agent token in one shot (no prompts, token auto-saved to config)
+zerion wallet create --name agent-bot --agent
 
-# 3. Set it as default
-zerion config set defaultWallet agent-bot
-
-# 4. Fund the wallet
-zerion wallet fund
+# 3. Fund the wallet
+zerion wallet fund --wallet agent-bot
 # → shows the EVM and Solana deposit addresses
 
-# 5. Create an agent token (bypasses passphrase for unattended trading)
-zerion agent create-token --name agent-bot --wallet agent-bot
-
-# 6. Set the token for headless operation
-export ZERION_AGENT_TOKEN=ows_key_...
-
-# 7. Apply security policies
+# 4. Apply security policies (optional but recommended)
 zerion agent create-policy --name safe-trading \
   --chains base,arbitrum --deny-transfers --expires 7d
 
-# 8. Trade
-zerion swap ETH USDC 0.01 --yes
+# 5. Trade — agent token is read from config automatically
+zerion swap ETH USDC 0.01 --chain base --yes
+zerion send ETH 0.01 --to 0x... --chain base --yes
+```
+
+Or step-by-step (interactive):
+
+```bash
+zerion wallet create --name agent-bot            # prompts for passphrase
+# → asks "Create an agent token?" → saves to config
+zerion swap ETH USDC 0.01 --yes                  # works immediately
 ```
 
 ## Authentication
@@ -92,13 +92,16 @@ zerion wallet analyze <address> --x402
 export ZERION_X402=true
 ```
 
-### Agent tokens (unattended trading)
+### Agent tokens (required for trading)
 
-Scoped tokens that bypass passphrase prompts. Attach security policies to limit what they can do.
+Agent tokens are required for swap, bridge, and send commands. They are saved to `~/.zerion/config.json` automatically on creation.
 
 ```bash
+# Create and auto-save to config
 zerion agent create-token --name my-bot --wallet my-wallet
-export ZERION_AGENT_TOKEN=ows_key_...
+
+# Or create wallet + token in one shot
+zerion wallet create --name my-bot --agent
 ```
 
 ## Environment variables
@@ -106,11 +109,19 @@ export ZERION_AGENT_TOKEN=ows_key_...
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ZERION_API_KEY` | Yes (unless x402) | API key from dashboard.zerion.io |
-| `ZERION_AGENT_TOKEN` | No | Agent token for unattended trading |
 | `WALLET_PRIVATE_KEY` | Yes (for x402) | EVM private key for x402 payments on Base |
 | `ZERION_X402` | No | Set `true` to enable x402 globally |
 | `SOLANA_RPC_URL` | No | Custom Solana RPC (default: mainnet-beta) |
 | `ZERION_API_BASE` | No | Override API base URL |
+
+## Config (`~/.zerion/config.json`)
+
+| Key | Description |
+|-----|-------------|
+| `agentToken` | Trading token (auto-saved by `agent create-token`) |
+| `defaultWallet` | Default wallet for all commands |
+| `defaultChain` | Default chain (default: ethereum) |
+| `slippage` | Default slippage % for swaps (default: 2) |
 
 ## All commands
 
@@ -182,6 +193,9 @@ zerion bridge <token> <chain> <amount> --yes              # Execute bridge
 zerion bridge <token> <chain> <amount> --from-chain <chain>  # Specify source chain
 zerion bridge <token> <chain> <amount> --to-token <tok>   # Bridge + swap on destination (quote)
 zerion bridge <token> <chain> <amount> --to-token <tok> --yes  # Bridge + swap (execute)
+zerion send <token> <amount> --to <address>                # Send quote (no execution)
+zerion send <token> <amount> --to <address> --yes         # Execute native or ERC-20 transfer
+zerion send <token> <amount> --to <address> --chain <chain> --yes  # On specific chain
 zerion search <query>                                     # Search for tokens by name, symbol, or address
 zerion search <query> --chain <chain>                     # Search within a specific chain
 zerion search <query> --limit <n>                         # Limit results (default: 10)
@@ -199,7 +213,7 @@ zerion agent revoke-token --name <bot>                    # Revoke by name
 zerion agent revoke-token --id <id>                       # Revoke by ID
 ```
 
-Usage: `export ZERION_AGENT_TOKEN=ows_key_...` to bypass passphrase prompts.
+Token is auto-saved to config. All trading commands (swap, bridge, send) read it automatically.
 
 ### Security policies
 ```
@@ -262,6 +276,10 @@ zerion --version                                          # Show version
 | `--pretty` | Human-readable output |
 | `--quiet` | Minimal output |
 | `--yes` | Skip confirmation prompts (required to execute trades) |
+| `--to <address>` | Recipient address for send command |
+| `--timeout <seconds>` | Transaction confirmation timeout (default: 120s) |
+| `--passphrase-file <path>` | Read passphrase from file (wallet create/import only) |
+| `--agent` | Create wallet + agent token in one shot (wallet create only) |
 
 ## Output modes
 
@@ -279,9 +297,11 @@ ethereum, base, arbitrum, optimism, polygon, binance-smart-chain, avalanche, gno
 
 Wallets are encrypted with AES-256-GCM via the Open Wallet Standard (OWS) vault at `~/.ows/`. Private keys never leave the device — signing happens locally, and the Zerion API never sees your keys.
 
-- **Passphrase**: Required for wallet creation and transaction signing
-- **Agent tokens**: Bypass passphrase for bot/agent use (scoped, revocable)
+- **Passphrase**: Required for wallet creation/import only (never for trading)
+- **Agent tokens**: Required for all trading (swap, bridge, send). Auto-saved to config on creation.
+- **`--agent` mode**: `wallet create --agent` generates passphrase internally, creates token — zero prompts
 - **Key-file import**: `--key-file <path>` avoids exposing keys in shell history
+- **`--passphrase-file`**: Read passphrase from file for automated wallet setup
 - **Config security**: `~/.zerion/config.json` is created with mode 0o600
 
 ## Troubleshooting
@@ -289,6 +309,7 @@ Wallets are encrypted with AES-256-GCM via the Open Wallet Standard (OWS) vault 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `missing_api_key` | No `ZERION_API_KEY` set | Set the env var or use `--x402` |
+| `no_agent_token` | No agent token for trading command | Run `zerion agent create-token --name <name> --wallet <wallet>` |
 | `no_wallet` | No wallet specified and no default set | Use `--wallet <name>` or `config set defaultWallet` |
 | `wallet_not_found` | Wallet name doesn't exist in OWS vault | Run `zerion wallet list` to check |
 | `unsupported_chain` | Invalid `--chain` value | Run `zerion chains` for valid IDs |

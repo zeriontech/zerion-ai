@@ -59,39 +59,84 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
     nonce,
   };
 
-  // Serialize unsigned
-  const unsignedTxHex = serializeTransaction(tx);
+  const signedTxHex = signAndSerialize(tx, zerionChainId, walletName, passphrase);
+  return { signedTxHex, client, tx };
+}
 
-  // Sign with OWS — pass CAIP-2 chain ID so policies check the correct chain
+/**
+ * Sign a transaction object with OWS and return the serialized signed hex.
+ * Centralizes the serialize -> sign -> split-signature -> re-serialize pattern.
+ */
+export function signAndSerialize(tx, zerionChainId, walletName, passphrase) {
+  const unsignedTxHex = serializeTransaction(tx);
   const signResult = ows.signEvmTransaction(walletName, unsignedTxHex, passphrase, toCaip2(zerionChainId));
 
-  // Reconstruct signed tx
   const sigHex = signResult.signature;
   const r = `0x${sigHex.slice(0, 64)}`;
   const s = `0x${sigHex.slice(64, 128)}`;
   const yParity = signResult.recoveryId;
 
-  const signedTxHex = serializeTransaction(tx, { r, s, yParity });
-
-  return { signedTxHex, client, tx };
+  return serializeTransaction(tx, { r, s, yParity });
 }
 
 /**
  * Broadcast a signed transaction and wait for receipt.
+ * @param {object} client - viem public client
+ * @param {string} signedTxHex - signed transaction hex
+ * @param {object} [options]
+ * @param {number} [options.timeout] - timeout in seconds (default 120)
+ * @param {boolean} [options.isCrossChain] - if true, print bridge-specific progress
  */
-export async function broadcastAndWait(client, signedTxHex) {
-  const hash = await client.sendRawTransaction({
-    serializedTransaction: signedTxHex,
-  });
+export async function broadcastAndWait(client, signedTxHex, { timeout = 120, isCrossChain = false } = {}) {
+  process.stderr.write("Broadcasting transaction...\n");
 
-  const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120_000 });
+  let hash;
+  try {
+    hash = await client.sendRawTransaction({
+      serializedTransaction: signedTxHex,
+    });
+  } catch (err) {
+    const error = new Error(
+      `Transaction broadcast failed: ${err.message}. ` +
+      `Common causes: insufficient gas balance, nonce conflict, or network congestion.`
+    );
+    error.code = "broadcast_failed";
+    throw error;
+  }
 
-  return {
+  process.stderr.write(`Tx hash: ${hash}\n`);
+  process.stderr.write("Waiting for confirmation...\n");
+
+  const timeoutMs = timeout * 1000;
+  let receipt;
+  try {
+    receipt = await client.waitForTransactionReceipt({ hash, timeout: timeoutMs });
+  } catch (err) {
+    if (err.name === "TimeoutError" || err.message?.includes("timed out")) {
+      const error = new Error(
+        `Transaction ${hash} was broadcast but not confirmed within ${timeout}s. ` +
+        `It may still confirm — check a block explorer before retrying to avoid double-spend.`
+      );
+      error.code = "confirmation_timeout";
+      error.hash = hash;
+      throw error;
+    }
+    throw err;
+  }
+
+  const result = {
     hash,
     status: receipt.status,
     blockNumber: Number(receipt.blockNumber),
     gasUsed: Number(receipt.gasUsed),
   };
+
+  if (isCrossChain) {
+    process.stderr.write("Source chain transaction confirmed.\n");
+    result.bridgeStatus = "source_confirmed";
+  }
+
+  return result;
 }
 
 /**
@@ -143,14 +188,6 @@ export async function approveErc20(tokenAddress, spender, amount, zerionChainId,
     nonce,
   };
 
-  const unsignedTxHex = serializeTransaction(tx);
-  const signResult = ows.signEvmTransaction(walletName, unsignedTxHex, passphrase, toCaip2(zerionChainId));
-
-  const sigHex = signResult.signature;
-  const r = `0x${sigHex.slice(0, 64)}`;
-  const s = `0x${sigHex.slice(64, 128)}`;
-  const yParity = signResult.recoveryId;
-
-  const signedTxHex = serializeTransaction(tx, { r, s, yParity });
+  const signedTxHex = signAndSerialize(tx, zerionChainId, walletName, passphrase);
   return broadcastAndWait(client, signedTxHex);
 }

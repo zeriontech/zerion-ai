@@ -51,7 +51,7 @@ function printUsage() {
       "agent create-token --name <bot> --wallet <wallet>": "Create scoped API token for unattended trading",
       "agent list-tokens": "List active agent tokens",
       "agent revoke-token --name <bot>": "Revoke an agent token",
-      "_usage": "Set ZERION_AGENT_TOKEN=ows_key_... to bypass passphrase prompts",
+      "_usage": "Token is saved to config automatically. Required for swap/bridge/send.",
     },
     agent_policies: {
       "agent create-policy --name <policy>": "Create security policy (see policy flags below)",
@@ -100,10 +100,15 @@ function printUsage() {
     },
     env: {
       "ZERION_API_KEY": "API key (get at dashboard.zerion.io)",
-      "ZERION_AGENT_TOKEN": "Agent token for unattended trading",
       "WALLET_PRIVATE_KEY": "EVM key for x402 pay-per-call",
       "ZERION_X402": "Set 'true' to enable x402 globally",
       "SOLANA_RPC_URL": "Custom Solana RPC endpoint",
+    },
+    config: {
+      "agentToken": "Trading token (auto-saved by `agent create-token`)",
+      "defaultWallet": "Default wallet for all commands",
+      "defaultChain": "Default chain (default: ethereum)",
+      "slippage": "Default slippage % for swaps (default: 2)",
     },
     chains: [
       "ethereum", "base", "arbitrum", "optimism", "polygon",

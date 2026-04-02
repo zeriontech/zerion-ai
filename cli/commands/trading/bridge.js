@@ -1,9 +1,8 @@
 import { getSwapQuote, executeSwap } from "../../lib/trading/swap.js";
-import { getAgentToken } from "../../lib/wallet/keystore.js";
+import { requireAgentToken, parseTimeout, handleTradingError } from "../../lib/trading/guards.js";
 import { resolveWallet } from "../../lib/wallet/resolve.js";
 import { print, printError } from "../../lib/util/output.js";
 import { getConfigValue } from "../../lib/config.js";
-import { readPassphrase } from "../../lib/util/prompt.js";
 
 export default async function bridge(args, flags) {
   const [token, targetChain, amount] = args;
@@ -70,9 +69,10 @@ export default async function bridge(args, flags) {
       return;
     }
 
-    const agentToken = getAgentToken();
-    const passphrase = agentToken || await readPassphrase();
-    const result = await executeSwap(quote, walletName, passphrase);
+    // Agent token required — no interactive passphrase for trading
+    const passphrase = requireAgentToken();
+    const timeout = parseTimeout(flags.timeout);
+    const result = await executeSwap(quote, walletName, passphrase, { timeout });
 
     print({
       ...quoteSummary,
@@ -82,18 +82,10 @@ export default async function bridge(args, flags) {
         blockNumber: result.blockNumber,
         gasUsed: result.gasUsed,
       },
+      bridgeDelivery: result.bridgeDelivery,
       executed: true,
     });
   } catch (err) {
-    if (process.env.ZERION_AGENT_TOKEN && err.message?.includes("API key not found")) {
-      printError("invalid_agent_token", "Agent token is revoked or invalid", {
-        suggestion: "Unset it (unset ZERION_AGENT_TOKEN) or create a new one (zerion agent create-token)",
-      });
-    } else {
-      printError(err.code || "bridge_error", err.message, {
-        suggestion: err.suggestion,
-      });
-    }
-    process.exit(1);
+    handleTradingError(err, "bridge_error");
   }
 }

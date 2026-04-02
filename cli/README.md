@@ -28,8 +28,8 @@ export ZERION_API_KEY="zk_dev_..."
 export WALLET_PRIVATE_KEY="0x..."
 zerion wallet analyze <address> --x402
 
-# Option C: Agent token (unattended trading)
-export ZERION_AGENT_TOKEN=ows_key_...
+# Agent token for trading (auto-saved to config)
+zerion agent create-token --name my-bot --wallet my-wallet
 ```
 
 ## Commands
@@ -75,6 +75,8 @@ zerion history                       Transaction history (shorthand)
 
 ### Trading
 
+All trading commands require an agent token (see below).
+
 ```
 zerion swap <from> <to> <amount>                             Swap tokens (quote only)
 zerion swap <from> <to> <amount> --yes                       Execute the swap
@@ -84,20 +86,21 @@ zerion swap tokens [chain]                                   List tokens availab
 zerion bridge <token> <chain> <amount>                       Bridge tokens (quote only)
 zerion bridge <token> <chain> <amount> --yes                 Execute bridge
 zerion bridge <token> <chain> <amount> --to-token <tok>      Bridge + swap on destination
+zerion send <token> <amount> --to <address>                  Send tokens (quote only)
+zerion send <token> <amount> --to <address> --yes            Execute native or ERC-20 transfer
 zerion search <query>                                        Search for tokens by name or symbol
 ```
 
 ### Agent tokens
 
-Create scoped API tokens that bypass passphrase prompts for unattended trading:
+Required for all trading commands (swap, bridge, send). Auto-saved to config on creation.
 
 ```
-zerion agent create-token --name <bot> --wallet <wallet>     Create scoped agent token
+zerion agent create-token --name <bot> --wallet <wallet>     Create token (saved to config)
+zerion wallet create --name <bot> --agent                    Create wallet + token in one shot
 zerion agent list-tokens                                     List active agent tokens
 zerion agent revoke-token --name <bot>                       Revoke an agent token
 ```
-
-Usage: `export ZERION_AGENT_TOKEN=ows_key_...` to bypass passphrase prompts.
 
 ### Security policies
 

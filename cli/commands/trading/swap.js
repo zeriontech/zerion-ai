@@ -1,10 +1,9 @@
 import { getSwapQuote, executeSwap } from "../../lib/trading/swap.js";
+import { requireAgentToken, parseTimeout, handleTradingError } from "../../lib/trading/guards.js";
 import { resolveWallet } from "../../lib/wallet/resolve.js";
 import { print, printError } from "../../lib/util/output.js";
 import { getConfigValue } from "../../lib/config.js";
 import { formatSwapQuote } from "../../lib/util/format.js";
-import { getAgentToken } from "../../lib/wallet/keystore.js";
-import { readPassphrase } from "../../lib/util/prompt.js";
 
 export default async function swap(args, flags) {
   const [fromToken, toToken, amount] = args;
@@ -77,10 +76,10 @@ export default async function swap(args, flags) {
       return;
     }
 
-    // 4. Execute (agent token takes precedence, otherwise prompt for passphrase)
-    const agentToken = getAgentToken();
-    const passphrase = agentToken || await readPassphrase();
-    const result = await executeSwap(quote, walletName, passphrase);
+    // 4. Execute — agent token required (no interactive passphrase for trading)
+    const passphrase = requireAgentToken();
+    const timeout = parseTimeout(flags.timeout);
+    const result = await executeSwap(quote, walletName, passphrase, { timeout });
 
     const resultData = {
       ...quoteSummary,
@@ -94,16 +93,6 @@ export default async function swap(args, flags) {
     };
     print(resultData, formatSwapQuote);
   } catch (err) {
-    // OWS returns "API key not found" for revoked/invalid agent tokens — clarify the message
-    if (process.env.ZERION_AGENT_TOKEN && err.message?.includes("API key not found")) {
-      printError("invalid_agent_token", "Agent token is revoked or invalid", {
-        suggestion: "Unset it (unset ZERION_AGENT_TOKEN) or create a new one (zerion agent create-token)",
-      });
-    } else {
-      printError(err.code || "swap_error", err.message, {
-        suggestion: err.suggestion,
-      });
-    }
-    process.exit(1);
+    handleTradingError(err, "swap_error");
   }
 }

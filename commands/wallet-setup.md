@@ -18,31 +18,34 @@ Guide the user through the complete wallet + agent setup flow.
    ```
    If no API key, instruct: `export ZERION_API_KEY="zk_dev_..."` (get from dashboard.zerion.io)
 
-3. **Create wallet** (if needed):
+3. **Create wallet + agent token**:
+
+   **Option A — Fully automated** (no prompts, best for agents):
+   ```bash
+   zerion wallet create --name <name> --agent
+   ```
+   Creates wallet, generates passphrase internally, creates agent token, saves token to config.
+
+   **Option B — Interactive** (prompts for passphrase, then offers agent token):
    ```bash
    zerion wallet create --name <name>
    ```
-   The user will be prompted for a passphrase interactively.
+   After creation, the CLI asks "Create an agent token?" — saying yes saves it to config.
 
-4. **Set as default**:
+4. **Show funding addresses**:
    ```bash
-   zerion config set defaultWallet <name>
+   zerion wallet fund --wallet <name>
    ```
 
-5. **Show funding addresses**:
-   ```bash
-   zerion wallet fund
-   ```
-
-6. **Optional — Create agent token** (for unattended trading):
-   ```bash
-   zerion agent create-token --name <bot-name> --wallet <wallet-name>
-   ```
-   Remind the user to save the token — it's shown only once.
-
-7. **Optional — Create security policy**:
+5. **Optional — Create security policy**:
    ```bash
    zerion agent create-policy --name <policy-name> --chains base,arbitrum --deny-transfers
    ```
 
-Present each step clearly and wait for the user to complete interactive prompts (passphrase entry) before proceeding.
+6. **Trade** — agent token is read from config automatically:
+   ```bash
+   zerion swap ETH USDC 0.01 --chain base --yes
+   zerion send ETH 0.01 --to 0x... --chain base --yes
+   ```
+
+The agent token is required for all trading commands and is saved to `~/.zerion/config.json` automatically.

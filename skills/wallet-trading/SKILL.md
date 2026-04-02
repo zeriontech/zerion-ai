@@ -76,6 +76,8 @@ zerion config set defaultWallet <name>
 
 ## Trading
 
+All trading commands require an agent token (see below). No passphrase prompts.
+
 ### Swap tokens
 
 ```bash
@@ -87,6 +89,9 @@ zerion swap ETH USDC 0.1 --yes
 
 # Cross-chain swap (swap + bridge)
 zerion swap ETH USDC 0.1 --to-chain arbitrum --yes
+
+# With timeout for slow bridges
+zerion swap ETH USDC 0.1 --to-chain arbitrum --timeout 300 --yes
 ```
 
 ### Bridge tokens
@@ -97,6 +102,16 @@ zerion bridge ETH arbitrum 0.1 --yes
 
 # Bridge + swap (bridge ETH to Arbitrum, receive USDC)
 zerion bridge ETH arbitrum 0.1 --to-token USDC --yes
+```
+
+### Send / transfer tokens
+
+```bash
+# Send native token (ETH, BNB, etc.)
+zerion send ETH 0.01 --to 0x... --chain base --yes
+
+# Send ERC-20 token
+zerion send USDC 10 --to 0x... --chain ethereum --yes
 ```
 
 ### Search tokens
@@ -112,13 +127,16 @@ zerion search "uniswap" --chain ethereum
 zerion swap tokens ethereum
 ```
 
-## Agent tokens (unattended trading)
+## Agent tokens (required for trading)
 
-Create scoped API tokens that bypass passphrase prompts:
+Agent tokens are required for all trading commands (swap, bridge, send). They are saved to config automatically on creation.
 
 ```bash
-# Create a token
+# Create a token (saved to ~/.zerion/config.json automatically)
 zerion agent create-token --name my-bot --wallet test-bot
+
+# Or create wallet + token in one shot (fully automated, no prompts)
+zerion wallet create --name my-bot --agent
 
 # List tokens
 zerion agent list-tokens
@@ -127,11 +145,7 @@ zerion agent list-tokens
 zerion agent revoke-token --name my-bot
 ```
 
-Use agent tokens via environment variable:
-```bash
-export ZERION_AGENT_TOKEN=ows_key_...
-zerion swap ETH USDC 0.1 --yes  # no passphrase prompt
-```
+The token is read from config automatically. No environment variable needed.
 
 ## Security policies
 
@@ -193,7 +207,8 @@ ethereum, base, arbitrum, optimism, polygon, binance-smart-chain, avalanche, gno
 
 ## Best practices
 
-1. **Always get a quote first** — run swap/bridge without `--yes` to see the quote
-2. **Use agent tokens for bots** — never expose your passphrase in scripts
+1. **Always get a quote first** — run swap/bridge/send without `--yes` to see the quote
+2. **Create an agent token** — required for all trading; `zerion agent create-token` saves it to config
 3. **Apply security policies** — chain locks + allowlists prevent accidental trades
 4. **Set defaults** — `config set defaultWallet` and `config set defaultChain` reduce flag typing
+5. **Use `--timeout` for bridges** — cross-chain operations can be slow; default is 120s
