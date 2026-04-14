@@ -1,6 +1,6 @@
 import * as ows from "../../lib/wallet/keystore.js";
 import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue, setConfigValue, unsetConfigValue, removeAgentTokensForWallet, listSavedAgentTokens } from "../../lib/config.js";
+import { getConfigValue, setConfigValue, unsetConfigValue, removeAgentTokensForWallet, removeWalletOrigin } from "../../lib/config.js";
 import { readPassphrase, readSecret } from "../../lib/util/prompt.js";
 
 export default async function walletDelete(args, flags) {
@@ -67,11 +67,7 @@ export default async function walletDelete(args, flags) {
     }
 
     // Clean up wallet origin tracking
-    const origins = getConfigValue("walletOrigins") || {};
-    if (origins[walletName]) {
-      delete origins[walletName];
-      setConfigValue("walletOrigins", origins);
-    }
+    removeWalletOrigin(walletName);
 
     // Promote another wallet as default if this was the default
     if (getConfigValue("defaultWallet") === walletName) {

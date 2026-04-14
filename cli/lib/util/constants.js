@@ -7,3 +7,16 @@ export const CONFIG_PATH = `${CONFIG_DIR}/config.json`;
 export const DEFAULT_SLIPPAGE = 2;
 export const DEFAULT_CHAIN = "ethereum";
 export const NATIVE_ASSET_ADDRESS = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+// Wallet origin types — how the wallet was created/imported
+export const WALLET_ORIGIN = {
+  MNEMONIC: "mnemonic",
+  EVM_KEY: "evm-key",
+  SOL_KEY: "sol-key",
+};
+
+// Passphrase warning shown during wallet create and import
+export const PASSPHRASE_WARNING =
+  "\nWARNING: This passphrase is the ONLY way to recover your wallet or\n" +
+  "create new agent tokens. There is no reset or recovery mechanism.\n" +
+  "If you lose it, your funds are permanently inaccessible.\n\n";

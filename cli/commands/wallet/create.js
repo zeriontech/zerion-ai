@@ -2,6 +2,7 @@ import * as ows from "../../lib/wallet/keystore.js";
 import { print, printError } from "../../lib/util/output.js";
 import { setConfigValue, getConfigValue } from "../../lib/config.js";
 import { readPassphrase, readSecret } from "../../lib/util/prompt.js";
+import { PASSPHRASE_WARNING } from "../../lib/util/constants.js";
 import { offerAgentToken } from "../../lib/wallet/offer-agent-token.js";
 
 export default async function walletCreate(args, flags) {
@@ -11,12 +12,7 @@ export default async function walletCreate(args, flags) {
     process.stderr.write("A passphrase is required to encrypt your wallet.\n\n");
     const passphrase = await readPassphrase({ confirm: true });
 
-    process.stderr.write(
-      "\n" +
-      "WARNING: This passphrase is the ONLY way to recover your wallet or\n" +
-      "create new agent tokens. There is no reset or recovery mechanism.\n" +
-      "If you lose it, your funds are permanently inaccessible.\n\n"
-    );
+    process.stderr.write(PASSPHRASE_WARNING);
 
     let ack = "";
     while (ack.trim() !== "YES") {

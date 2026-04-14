@@ -1,6 +1,7 @@
 import * as ows from "../../lib/wallet/keystore.js";
 import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue, getWalletOrigin } from "../../lib/config.js";
+import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../lib/config.js";
+import { WALLET_ORIGIN } from "../../lib/util/constants.js";
 
 export default async function walletFund(args, flags) {
   const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");
@@ -14,17 +15,12 @@ export default async function walletFund(args, flags) {
 
   try {
     const origin = getWalletOrigin(walletName);
-    const wallet = { name: walletName };
+    const fullWallet = ows.getWallet(walletName);
+    const wallet = { name: walletName, ...getWalletAddresses(fullWallet, origin) };
     const instructions = {};
 
-    if (origin !== "sol-key") {
-      wallet.evmAddress = ows.getEvmAddress(walletName);
-      instructions.evm = "Send EVM tokens (ETH, USDC, etc.) to the EVM address above.";
-    }
-    if (origin !== "evm-key") {
-      wallet.solAddress = ows.getSolAddress(walletName);
-      instructions.solana = "Send SOL or SPL tokens to the Solana address above.";
-    }
+    if (wallet.evmAddress) instructions.evm = "Send EVM tokens (ETH, USDC, etc.) to the EVM address above.";
+    if (wallet.solAddress) instructions.solana = "Send SOL or SPL tokens to the Solana address above.";
 
     print({ wallet, instructions });
   } catch (err) {

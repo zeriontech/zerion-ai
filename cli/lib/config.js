@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { CONFIG_DIR, CONFIG_PATH, DEFAULT_SLIPPAGE, DEFAULT_CHAIN } from "./util/constants.js";
+import { CONFIG_DIR, CONFIG_PATH, DEFAULT_SLIPPAGE, DEFAULT_CHAIN, WALLET_ORIGIN } from "./util/constants.js";
 
 const DEFAULTS = {
   apiKey: null,
@@ -55,7 +55,24 @@ export function setWalletOrigin(walletName, origin) {
 
 export function getWalletOrigin(walletName) {
   const origins = getConfigValue("walletOrigins") || {};
-  return origins[walletName] || "mnemonic";
+  return origins[walletName] || WALLET_ORIGIN.MNEMONIC;
+}
+
+export function removeWalletOrigin(walletName) {
+  const origins = getConfigValue("walletOrigins") || {};
+  delete origins[walletName];
+  setConfigValue("walletOrigins", origins);
+}
+
+/**
+ * Filter wallet addresses based on import origin.
+ * Only returns addresses for chains the user actually imported keys for.
+ */
+export function getWalletAddresses(wallet, origin) {
+  const result = {};
+  if (origin !== WALLET_ORIGIN.SOL_KEY) result.evmAddress = wallet.evmAddress;
+  if (origin !== WALLET_ORIGIN.EVM_KEY) result.solAddress = wallet.solAddress;
+  return result;
 }
 
 /**

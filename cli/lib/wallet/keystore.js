@@ -117,6 +117,17 @@ export function getWallet(nameOrId) {
   return formatWallet(ows.getWallet(nameOrId));
 }
 
+/**
+ * Build a walletId → walletName lookup map.
+ */
+export function getWalletNameById(walletId) {
+  const wallets = ows.listWallets();
+  for (const w of wallets) {
+    if (w.id === walletId) return w.name;
+  }
+  return walletId;
+}
+
 export function getEvmAddress(walletName) {
   return extractEvmAddress(ows.getWallet(walletName));
 }

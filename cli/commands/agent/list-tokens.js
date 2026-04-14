@@ -5,15 +5,11 @@ import { getConfigValue } from "../../lib/config.js";
 export default async function agentListTokens(_args, _flags) {
   try {
     const tokens = ows.listAgentTokens();
-    const wallets = ows.listWallets();
     const defaultWallet = getConfigValue("defaultWallet");
-
-    const walletIdToName = new Map();
-    for (const w of wallets) walletIdToName.set(w.id, w.name);
 
     print({
       tokens: tokens.map((t) => {
-        const walletName = (t.walletIds || []).map((id) => walletIdToName.get(id) || id)[0] || "unknown";
+        const walletName = t.walletIds?.[0] ? ows.getWalletNameById(t.walletIds[0]) : "unknown";
         return {
           name: t.name,
           wallet: walletName,

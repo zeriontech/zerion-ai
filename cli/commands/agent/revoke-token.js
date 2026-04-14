@@ -15,12 +15,8 @@ export default async function agentRevokeToken(args, flags) {
   try {
     // Find the wallet name before revoking so we can clean up config
     const tokens = ows.listAgentTokens();
-    const wallets = ows.listWallets();
-    const walletIdToName = new Map();
-    for (const w of wallets) walletIdToName.set(w.id, w.name);
-
     const match = tokens.find((t) => t.name === nameOrId || t.id === nameOrId);
-    const walletName = match ? walletIdToName.get(match.walletIds?.[0]) : null;
+    const walletName = match?.walletIds?.[0] ? ows.getWalletNameById(match.walletIds[0]) : null;
 
     ows.revokeAgentToken(nameOrId);
 
