@@ -1,6 +1,6 @@
 import { encodeFunctionData, parseAbi, parseEther, parseUnits, formatEther, formatUnits } from "viem";
 import { resolveToken } from "../../lib/trading/resolve-token.js";
-import { requireAgentToken, parseTimeout, handleTradingError } from "../../lib/trading/guards.js";
+import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutablePolicies } from "../../lib/trading/guards.js";
 import * as api from "../../lib/api/client.js";
 import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../lib/trading/transaction.js";
 import { resolveWallet } from "../../lib/wallet/resolve.js";
@@ -147,6 +147,7 @@ export default async function send(args, flags) {
       tx = { ...baseTx, to: tokenAddress, value: 0n, data, gas };
     }
 
+    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data });
     const signedTxHex = signAndSerialize(tx, chain, walletName, passphrase);
     const timeout = parseTimeout(flags.timeout);
     const result = await broadcastAndWait(client, signedTxHex, { timeout });

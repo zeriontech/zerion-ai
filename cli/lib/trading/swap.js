@@ -12,6 +12,7 @@ import { signAndBroadcastSolana } from "../chain/solana.js";
 import { isSolana } from "../chain/registry.js";
 import { getConfigValue } from "../config.js";
 import { NATIVE_ASSET_ADDRESS, DEFAULT_SLIPPAGE } from "../util/constants.js";
+import { enforceExecutablePolicies } from "./guards.js";
 
 /**
  * Get a swap/bridge quote from Zerion API.
@@ -119,6 +120,10 @@ export async function getSwapQuote({
 export async function executeSwap(quote, walletName, passphrase, { timeout } = {}) {
   const zerionChainId = quote.fromChain;
   const isCrossChain = quote.fromChain !== quote.toChain;
+
+  // Enforce executable policies before signing
+  const tx = quote.transaction || {};
+  await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data });
 
   // Route: Solana vs EVM
   if (isSolana(zerionChainId)) {

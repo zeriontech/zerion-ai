@@ -3,7 +3,9 @@
  * Centralizes the repeated agent-token checks, timeout parsing, and catch-block logic.
  */
 
-import { getAgentToken } from "../wallet/keystore.js";
+import { pathToFileURL } from "node:url";
+import { getAgentToken, listAgentTokens, getPolicy } from "../wallet/keystore.js";
+import { getConfigValue } from "../config.js";
 import { printError } from "../util/output.js";
 
 /**
@@ -22,6 +24,62 @@ export function requireAgentToken() {
     process.exit(1);
   }
   return token;
+}
+
+/**
+ * Enforce executable policies attached to the active agent token.
+ * OWS enforces native rules (allowed_chains, expires_at) but does NOT run
+ * executable scripts — we must do it here before signing.
+ * @param {{ to: string, value: string|bigint, data: string, chain: string }} txInfo
+ */
+export async function enforceExecutablePolicies(txInfo) {
+  const walletName = getConfigValue("defaultWallet");
+  if (!walletName) return;
+
+  // Find the active API key's policy IDs
+  const tokens = listAgentTokens();
+  const activeKey = tokens
+    .filter((t) => {
+      const wn = t.walletIds?.[0];
+      return wn != null;
+    })
+    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+    .find((t) => t.walletIds?.[0] != null);
+  if (!activeKey?.policyIds?.length) return;
+
+  const ctx = {
+    transaction: {
+      to: txInfo.to || null,
+      value: String(txInfo.value || "0"),
+      data: txInfo.data || "0x",
+    },
+  };
+
+  for (const pid of activeKey.policyIds) {
+    let policy;
+    try { policy = getPolicy(pid); } catch { continue; }
+    const scripts = policy.config?.scripts || [];
+    for (const script of scripts) {
+      try {
+        const mod = await import(pathToFileURL(script).href);
+        if (typeof mod.check !== "function") continue;
+        const result = mod.check({ ...ctx, policy_config: policy.config });
+        if (!result.allow) {
+          printError("policy_denied", result.reason || "Blocked by policy", {
+            policy: policy.name || pid,
+          });
+          process.exit(1);
+        }
+      } catch (err) {
+        if (err.code === "ERR_MODULE_NOT_FOUND") continue;
+        // Policy script failures deny by default (fail-closed)
+        printError("policy_error", `Policy script failed: ${err.message}`, {
+          policy: policy.name || pid,
+        });
+        process.exit(1);
+      }
+    }
+  }
 }
 
 /**
