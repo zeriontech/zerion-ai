@@ -59,7 +59,7 @@ Creates an OWS-encrypted wallet with both EVM and Solana addresses.
 ```bash
 zerion wallet import --name <name> --key        # interactive private key prompt
 zerion wallet import --name <name> --mnemonic    # interactive mnemonic prompt
-zerion wallet import --name <name> --key-file <path>  # from file (safest)
+
 ```
 
 ### List wallets
@@ -129,14 +129,20 @@ zerion swap tokens ethereum
 
 ## Agent tokens (required for trading)
 
-Agent tokens are required for all trading commands (swap, bridge, send). They are saved to config automatically on creation.
+Agent tokens are required for all trading commands (swap, bridge, send). A security policy is always required — if `--policy` is omitted, an interactive picker guides you through:
+1. **Tier** — Standard (deny transfers + expiry), Strict (+ chain restriction), or Custom
+2. **Expiry** — 7 days, 30 days, or no expiry
+3. **Chains** (Strict only) — checklist of allowed chains
 
 ```bash
-# Create a token (saved to ~/.zerion/config.json automatically)
+# Create a token — interactive policy setup
 zerion agent create-token --name my-bot --wallet test-bot
 
-# Or create wallet + token in one shot (fully automated, no prompts)
-zerion wallet create --name my-bot --agent
+# Create with an existing policy (non-interactive)
+zerion agent create-token --name my-bot --wallet test-bot --policy <policy-id>
+
+# Or create wallet (includes token + policy setup at the end)
+zerion wallet create --name my-bot
 
 # List tokens
 zerion agent list-tokens

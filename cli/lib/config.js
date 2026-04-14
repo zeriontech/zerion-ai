@@ -37,6 +37,12 @@ export function setConfigValue(key, value) {
   saveConfig(config);
 }
 
+export function unsetConfigValue(key) {
+  const config = loadConfig();
+  delete config[key];
+  saveConfig(config);
+}
+
 export function getApiKey() {
   return process.env.ZERION_API_KEY || getConfigValue("apiKey");
 }

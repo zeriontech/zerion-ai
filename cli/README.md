@@ -39,9 +39,7 @@ zerion agent create-token --name my-bot --wallet my-wallet
 ```
 zerion wallet create --name <name>                        Create encrypted wallet (EVM + Solana)
 zerion wallet import --name <name> --key                  Import from private key (interactive prompt)
-zerion wallet import --name <name> --key-file <path>      Import from file (safest)
 zerion wallet import --name <name> --mnemonic             Import from seed phrase
-zerion wallet import --name <name> --mnemonic-file <path> Import from mnemonic file
 zerion wallet list                                        List all wallets
 zerion wallet fund                                        Show deposit addresses for funding
 zerion wallet backup --wallet <name>                      Export recovery phrase (mnemonic backup)
@@ -93,11 +91,12 @@ zerion search <query>                                        Search for tokens b
 
 ### Agent tokens
 
-Required for all trading commands (swap, bridge, send). Auto-saved to config on creation.
+Required for all trading commands (swap, bridge, send). A security policy is always required — the interactive setup guides you through tier selection (Standard/Strict/Custom), expiry, and optional chain restrictions.
 
 ```
-zerion agent create-token --name <bot> --wallet <wallet>     Create token (saved to config)
-zerion wallet create --name <bot> --agent                    Create wallet + token in one shot
+zerion agent create-token --name <bot> --wallet <wallet>     Create token (interactive policy setup)
+zerion agent create-token --name <bot> --wallet <w> --policy <id>  Create with existing policy
+zerion wallet create --name <bot>                            Create wallet (includes token setup)
 zerion agent list-tokens                                     List active agent tokens
 zerion agent revoke-token --name <bot>                       Revoke an agent token
 ```
@@ -139,6 +138,7 @@ zerion config set apiKey <key>           Set API key
 zerion config set defaultWallet <name>   Set default wallet
 zerion config set defaultChain <chain>   Set default chain
 zerion config set slippage <percent>     Set slippage tolerance (default: 2%)
+zerion config unset <key>                Remove a config value (resets to default)
 zerion config list                       Show current configuration
 ```
 

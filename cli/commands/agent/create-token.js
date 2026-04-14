@@ -2,6 +2,7 @@ import * as ows from "../../lib/wallet/keystore.js";
 import { print, printError } from "../../lib/util/output.js";
 import { getConfigValue, setConfigValue } from "../../lib/config.js";
 import { readPassphrase } from "../../lib/util/prompt.js";
+import { pickPolicyInteractive } from "../../lib/wallet/policy-picker.js";
 
 export default async function agentCreateToken(args, flags) {
   const name = flags.name || args[0];
@@ -9,7 +10,7 @@ export default async function agentCreateToken(args, flags) {
 
   if (!name) {
     printError("missing_args", "Token name required", {
-      example: 'zerion agent create-token --name "trading-bot" --wallet my-agent --policy <policy-id>',
+      example: 'zerion agent create-token --name "trading-bot" --wallet my-agent',
     });
     process.exit(1);
   }
@@ -21,27 +22,30 @@ export default async function agentCreateToken(args, flags) {
     process.exit(1);
   }
 
-  // Passphrase to prove wallet ownership — interactive or via --passphrase-file for agents
-  const passphrase = await readPassphrase({
-    passphraseFile: flags["passphrase-file"],
-  });
+  // Resolve policy — from flag or interactive picker
+  let policyIds;
 
-  // Resolve policy IDs
-  const policyIds = flags.policy
-    ? flags.policy.split(",").map((p) => p.trim())
-    : [];
-
-  // Validate policies exist
-  for (const pid of policyIds) {
-    try {
-      ows.getPolicy(pid);
-    } catch {
-      printError("policy_not_found", `Policy "${pid}" not found`, {
-        suggestion: "List policies: zerion agent list-policies",
-      });
-      process.exit(1);
+  if (flags.policy) {
+    // Explicit --policy flag: validate and use
+    policyIds = flags.policy.split(",").map((p) => p.trim());
+    for (const pid of policyIds) {
+      try {
+        ows.getPolicy(pid);
+      } catch {
+        printError("policy_not_found", `Policy "${pid}" not found`, {
+          suggestion: "List policies: zerion agent list-policies",
+        });
+        process.exit(1);
+      }
     }
+  } else {
+    // No --policy flag: launch interactive picker
+    const policyId = await pickPolicyInteractive(walletName);
+    policyIds = [policyId];
   }
+
+  // Passphrase to prove wallet ownership — always interactive (after policy is resolved)
+  const passphrase = await readPassphrase();
 
   try {
     const result = ows.createAgentToken(name, walletName, passphrase, flags.expires, policyIds);
@@ -55,7 +59,7 @@ export default async function agentCreateToken(args, flags) {
       agentToken: {
         name: result.name,
         wallet: result.wallet,
-        policies: policyIds.length > 0 ? policyIds : "none",
+        policies: policyIds,
         expiresAt: flags.expires || "never",
         saved: true,
       },

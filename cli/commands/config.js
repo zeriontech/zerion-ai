@@ -1,4 +1,4 @@
-import { loadConfig, getConfigValue, setConfigValue } from "../lib/config.js";
+import { loadConfig, getConfigValue, setConfigValue, unsetConfigValue } from "../lib/config.js";
 import { print, printError } from "../lib/util/output.js";
 
 const VALID_KEYS = ["apiKey", "agentToken", "defaultWallet", "slippage", "defaultChain"];
@@ -54,8 +54,26 @@ export default async function configCmd(args, flags) {
       break;
     }
 
+    case "unset": {
+      if (!key) {
+        printError("missing_key", "Specify a config key to unset", {
+          validKeys: VALID_KEYS,
+        });
+        process.exit(1);
+      }
+      if (!VALID_KEYS.includes(key)) {
+        printError("invalid_key", `Unknown config key: ${key}`, {
+          validKeys: VALID_KEYS,
+        });
+        process.exit(1);
+      }
+      unsetConfigValue(key);
+      print({ [key]: null, removed: true });
+      break;
+    }
+
     default:
-      printError("invalid_action", "Usage: zerion config <list|get|set>", {
+      printError("invalid_action", "Usage: zerion config <list|get|set|unset>", {
         suggestion: "zerion config list",
       });
       process.exit(1);

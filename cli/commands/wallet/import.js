@@ -7,7 +7,7 @@ import { readSecret, readPassphrase } from "../../lib/util/prompt.js";
 import { offerAgentToken } from "../../lib/wallet/offer-agent-token.js";
 
 async function resolveSecretInput(flags, flagName, fileFlagName, prompt) {
-  if (flags[fileFlagName]) {
+  if (fileFlagName && flags[fileFlagName]) {
     const filePath = resolve(flags[fileFlagName]);
     const lstat = lstatSync(filePath);
     if (lstat.isSymbolicLink()) {
@@ -38,16 +38,16 @@ async function resolveSecretInput(flags, flagName, fileFlagName, prompt) {
 export default async function walletImport(args, flags) {
   const name = flags.name || args[0] || `imported-${Date.now()}`;
 
-  if (!flags.key && !flags.mnemonic && !flags["key-file"] && !flags["mnemonic-file"]) {
+  if (!flags.key && !flags.mnemonic && !flags["mnemonic-file"]) {
     printError(
       "missing_input",
-      "Provide --key, --key-file, --mnemonic, or --mnemonic-file",
-      { suggestion: "zerion wallet import --key (prompts securely)\nzerion wallet import --key-file ./key.txt\nzerion wallet import --mnemonic (prompts securely)" }
+      "Provide --key or --mnemonic",
+      { suggestion: "zerion wallet import --key (prompts securely)\nzerion wallet import --mnemonic (prompts securely)" }
     );
     process.exit(1);
   }
 
-  const hasKey = flags.key || flags["key-file"];
+  const hasKey = !!flags.key;
   const hasMnemonic = flags.mnemonic || flags["mnemonic-file"];
   if (hasKey && hasMnemonic) {
     printError("invalid_input", "Provide either key or mnemonic, not both");
@@ -61,18 +61,12 @@ export default async function walletImport(args, flags) {
   );
 
   try {
-    // Passphrase: interactive by default, or --passphrase-file for agent workflows
-    if (!flags["passphrase-file"]) {
-      process.stderr.write("A passphrase is required to encrypt your wallet.\n\n");
-    }
-    const passphrase = await readPassphrase({
-      confirm: !flags["passphrase-file"],
-      passphraseFile: flags["passphrase-file"],
-    });
+    process.stderr.write("A passphrase is required to encrypt your wallet.\n\n");
+    const passphrase = await readPassphrase({ confirm: true });
 
     let wallet;
     if (hasKey) {
-      const key = await resolveSecretInput(flags, "key", "key-file", "Enter private key (hex): ");
+      const key = await resolveSecretInput(flags, "key", null, "Enter private key (hex): ");
       wallet = ows.importFromKey(name, key, passphrase);
     } else {
       const mnemonic = await resolveSecretInput(flags, "mnemonic", "mnemonic-file", "Enter mnemonic phrase: ");

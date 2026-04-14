@@ -23,7 +23,6 @@ function printUsage() {
     wallet_management: {
       "wallet create --name <name>": "Create encrypted wallet (EVM + Solana)",
       "wallet import --name <name> --key": "Import from private key (interactive prompt)",
-      "wallet import --name <name> --key-file <path>": "Import from file (safest)",
       "wallet import --name <name> --mnemonic": "Import from seed phrase",
       "wallet list": "List all wallets",
       "wallet fund": "Show deposit addresses for funding",
@@ -68,6 +67,7 @@ function printUsage() {
     other: {
       "chains": "List supported chains",
       "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage)",
+      "config unset <key>": "Remove a config value (resets to default)",
       "config list": "Show current configuration",
       "portfolio": "Portfolio (shorthand, uses --wallet or default)",
       "positions": "Positions (shorthand, uses --wallet or default)",

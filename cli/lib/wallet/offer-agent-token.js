@@ -1,52 +1,37 @@
 /**
- * Shared post-wallet-creation flow: offer to create an agent token.
+ * Post-wallet-creation flow: auto-create an agent token WITH a required policy.
  * Used by both `wallet create` and `wallet import`.
+ *
+ * Delegates to the shared policy picker for interactive tier/expiry/chain selection.
  */
 
 import * as ows from "./keystore.js";
 import { print } from "../util/output.js";
-import { confirm } from "../util/prompt.js";
 import { setConfigValue } from "../config.js";
+import { pickPolicyInteractive } from "./policy-picker.js";
 
 /**
- * Offer agent token creation after wallet setup.
- * Non-TTY: auto-creates token (script/agent workflows).
- * TTY: prompts the user interactively.
+ * Auto-create an agent token with a mandatory policy for the given wallet.
  */
 export async function offerAgentToken(walletName, passphrase) {
-  if (!process.stdin.isTTY) {
-    return autoCreateToken(walletName, passphrase);
-  }
-
-  const yes = await confirm("\nCreate an agent token for unattended trading? (y/n) ");
-  if (!yes) {
-    process.stderr.write(
-      `Skipped. You can create one later:\n` +
-      `  zerion agent create-token --name "my-bot" --wallet ${walletName}\n\n`
-    );
-    return;
-  }
+  const policyId = await pickPolicyInteractive(walletName);
 
   try {
-    const result = ows.createAgentToken(`${walletName}-agent`, walletName, passphrase);
-    setConfigValue("agentToken", result.token);
-    process.stderr.write(
-      `\nAgent token saved to config. All trading commands will use it automatically.\n\n`
+    const result = ows.createAgentToken(
+      `${walletName}-agent`, walletName, passphrase, undefined, [policyId]
     );
+    setConfigValue("agentToken", result.token);
+
+    print({
+      agentToken: {
+        name: result.name,
+        wallet: walletName,
+        policy: policyId,
+        saved: true,
+      },
+      created: true,
+    });
   } catch (err) {
     process.stderr.write(`Warning: could not create agent token: ${err.message}\n\n`);
-  }
-}
-
-function autoCreateToken(walletName, passphrase) {
-  try {
-    const result = ows.createAgentToken(`${walletName}-agent`, walletName, passphrase);
-    setConfigValue("agentToken", result.token);
-    process.stderr.write(
-      `\nAgent token created and saved to config.\n`
-    );
-    print({ agentToken: { name: result.name, saved: true } });
-  } catch (err) {
-    process.stderr.write(`\nWarning: could not auto-create agent token: ${err.message}\n\n`);
   }
 }
