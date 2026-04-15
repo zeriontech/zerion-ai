@@ -25,15 +25,18 @@ describe("zerion", () => {
       execFile(
         "node",
         [BIN, "analyze", "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"],
-        { env: { ...process.env, ZERION_API_KEY: "" } },
+        { env: { ...process.env, ZERION_API_KEY: "", HOME: process.env.HOME } },
         (error, _stdout, stderr) => {
           resolve({ code: error?.code ?? 0, stderr });
         }
       );
     });
 
-    // analyze may succeed if API key is in config, or fail gracefully
-    assert.equal(code, 0);
+    // Exit 0 if API key found in config, exit 1 with error message if not
+    assert.ok(code === 0 || code === 1, `unexpected exit code: ${code}`);
+    if (code === 1) {
+      assert.ok(stderr.length > 0, "should produce error output when failing");
+    }
   });
 
   it("chains command works without API key", async () => {
