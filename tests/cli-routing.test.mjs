@@ -71,12 +71,13 @@ describe("CLI routing", () => {
       assert.ok(json.count > 0);
     });
 
-    it("chains list removed → unknown_command", async () => {
-      const { code, stderr } = await run(["chains", "list"]);
-      assert.equal(code, 1);
-      const json = parseJSON(stderr);
+    it("chains list still works via single-word fallback", async () => {
+      const { code, stdout } = await run(["chains", "list", "--json"]);
+      assert.equal(code, 0);
+      const json = parseJSON(stdout);
       assert.ok(json);
-      assert.equal(json.error.code, "unknown_command");
+      assert.ok(json.chains);
+      assert.ok(json.count > 0);
     });
 
     it("wallet list shows wallets", async () => {
