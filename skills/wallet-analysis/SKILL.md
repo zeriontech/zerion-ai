@@ -121,7 +121,7 @@ All output is JSON on stdout. Errors are JSON on stderr with `{ "error": { "code
 
 ## Supported chains
 
-ethereum, base, arbitrum, optimism, polygon, bsc, avalanche, gnosis, scroll, linea, zksync, solana, zora, blast.
+ethereum, base, arbitrum, optimism, polygon, binance-smart-chain, avalanche, gnosis, scroll, linea, zksync-era, solana, zora, blast.
 
 Use `zerion chains` to inspect the broader chain catalog, but stick to the IDs above for `--chain` unless the CLI validator is expanded.
 

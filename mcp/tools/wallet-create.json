@@ -1,6 +1,6 @@
 {
   "name": "wallet-create",
-  "description": "Create a new encrypted wallet with EVM and Solana addresses.",
+  "description": "Create a new encrypted wallet with EVM and Solana addresses. INTERACTIVE ONLY: requires passphrase input via terminal. Cannot be called by automated MCP clients.",
   "inputSchema": {
     "type": "object",
     "properties": {

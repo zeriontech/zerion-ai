@@ -32,9 +32,6 @@ export async function signAndBroadcastSolana(swapTxData, walletName, passphrase)
     throw new Error("No transaction data from swap API for Solana");
   }
 
-  // Decode the transaction — try VersionedTransaction first, fall back to legacy
-  const txBuffer = Buffer.from(txData.startsWith("0x") ? txData.slice(2) : txData, "hex");
-
   let signedTxBytes;
 
   try {

@@ -9,6 +9,7 @@ import { getConfigValue } from "../../lib/config.js";
 import { getEvmAddress } from "../../lib/wallet/keystore.js";
 import { NATIVE_ASSET_ADDRESS } from "../../lib/util/constants.js";
 import { formatSwapQuote } from "../../lib/util/format.js";
+import { validateChain } from "../../lib/util/validate.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -36,6 +37,12 @@ export default async function send(args, flags) {
     printError("invalid_address", `Invalid recipient address: ${to}`, {
       suggestion: "Provide a valid 0x-prefixed EVM address (42 hex characters)",
     });
+    process.exit(1);
+  }
+
+  const chainErr = validateChain(flags.chain);
+  if (chainErr) {
+    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
     process.exit(1);
   }
 
@@ -86,11 +93,12 @@ export default async function send(args, flags) {
       client.estimateFeesPerGas(),
     ]);
 
-    // Balance check: prevent broadcasting doomed transactions
+    // Balance check: prevent broadcasting doomed transactions (include gas cost for native)
     const balance = await client.getBalance({ address: walletAddress });
-    if (isNative && balance < amountParsed) {
+    const estimatedGasCost = 21000n * (feeData.maxFeePerGas || 0n);
+    if (isNative && balance < amountParsed + estimatedGasCost) {
       printError("insufficient_balance",
-        `Insufficient ${resolved.symbol}: have ${formatEther(balance)}, need ${amount}`,
+        `Insufficient ${resolved.symbol}: have ${formatEther(balance)}, need ${amount} + gas (~${formatEther(estimatedGasCost)})`,
         { suggestion: `Check balance: zerion portfolio --chain ${chain}` }
       );
       process.exit(1);

@@ -51,12 +51,12 @@ These are the chain IDs currently accepted by the wallet commands in this repo:
 | Arbitrum | `arbitrum` |
 | Optimism | `optimism` |
 | Polygon | `polygon` |
-| BNB Chain | `bsc` |
+| BNB Chain | `binance-smart-chain` |
 | Avalanche | `avalanche` |
 | Gnosis | `gnosis` |
 | Scroll | `scroll` |
 | Linea | `linea` |
-| zkSync | `zksync` |
+| zkSync | `zksync-era` |
 | Solana | `solana` |
 | Zora | `zora` |
 | Blast | `blast` |

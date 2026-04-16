@@ -30,13 +30,31 @@ export async function resolveToken(query, chainId) {
     return { ...NATIVE_ALIASES.get(upper), name: upper };
   }
 
-  // 2. If it looks like a contract address, use it directly as fungibleId
+  // 2. If it looks like a contract address, resolve decimals from API
   if (query.startsWith("0x") && query.length >= 40) {
+    const addr = query.toLowerCase();
+    // Try to get actual decimals from chain-specific implementation
+    try {
+      const response = await api.searchFungibles(addr, { chainId, limit: 1 });
+      const match = response.data?.[0];
+      if (match) {
+        const impl = (match.attributes?.implementations || []).find(
+          (i) => i.chain_id === chainId
+        ) || match.attributes?.implementations?.[0];
+        return {
+          fungibleId: match.id,
+          symbol: match.attributes?.symbol || addr.slice(0, 6) + "...",
+          decimals: impl?.decimals ?? 18,
+          address: impl?.address || addr,
+          name: match.attributes?.name || "Unknown",
+        };
+      }
+    } catch { /* fall through to default */ }
     return {
-      fungibleId: query.toLowerCase(),
-      symbol: query.slice(0, 6) + "...",
-      decimals: 18, // Will be corrected by swap API
-      address: query.toLowerCase(),
+      fungibleId: addr,
+      symbol: addr.slice(0, 6) + "...",
+      decimals: 18,
+      address: addr,
       name: "Unknown",
     };
   }

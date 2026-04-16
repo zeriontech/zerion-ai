@@ -37,9 +37,11 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
   const client = getPublicClient(zerionChainId);
   const walletAddress = ows.getEvmAddress(walletName);
 
-  // Get nonce and gas prices from chain
+  // Get nonce and gas prices from chain.
+  // Use "latest" blockTag for nonce — "pending" can lag on some RPCs after a recent approval tx,
+  // causing the swap to reuse the approval's nonce.
   const [nonce, feeData] = await Promise.all([
-    client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
+    client.getTransactionCount({ address: walletAddress, blockTag: "latest" }),
     client.estimateFeesPerGas(),
   ]);
 

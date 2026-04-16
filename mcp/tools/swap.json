@@ -1,6 +1,6 @@
 {
   "name": "swap",
-  "description": "Swap tokens on the same chain or cross-chain. Returns a quote; add --yes to execute.",
+  "description": "Swap tokens on the same chain or cross-chain. Always executes the swap — requires an agent token.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -23,13 +23,9 @@
       "to_chain": {
         "type": "string",
         "description": "Destination chain for cross-chain swaps"
-      },
-      "execute": {
-        "type": "boolean",
-        "description": "Set true to execute the swap (default: quote only)"
       }
     },
     "required": ["from_token", "to_token", "amount"]
   },
-  "cli": "zerion swap {from_token} {to_token} {amount} [--chain {chain}] [--to-chain {to_chain}] [--yes]"
+  "cli": "zerion swap {from_token} {to_token} {amount} [--chain {chain}] [--to-chain {to_chain}]"
 }

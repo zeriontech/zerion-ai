@@ -133,9 +133,9 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       const { code, json } = await run(["analyze", VITALIK]);
       assert.equal(code, 0);
       assert.ok(json);
-      assert.ok(json.address);
+      assert.ok(json.wallet);
       assert.ok(json.portfolio);
-      assert.ok(json.activity);
+      assert.ok(json.positions);
       assert.ok(json.pnl);
     });
 

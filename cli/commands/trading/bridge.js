@@ -3,6 +3,7 @@ import { requireAgentToken, parseTimeout, handleTradingError } from "../../lib/t
 import { resolveWallet } from "../../lib/wallet/resolve.js";
 import { print, printError } from "../../lib/util/output.js";
 import { getConfigValue } from "../../lib/config.js";
+import { validateChain } from "../../lib/util/validate.js";
 
 export default async function bridge(args, flags) {
   const [token, targetChain, amount] = args;
@@ -18,6 +19,12 @@ export default async function bridge(args, flags) {
     printError("missing_amount", "Specify an amount to bridge", {
       example: `zerion bridge ${token} ${targetChain} 100`,
     });
+    process.exit(1);
+  }
+
+  const chainErr = validateChain(flags["from-chain"]) || validateChain(targetChain);
+  if (chainErr) {
+    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
     process.exit(1);
   }
 

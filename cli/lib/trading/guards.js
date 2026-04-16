@@ -3,10 +3,14 @@
  * Centralizes the repeated agent-token checks, timeout parsing, and catch-block logic.
  */
 
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { resolve, relative, dirname, join } from "node:path";
 import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../util/output.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const POLICIES_DIR = resolve(join(__dirname, "..", "..", "policies"));
 
 /**
  * Require a valid agent token for trading execution.
@@ -67,8 +71,15 @@ export async function enforceExecutablePolicies(txInfo) {
     }
     const scripts = policy.config?.scripts || [];
     for (const script of scripts) {
+      const resolved = resolve(script);
+      if (!resolved.startsWith(POLICIES_DIR)) {
+        printError("policy_path_violation", `Policy script outside allowed directory: ${script}`, {
+          policy: policy.name || pid,
+        });
+        process.exit(1);
+      }
       try {
-        const mod = await import(pathToFileURL(script).href);
+        const mod = await import(pathToFileURL(resolved).href);
         if (typeof mod.check !== "function") continue;
         const result = mod.check({ ...ctx, policy_config: policy.config });
         if (!result.allow) {

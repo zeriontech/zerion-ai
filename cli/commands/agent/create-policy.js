@@ -10,14 +10,13 @@ const POLICIES_DIR = join(__dirname, "..", "..", "policies");
 
 function parseExpires(input) {
   // Relative: 1h, 24h, 7d, 30d
-  const match = input.match(/^(\d+)([hdm])$/i);
+  const match = input.match(/^(\d+)([hd])$/i);
   if (match) {
     const n = parseInt(match[1], 10);
     const unit = match[2].toLowerCase();
     const ms =
       unit === "h" ? n * 3600_000 :
-      unit === "d" ? n * 86400_000 :
-      unit === "m" ? n * 2592000_000 : 0; // m = 30-day months
+      unit === "d" ? n * 86400_000 : 0;
     return new Date(Date.now() + ms).toISOString();
   }
   // Absolute: ISO date or YYYY-MM-DD

@@ -17,7 +17,7 @@ if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.
   setPrettyMode(true);
 }
 
-// --- Wallet management (lazy-loaded: OWS, Solana, qrcode) ---
+// --- Wallet management ---
 
 import walletCreate from "./commands/wallet/create.js";
 import walletImport from "./commands/wallet/import.js";
@@ -42,7 +42,7 @@ import positions from "./commands/analytics/positions.js";
 import portfolio from "./commands/analytics/portfolio.js";
 import pnl from "./commands/analytics/pnl.js";
 import history from "./commands/analytics/history.js";
-import analyze from "./commands/analytics/activity.js";
+import analyze from "./commands/analytics/overview.js";
 registerSingle("portfolio", portfolio);
 registerSingle("positions", positions);
 registerSingle("pnl", pnl);

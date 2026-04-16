@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { CONFIG_DIR, CONFIG_PATH, DEFAULT_SLIPPAGE, DEFAULT_CHAIN, WALLET_ORIGIN } from "./util/constants.js";
 
 const DEFAULTS = {
@@ -9,22 +10,35 @@ const DEFAULTS = {
 };
 
 let _configCache = null;
+let _configCorrupted = false;
 
 export function loadConfig() {
-  if (_configCache) return _configCache;
+  if (_configCache) return { ..._configCache };
   if (!existsSync(CONFIG_PATH)) return { ...DEFAULTS };
   try {
     _configCache = { ...DEFAULTS, ...JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) };
-    return _configCache;
+    return { ..._configCache };
   } catch {
+    _configCorrupted = true;
+    process.stderr.write(
+      `WARNING: ${CONFIG_PATH} is corrupted. Writes are blocked to prevent data loss.\n` +
+      `Fix or delete the file manually, then retry.\n`
+    );
     return { ...DEFAULTS };
   }
 }
 
 export function saveConfig(config) {
+  if (_configCorrupted) {
+    process.stderr.write(`ERROR: Refusing to write config — ${CONFIG_PATH} was corrupted on load.\n`);
+    process.exit(1);
+  }
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
-  _configCache = config;
+  // Atomic write: write to temp file, then rename
+  const tmpPath = join(CONFIG_DIR, ".config.tmp");
+  writeFileSync(tmpPath, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+  renameSync(tmpPath, CONFIG_PATH);
+  _configCache = { ...config };
 }
 
 export function getConfigValue(key) {

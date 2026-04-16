@@ -4,6 +4,7 @@ import { resolveWallet } from "../../lib/wallet/resolve.js";
 import { print, printError } from "../../lib/util/output.js";
 import { getConfigValue } from "../../lib/config.js";
 import { formatSwapQuote } from "../../lib/util/format.js";
+import { validateChain } from "../../lib/util/validate.js";
 
 export default async function swap(args, flags) {
   const [fromToken, toToken, amount] = args;
@@ -19,6 +20,12 @@ export default async function swap(args, flags) {
     printError("missing_amount", "Specify an amount to swap", {
       example: `zerion swap ${fromToken} ${toToken} 0.1`,
     });
+    process.exit(1);
+  }
+
+  const chainErr = validateChain(flags.chain) || validateChain(flags["from-chain"]) || validateChain(flags["to-chain"]);
+  if (chainErr) {
+    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
     process.exit(1);
   }
 

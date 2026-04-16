@@ -106,12 +106,14 @@ describe("CLI routing", () => {
       assert.equal(json.error.code, "unknown_command");
     });
 
-    it("analyze with no address → missing_args, exit 1", async () => {
-      const { code, stderr } = await run(["analyze"]);
+    it("analyze with no address and no default wallet → no_wallet, exit 1", async () => {
+      const { code, stderr } = await run(["analyze"], {
+        HOME: "/tmp/zerion-test-nonexistent",
+      });
       assert.equal(code, 1);
       const json = parseJSON(stderr);
       assert.ok(json);
-      assert.equal(json.error.code, "missing_args");
+      assert.equal(json.error.code, "no_wallet");
     });
 
     it("portfolio with no address and no default wallet → no_wallet, exit 1", async () => {

@@ -109,7 +109,7 @@ export function resolveWallet(flags, args = []) {
  * Supports both `wallet portfolio <addr>` and `portfolio --wallet <name>`.
  */
 export async function resolveAddressOrWallet(args, flags) {
-  if (args[0] && (args[0].startsWith("0x") || args[0].endsWith(".eth"))) {
+  if (args[0] && (args[0].startsWith("0x") || args[0].endsWith(".eth") || /^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(args[0]))) {
     const address = await resolveAddress(args[0]);
     return { walletName: args[0], address };
   }

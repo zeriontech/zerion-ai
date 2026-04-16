@@ -41,7 +41,7 @@ export async function getSwapQuote({
     "input[amount]": amountInSmallestUnits,
     "output[chain_id]": toChain || fromChain,
     "output[fungible_id]": toResolved.fungibleId,
-    "slippage_percent": slippage || getConfigValue("slippage") || DEFAULT_SLIPPAGE,
+    "slippage_percent": slippage ?? getConfigValue("slippage") ?? DEFAULT_SLIPPAGE,
     sort: "amount",
   };
 
@@ -186,8 +186,6 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
       throw err;
     }
 
-    // Small delay for approval to propagate
-    await new Promise((r) => setTimeout(r, 2000));
   }
 
   // 2. Sign the swap transaction
