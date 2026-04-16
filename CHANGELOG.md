@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/zeriontech/zerion-ai/compare/v0.3.0...v0.4.0) (2026-04-16)
+
+
+### Features
+
+* merge wallet CLI into unified zerion-cli ([426ad00](https://github.com/zeriontech/zerion-ai/commit/426ad000e505c3d905ca81230bb6f285f7351aef))
+
 ## [0.3.0](https://github.com/zeriontech/zerion-ai/compare/v0.2.0...v0.3.0) (2026-04-03)
 
 
