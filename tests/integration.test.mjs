@@ -3,13 +3,14 @@ import { describe, it, before } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { getApiKey } from "../cli/lib/config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BIN = join(__dirname, "../cli/zerion.js");
 
-const API_KEY = process.env.ZERION_API_KEY || "";
+const API_KEY = getApiKey() || "";
 const SKIP = !API_KEY;
-const SKIP_MSG = "Skipping: ZERION_API_KEY not set";
+const SKIP_MSG = "Skipping: no API key found (set ZERION_API_KEY or run `zerion config set apiKey <key>`)";
 
 const VITALIK = "0x42b9dF65B219B3dD36FF330A4dD8f327A6Ada990";
 
@@ -18,7 +19,7 @@ function run(args) {
     execFile(
       "node",
       [BIN, ...args],
-      { env: { ...process.env, ZERION_API_KEY: API_KEY }, timeout: 30000 },
+      { env: { ...process.env }, timeout: 30000 },
       (error, stdout, stderr) => {
         resolve({
           code: error?.code ?? 0,
@@ -122,8 +123,8 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       const { code, json } = await run(["chains"]);
       assert.equal(code, 0);
       assert.ok(json);
-      assert.ok(Array.isArray(json.data));
-      assert.ok(json.data.length > 0);
+      assert.ok(Array.isArray(json.chains));
+      assert.ok(json.chains.length > 0);
     });
   });
 
@@ -132,10 +133,9 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       const { code, json } = await run(["analyze", VITALIK]);
       assert.equal(code, 0);
       assert.ok(json);
-      assert.ok(json.wallet);
+      assert.ok(json.address);
       assert.ok(json.portfolio);
-      assert.ok(json.positions);
-      assert.ok(json.transactions);
+      assert.ok(json.activity);
       assert.ok(json.pnl);
     });
 
@@ -143,7 +143,7 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       const { code, json } = await run(["analyze", "vitalik.eth"]);
       assert.equal(code, 0);
       assert.ok(json);
-      assert.equal(json.wallet.query, "vitalik.eth");
+      assert.equal(json.label, "vitalik.eth");
     });
 
     it("analyze with chain filter", { skip: SKIP ? SKIP_MSG : false }, async () => {
