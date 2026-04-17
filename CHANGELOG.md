@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/zeriontech/zerion-ai/compare/v0.4.0...v0.4.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* rename npm package from zerion to zerion-cli ([#10](https://github.com/zeriontech/zerion-ai/issues/10)) ([e76bfaa](https://github.com/zeriontech/zerion-ai/commit/e76bfaa3471faf75c2243aa05a5c962a82424dc2))
+
 ## [0.4.0](https://github.com/zeriontech/zerion-ai/compare/v0.3.0...v0.4.0) (2026-04-16)
 
 
