@@ -1,15 +1,17 @@
 // Zerion API HTTP client — native fetch + Basic Auth + x402/MPP pay-per-call.
 // Auth resolution lives in ./auth.js. Callers pass the resolved { kind, ... }
 // object through `auth` / `options.auth`. When omitted, fetchAPI falls back
-// to resolveAuth({}) — which resolves to the API key from env/config.
+// to apiKey — pay-per-call is opt-in only through resolveAuth(flags), which
+// only analytics commands call. Trading commands hit this fallback and
+// always use the API key regardless of ZERION_X402 / ZERION_MPP env vars.
 
 import { API_BASE } from "../util/constants.js";
-import { basicAuthHeader, resolveAuth } from "./auth.js";
+import { basicAuthHeader, resolveApiKeyAuth } from "./auth.js";
 import { getX402Fetch } from "./x402.js";
 import { getMppFetch } from "./mpp.js";
 
 export async function fetchAPI(pathname, params = {}, auth) {
-  const resolved = auth || resolveAuth({});
+  const resolved = auth || resolveApiKeyAuth();
 
   const url = new URL(`${API_BASE}${pathname}`);
   for (const [key, value] of Object.entries(params)) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveAuth, basicAuthHeader } from "#zerion-ai/cli/lib/api/auth.js";
+import { resolveAuth, resolveApiKeyAuth, basicAuthHeader } from "#zerion-ai/cli/lib/api/auth.js";
 
 // Synthetic keys that pass the format detectors but are never used for
 // actual crypto operations — resolveAuth is pure and doesn't touch the network.
@@ -149,6 +149,49 @@ describe("resolveAuth — apiKey fallback", () => {
       const a = call({}, {});
       assert.equal(a.kind, "apiKey");
       assert.equal(a.key, "zk_dev_test_fake");
+    });
+  });
+});
+
+describe("resolveApiKeyAuth (fetchAPI fallback for trading commands)", () => {
+  // This helper is used by fetchAPI when callers don't pass auth explicitly
+  // (e.g., trading commands). It must IGNORE ZERION_X402 / ZERION_MPP to
+  // avoid silently opting trading flows into pay-per-call via a globally
+  // set env var.
+  function withEnv(patch, fn) {
+    const saved = {};
+    for (const k of Object.keys(patch)) {
+      saved[k] = process.env[k];
+      if (patch[k] === undefined) delete process.env[k];
+      else process.env[k] = patch[k];
+    }
+    try { fn(); } finally {
+      for (const k of Object.keys(saved)) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+  }
+
+  it("returns apiKey when ZERION_API_KEY is set", () => {
+    withEnv({ ZERION_API_KEY: "zk_dev_test" }, () => {
+      const a = resolveApiKeyAuth();
+      assert.equal(a.kind, "apiKey");
+      assert.equal(a.key, "zk_dev_test");
+    });
+  });
+
+  it("ignores ZERION_X402=true (trading must not auto-opt into pay-per-call)", () => {
+    withEnv({ ZERION_API_KEY: "zk_dev_test", ZERION_X402: "true" }, () => {
+      const a = resolveApiKeyAuth();
+      assert.equal(a.kind, "apiKey");
+    });
+  });
+
+  it("ignores ZERION_MPP=true (trading must not auto-opt into pay-per-call)", () => {
+    withEnv({ ZERION_API_KEY: "zk_dev_test", ZERION_MPP: "true" }, () => {
+      const a = resolveApiKeyAuth();
+      assert.equal(a.kind, "apiKey");
     });
   });
 });

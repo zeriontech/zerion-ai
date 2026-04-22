@@ -36,21 +36,28 @@ function resolveMppKey(env) {
   return env.TEMPO_PRIVATE_KEY || env.WALLET_PRIVATE_KEY || "";
 }
 
+// Resolves apiKey auth without looking at pay-per-call env vars. Used both
+// by resolveAuth's default branch and by callers that never support
+// pay-per-call (e.g., fetchAPI's fallback for trading commands).
+export function resolveApiKeyAuth() {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw authError(
+      "missing_api_key",
+      "ZERION_API_KEY is required. Get one at https://developers.zerion.io\n" +
+      "Alternatively, use --x402 or --mpp for pay-per-call (no API key needed)."
+    );
+  }
+  return { kind: "apiKey", key: apiKey };
+}
+
 export function resolveAuth(flags = {}, env = process.env) {
   const wantsMpp  = flags.mpp  === true || env.ZERION_MPP  === "true";
   const wantsX402 = flags.x402 === true || env.ZERION_X402 === "true";
 
   // Default: API key. Pay-per-call is an explicit opt-in below.
   if (!wantsMpp && !wantsX402) {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      throw authError(
-        "missing_api_key",
-        "ZERION_API_KEY is required. Get one at https://developers.zerion.io\n" +
-        "Alternatively, use --x402 or --mpp for pay-per-call (no API key needed)."
-      );
-    }
-    return { kind: "apiKey", key: apiKey };
+    return resolveApiKeyAuth();
   }
 
   if (wantsMpp && wantsX402) {
