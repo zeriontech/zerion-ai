@@ -16,7 +16,8 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "test:unit": "node --test tests/unit.test.mjs tests/tool-catalog.test.mjs tests/examples.test.mjs tests/consistency.test.mjs tests/auth.test.mjs",
-    "test:integration": "node --test tests/integration.test.mjs",
+    "test:integration": "node --test tests/integration.test.mjs tests/auth.integration.test.mjs",
+    "test:auth": "node --test tests/auth.integration.test.mjs",
     "prepublishOnly": "npm test"
   },
   "engines": {
