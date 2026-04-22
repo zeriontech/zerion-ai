@@ -88,6 +88,13 @@ register("agent", "delete-policy", agentDeletePolicy);
 import configCmd from "./commands/config.js";
 registerSingle("config", configCmd);
 
+// --- Auth (login / logout) ---
+
+import loginCmd from "./commands/login.js";
+import logoutCmd from "./commands/logout.js";
+registerSingle("login", loginCmd);
+registerSingle("logout", logoutCmd);
+
 // --- Dispatch ---
 
 try {

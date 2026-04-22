@@ -16,6 +16,26 @@ It ships two flagship workflows:
 
 ![Wallet analysis demo](./assets/demo-wallet-analysis.svg)
 
+## Quickstart: Authentication
+
+Pick whichever fits your workflow. All three authenticate the same CLI.
+
+```bash
+# Browser-based (recommended for agents) — opens the dashboard,
+# you click Authorize, the CLI auto-saves the key.
+zerion login --browser
+
+# Direct key — paste once, saved to ~/.zerion/config.json
+zerion login --api-key zk-YOUR-KEY
+
+# Or env var — useful for CI / containers (takes precedence over saved key)
+export ZERION_API_KEY=zk-YOUR-KEY
+```
+
+Running `zerion login` with no flags is interactive: it asks whether to open
+the browser or paste a key manually. Use `zerion logout` to clear the saved
+API key and any agent tokens.
+
 ## 1. Choose your authentication method
 
 ### Option A: API Key
