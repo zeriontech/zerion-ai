@@ -3,13 +3,15 @@ import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { formatPnl } from "../../lib/util/format.js";
 import { isX402Enabled } from "../../lib/api/x402.js";
+import { isMppEnabled } from "../../lib/api/mpp.js";
 
 export default async function pnl(args, flags) {
   const useX402 = flags.x402 === true || isX402Enabled();
+  const useMpp = flags.mpp === true || isMppEnabled();
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
-    const response = await api.getPnl(address, { useX402 });
+    const response = await api.getPnl(address, { useX402, useMpp });
     const data = response.data?.attributes || {};
 
     const result = {

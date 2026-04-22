@@ -8,10 +8,12 @@ import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { validateChain, validatePositions, resolvePositionFilter } from "../../lib/util/validate.js";
 import { isX402Enabled } from "../../lib/api/x402.js";
+import { isMppEnabled } from "../../lib/api/mpp.js";
 import { formatPositions } from "../../lib/util/format.js";
 
 export default async function walletPositions(args, flags) {
   const useX402 = flags.x402 === true || isX402Enabled();
+  const useMpp = flags.mpp === true || isMppEnabled();
 
   const chainErr = validateChain(flags.chain);
   if (chainErr) {
@@ -32,6 +34,7 @@ export default async function walletPositions(args, flags) {
       chainId: flags.chain,
       positionFilter: resolvePositionFilter(flags.positions),
       useX402,
+      useMpp,
     });
 
     const positions = (response.data || [])

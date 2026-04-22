@@ -3,9 +3,11 @@ import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { formatHistory } from "../../lib/util/format.js";
 import { isX402Enabled } from "../../lib/api/x402.js";
+import { isMppEnabled } from "../../lib/api/mpp.js";
 
 export default async function history(args, flags) {
   const useX402 = flags.x402 === true || isX402Enabled();
+  const useMpp = flags.mpp === true || isMppEnabled();
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
@@ -13,6 +15,7 @@ export default async function history(args, flags) {
       chainId: flags.chain,
       limit: flags.limit ? parseInt(flags.limit, 10) : 10,
       useX402,
+      useMpp,
     });
 
     const transactions = (response.data || []).map((tx) => ({

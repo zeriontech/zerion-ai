@@ -3,18 +3,21 @@ import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { formatPortfolio } from "../../lib/util/format.js";
 import { isX402Enabled } from "../../lib/api/x402.js";
+import { isMppEnabled } from "../../lib/api/mpp.js";
 
 export default async function portfolio(args, flags) {
   const useX402 = flags.x402 === true || isX402Enabled();
+  const useMpp = flags.mpp === true || isMppEnabled();
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
     const [portfolioRes, positionsRes] = await Promise.all([
-      api.getPortfolio(address, { useX402 }),
+      api.getPortfolio(address, { useX402, useMpp }),
       api.getPositions(address, {
         chainId: flags.chain,
         positionFilter: "only_simple",
         useX402,
+        useMpp,
       }),
     ]);
 
