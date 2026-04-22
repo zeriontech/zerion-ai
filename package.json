@@ -21,8 +21,8 @@
     "prepublishOnly": "npm test"
   },
   "imports": {
-    "#zerion-ai/*": "./*",
-    "#zerion-ai": "./package.json"
+    "#zerion/*": "./*",
+    "#zerion": "./package.json"
   },
   "engines": {
     "node": ">=20"

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion-ai")));
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 const toolsDir = join(ROOT, "mcp/tools");
 
 const EXPECTED_FILES = [

@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion-ai")));
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 
 function readJSON(relPath) {
   return JSON.parse(readFileSync(join(ROOT, relPath), "utf8"));

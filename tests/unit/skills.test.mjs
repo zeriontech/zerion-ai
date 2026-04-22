@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion-ai")));
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 const skillsDir = join(ROOT, "skills");
 
 const EXPECTED_SKILLS = ["wallet-analysis", "wallet-trading", "chains", "zerion"];

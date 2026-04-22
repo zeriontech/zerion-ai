@@ -3,9 +3,9 @@ import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { basicAuthHeader } from "#zerion-ai/cli/lib/api/auth.js";
+import { basicAuthHeader } from "#zerion/cli/lib/api/auth.js";
 
-const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion-ai")));
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 const toolsDir = join(ROOT, "mcp/tools");
 
 function readJSON(relPath) {

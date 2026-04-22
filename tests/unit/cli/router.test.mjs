@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const BIN = fileURLToPath(import.meta.resolve("#zerion-ai/cli/zerion.js"));
+const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
 
 function run(args, env = {}) {
   return new Promise((resolve) => {

@@ -43,7 +43,7 @@ import { describe, it } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const BIN = fileURLToPath(import.meta.resolve("#zerion-ai/cli/zerion.js"));
+const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
 
 const VITALIK = "0x42b9dF65B219B3dD36FF330A4dD8f327A6Ada990";
 const HISTORY_ARGS = ["history", VITALIK, "--limit", "1"];
