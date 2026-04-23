@@ -165,7 +165,9 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       });
 
       assert.equal(result.code, 1);
-      const json = JSON.parse(result.stderr);
+      // Node can emit deprecation warnings (e.g. DEP0040 punycode) ahead of
+      // the CLI's JSON error output on stderr. Parse from the first '{'.
+      const json = JSON.parse(result.stderr.slice(result.stderr.indexOf("{")));
       assert.equal(json.error.code, "api_error");
     });
   });
