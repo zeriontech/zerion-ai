@@ -70,7 +70,7 @@ export default async function swap(args, flags) {
     };
 
     // 4. Execute — agent token required (no interactive passphrase for trading)
-    const passphrase = requireAgentToken("for trading");
+    const passphrase = await requireAgentToken("for trading");
     const timeout = parseTimeout(flags.timeout);
     const result = await executeSwap(quote, walletName, passphrase, { timeout });
 

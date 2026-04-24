@@ -83,7 +83,7 @@ export default async function send(args, flags) {
     };
 
     // Agent token required — no interactive passphrase for trading
-    const passphrase = requireAgentToken("for trading");
+    const passphrase = await requireAgentToken("for trading");
 
     const client = getPublicClient(chain);
     const walletAddress = getEvmAddress(walletName);

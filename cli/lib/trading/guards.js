@@ -5,23 +5,31 @@
 
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, relative, dirname, join } from "node:path";
-import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById } from "../wallet/keystore.js";
+import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById, listWallets } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../util/output.js";
+import { confirm } from "../util/prompt.js";
+import agentCreateToken from "../../commands/agent/create-token.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const POLICIES_DIR = resolve(join(__dirname, "..", "..", "policies"));
 
 /**
  * Require a valid agent token for unattended signing (trading, message signing).
- * Prints an actionable error and exits if none is configured.
- * @param {string} [context] - what the token is needed for, e.g. "for signing" (default: "")
- * @returns {string} The agent token (used as OWS passphrase)
+ * If none is configured and stderr is a TTY, prompts the user to set one up
+ * inline — runs `agent create-token` then returns the freshly-saved token so
+ * the caller can continue. In non-TTY contexts, errors and exits.
+ * @param {string} [context] - what the token is needed for, e.g. "for signing"
+ * @returns {Promise<string>} The agent token (used as OWS passphrase)
  */
-export function requireAgentToken(context = "") {
+export async function requireAgentToken(context = "") {
   const token = getAgentToken();
-  if (!token) {
-    const suffix = context ? ` ${context}` : "";
+  if (token) return token;
+
+  const suffix = context ? ` ${context}` : "";
+
+  // Non-interactive: error and exit like before
+  if (!process.stderr.isTTY) {
     printError("no_agent_token", `Agent token required${suffix}`, {
       suggestion:
         "Create one: zerion agent create-token --name <name> --wallet <wallet>\n" +
@@ -29,7 +37,35 @@ export function requireAgentToken(context = "") {
     });
     process.exit(1);
   }
-  return token;
+
+  // Interactive: offer to create one now
+  process.stderr.write(`\nAgent token required${suffix}.\n`);
+
+  const defaultWallet = getConfigValue("defaultWallet");
+  const wallets = (() => {
+    try { return listWallets(); } catch { return []; }
+  })();
+
+  if (wallets.length === 0) {
+    process.stderr.write("No wallets found. Create one first: zerion wallet create --name <name>\n\n");
+    process.exit(1);
+  }
+
+  const walletName = defaultWallet || wallets[0].name;
+  const wantSetup = await confirm(`Want to setup an agent token for "${walletName}"? [Y/n] `);
+  if (!wantSetup) {
+    process.stderr.write("Aborted. Create one later with: zerion agent create-token --name <name> --wallet <wallet>\n\n");
+    process.exit(1);
+  }
+
+  await agentCreateToken([], { name: `${walletName}-agent`, wallet: walletName });
+
+  const freshToken = getAgentToken();
+  if (!freshToken) {
+    printError("no_agent_token", `Agent token creation did not complete${suffix}`);
+    process.exit(1);
+  }
+  return freshToken;
 }
 
 /**

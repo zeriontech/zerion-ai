@@ -81,7 +81,7 @@ export default async function walletSignTypedData(args, flags) {
   }
 
   // Agent token required — same model as swap/bridge/send. No interactive passphrase.
-  const passphrase = requireAgentToken("for signing");
+  const passphrase = await requireAgentToken("for signing");
 
   try {
     const wallet = ows.getWallet(walletName);

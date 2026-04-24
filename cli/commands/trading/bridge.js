@@ -67,7 +67,7 @@ export default async function bridge(args, flags) {
     };
 
     // Agent token required — no interactive passphrase for trading
-    const passphrase = requireAgentToken("for trading");
+    const passphrase = await requireAgentToken("for trading");
     const timeout = parseTimeout(flags.timeout);
     const result = await executeSwap(quote, walletName, passphrase, { timeout });
 
