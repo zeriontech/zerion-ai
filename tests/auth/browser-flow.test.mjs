@@ -46,6 +46,7 @@ describe("browser-flow.browserLogin", () => {
     const result = await browserLogin({
       webUrl: "https://mock.invalid",
       statusUrl: "https://mock.invalid/api/cli/status",
+      opener: async () => {},
     });
 
     assert.equal(result.apiKey, "zk-test123");
@@ -66,6 +67,7 @@ describe("browser-flow.browserLogin", () => {
         browserLogin({
           webUrl: "https://mock.invalid",
           statusUrl: "https://mock.invalid/api/cli/status",
+          opener: async () => {},
         }),
       /rejected/i
     );

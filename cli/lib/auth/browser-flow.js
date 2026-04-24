@@ -15,7 +15,11 @@ import { WEB_URL, CLI_STATUS_URL } from "../util/constants.js";
 const POLL_INTERVAL_MS = 2000;
 const TIMEOUT_MS = 5 * 60 * 1000;
 
-export async function browserLogin({ webUrl = WEB_URL, statusUrl = CLI_STATUS_URL } = {}) {
+export async function browserLogin({
+  webUrl = WEB_URL,
+  statusUrl = CLI_STATUS_URL,
+  opener = open,
+} = {}) {
   const sessionId = generateSessionId();
   const verifier = generateVerifier();
   const challenge = generateChallenge(verifier);
@@ -26,7 +30,7 @@ export async function browserLogin({ webUrl = WEB_URL, statusUrl = CLI_STATUS_UR
   process.stderr.write(`If the browser doesn't open, visit:\n  ${loginUrl}\n\n`);
 
   try {
-    await open(loginUrl);
+    await opener(loginUrl);
   } catch {
     // fallback instructions already printed above
   }
