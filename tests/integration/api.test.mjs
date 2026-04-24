@@ -2,11 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it, before } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { getApiKey } from "../cli/lib/config.js";
+import { getApiKey } from "#zerion/cli/lib/config.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BIN = join(__dirname, "../cli/zerion.js");
+const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
 
 const API_KEY = getApiKey() || "";
 const SKIP = !API_KEY;
@@ -167,7 +165,9 @@ describe("integration tests (requires ZERION_API_KEY)", () => {
       });
 
       assert.equal(result.code, 1);
-      const json = JSON.parse(result.stderr);
+      // Node can emit deprecation warnings (e.g. DEP0040 punycode) ahead of
+      // the CLI's JSON error output on stderr. Parse from the first '{'.
+      const json = JSON.parse(result.stderr.slice(result.stderr.indexOf("{")));
       assert.equal(json.error.code, "api_error");
     });
   });

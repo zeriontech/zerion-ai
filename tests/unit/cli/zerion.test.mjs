@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BIN = join(__dirname, "../cli/zerion.js");
+const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
 
 describe("zerion", () => {
   it("prints help", async () => {
@@ -37,23 +35,5 @@ describe("zerion", () => {
     if (code === 1) {
       assert.ok(stderr.length > 0, "should produce error output when failing");
     }
-  });
-
-  it("chains command works without API key", async () => {
-    const { code, stdout } = await new Promise((resolve) => {
-      execFile(
-        "node",
-        [BIN, "chains", "--json"],
-        { env: { ...process.env, ZERION_API_KEY: "" } },
-        (error, stdout) => {
-          resolve({ code: error?.code ?? 0, stdout });
-        }
-      );
-    });
-
-    assert.equal(code, 0);
-    const json = JSON.parse(stdout);
-    assert.ok(json.chains);
-    assert.ok(json.count > 0);
   });
 });

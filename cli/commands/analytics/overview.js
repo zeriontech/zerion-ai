@@ -6,7 +6,7 @@
 import { fetchAPI } from "../../lib/api/client.js";
 import { summarizeAnalyze } from "../../lib/util/analyze.js";
 import { print, printError } from "../../lib/util/output.js";
-import { isX402Enabled } from "../../lib/api/x402.js";
+import { resolveAuth } from "../../lib/api/auth.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { validateChain } from "../../lib/util/validate.js";
 
@@ -18,7 +18,6 @@ export default async function walletAnalyze(args, flags) {
   }
 
   const { walletName, address: resolved } = await resolveAddressOrWallet(args, flags);
-  const useX402 = flags.x402 === true || isX402Enabled();
   const addr = encodeURIComponent(resolved);
   const txLimit = flags.limit ? parseInt(flags.limit, 10) : 10;
 
@@ -32,11 +31,12 @@ export default async function walletAnalyze(args, flags) {
   else if (flags.positions === "defi") posParams["filter[positions]"] = "only_complex";
 
   try {
+    const auth = resolveAuth(flags);
     const results = await Promise.allSettled([
-      fetchAPI(`/wallets/${addr}/portfolio`, {}, useX402),
-      fetchAPI(`/wallets/${addr}/positions/`, posParams, useX402),
-      fetchAPI(`/wallets/${addr}/transactions/`, txParams, useX402),
-      fetchAPI(`/wallets/${addr}/pnl`, {}, useX402),
+      fetchAPI(`/wallets/${addr}/portfolio`, {}, auth),
+      fetchAPI(`/wallets/${addr}/positions/`, posParams, auth),
+      fetchAPI(`/wallets/${addr}/transactions/`, txParams, auth),
+      fetchAPI(`/wallets/${addr}/pnl`, {}, auth),
     ]);
 
     const labels = ["portfolio", "positions", "transactions", "pnl"];
@@ -48,7 +48,7 @@ export default async function walletAnalyze(args, flags) {
     const summary = summarizeAnalyze(resolved, ...values);
     if (walletName !== resolved) summary.label = walletName;
     if (failures.length) summary.failures = failures;
-    if (useX402) summary.auth = "x402";
+    if (auth.kind !== "apiKey") summary.auth = auth.kind;
 
     print(summary);
   } catch (err) {

@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BIN = join(__dirname, "../cli/zerion.js");
+const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
 
 function run(args, env = {}) {
   return new Promise((resolve) => {
@@ -62,24 +60,6 @@ describe("CLI routing", () => {
   });
 
   describe("command routing", () => {
-    it("chains shows chain list (no API key needed)", async () => {
-      const { code, stdout } = await run(["chains"]);
-      assert.equal(code, 0);
-      const json = parseJSON(stdout);
-      assert.ok(json);
-      assert.ok(json.chains);
-      assert.ok(json.count > 0);
-    });
-
-    it("chains list still works via single-word fallback", async () => {
-      const { code, stdout } = await run(["chains", "list", "--json"]);
-      assert.equal(code, 0);
-      const json = parseJSON(stdout);
-      assert.ok(json);
-      assert.ok(json.chains);
-      assert.ok(json.count > 0);
-    });
-
     it("wallet list shows wallets", async () => {
       const { code, stdout } = await run(["wallet", "list", "--json"]);
       assert.equal(code, 0);

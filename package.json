@@ -14,10 +14,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test tests/*.test.mjs tests/**/*.test.mjs",
-    "test:unit": "node --test tests/unit.test.mjs tests/tool-catalog.test.mjs tests/examples.test.mjs tests/consistency.test.mjs",
-    "test:integration": "node --test tests/integration.test.mjs",
+    "test": "node --test 'tests/**/*.test.mjs'",
+    "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
+    "test:integration": "node --test 'tests/integration/**/*.test.mjs'",
+    "test:integration:auth": "node --test tests/integration/auth.test.mjs",
     "prepublishOnly": "npm test"
+  },
+  "imports": {
+    "#zerion/*": "./*",
+    "#zerion": "./package.json"
   },
   "engines": {
     "node": ">=20"
@@ -45,6 +50,7 @@
     "@x402/evm": "^2.6.0",
     "@x402/fetch": "^2.6.0",
     "@x402/svm": "^2.8.0",
+    "mppx": "^0.6.2",
     "open": "^10.1.0",
     "qrcode-terminal": "^0.12.0",
     "viem": "^2.0.0"

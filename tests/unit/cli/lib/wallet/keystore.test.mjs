@@ -1,7 +1,7 @@
 import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { serializeTransaction } from "viem";
-import * as ows from "../cli/lib/wallet/keystore.js";
+import * as ows from "#zerion/cli/lib/wallet/keystore.js";
 
 const TEST_WALLET = "ows-unit-test";
 

@@ -2,19 +2,19 @@ import * as api from "../../lib/api/client.js";
 import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { formatPortfolio } from "../../lib/util/format.js";
-import { isX402Enabled } from "../../lib/api/x402.js";
+import { resolveAuth } from "../../lib/api/auth.js";
 
 export default async function portfolio(args, flags) {
-  const useX402 = flags.x402 === true || isX402Enabled();
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
+    const auth = resolveAuth(flags);
     const [portfolioRes, positionsRes] = await Promise.all([
-      api.getPortfolio(address, { useX402 }),
+      api.getPortfolio(address, { auth }),
       api.getPositions(address, {
         chainId: flags.chain,
         positionFilter: "only_simple",
-        useX402,
+        auth,
       }),
     ]);
 

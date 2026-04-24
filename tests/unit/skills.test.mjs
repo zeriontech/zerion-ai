@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, "..");
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 const skillsDir = join(ROOT, "skills");
 
 const EXPECTED_SKILLS = ["wallet-analysis", "wallet-trading", "chains", "zerion"];

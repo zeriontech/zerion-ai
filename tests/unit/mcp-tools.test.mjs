@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const toolsDir = join(__dirname, "../mcp/tools");
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
+const toolsDir = join(ROOT, "mcp/tools");
 
 const EXPECTED_FILES = [
   "wallet-portfolio.json",

@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { basicAuthHeader } from "../cli/lib/api/client.js";
+import { join } from "node:path";
+import { basicAuthHeader } from "#zerion/cli/lib/api/auth.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, "..");
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 const toolsDir = join(ROOT, "mcp/tools");
 
 function readJSON(relPath) {

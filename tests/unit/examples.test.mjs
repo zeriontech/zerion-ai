@@ -3,10 +3,9 @@ import { describe, it } from "node:test";
 import { readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, "..");
+const ROOT = fileURLToPath(new URL(".", import.meta.resolve("#zerion")));
 
 function readJSON(relPath) {
   return JSON.parse(readFileSync(join(ROOT, relPath), "utf8"));
