@@ -7,11 +7,11 @@ import * as api from "../../lib/api/client.js";
 import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { validateChain, validatePositions, resolvePositionFilter } from "../../lib/util/validate.js";
-import { isX402Enabled } from "../../lib/api/x402.js";
+import { resolveX402 } from "../../lib/api/x402.js";
 import { formatPositions } from "../../lib/util/format.js";
 
 export default async function walletPositions(args, flags) {
-  const useX402 = flags.x402 === true || isX402Enabled();
+  const useX402 = resolveX402(flags);
 
   const chainErr = validateChain(flags.chain);
   if (chainErr) {

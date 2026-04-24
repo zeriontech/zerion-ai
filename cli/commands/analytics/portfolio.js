@@ -2,10 +2,10 @@ import * as api from "../../lib/api/client.js";
 import { print, printError } from "../../lib/util/output.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { formatPortfolio } from "../../lib/util/format.js";
-import { isX402Enabled } from "../../lib/api/x402.js";
+import { resolveX402 } from "../../lib/api/x402.js";
 
 export default async function portfolio(args, flags) {
-  const useX402 = flags.x402 === true || isX402Enabled();
+  const useX402 = resolveX402(flags);
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
