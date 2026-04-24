@@ -36,8 +36,8 @@ register("wallet", "fund", walletFund);
 register("wallet", "backup", walletBackup);
 register("wallet", "delete", walletDelete);
 register("wallet", "sync", walletSync);
-register("wallet", "sign-message", walletSignMessage);
-register("wallet", "sign-typed-data", walletSignTypedData);
+registerSingle("sign-message", walletSignMessage);
+registerSingle("sign-typed-data", walletSignTypedData);
 registerSingle("watch", watch);
 
 // --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---

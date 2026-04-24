@@ -150,12 +150,12 @@ Use for off-chain authorizations: SIWE login, EIP-2612 `permit`, Permit2 approva
 If an agent token is active, signing is unattended; otherwise the user is prompted for the wallet passphrase.
 
 ```
-zerion wallet sign-message <message> --chain <chain>              # EIP-191 (EVM) or raw ed25519 (Solana)
-zerion wallet sign-message <message> --encoding hex               # Treat <message> as hex bytes
-zerion wallet sign-message --message <text> --wallet <name>       # Explicit flags
-zerion wallet sign-typed-data --data '<json>' --chain <chain>     # EIP-712 typed data (EVM only)
-zerion wallet sign-typed-data --file <path>                       # Read typed data from file
-cat typed.json | zerion wallet sign-typed-data                    # Read typed data from stdin
+zerion sign-message <message> --chain <chain>              # EIP-191 (EVM) or raw ed25519 (Solana)
+zerion sign-message <message> --encoding hex               # Treat <message> as hex bytes
+zerion sign-message --message <text> --wallet <name>       # Explicit flags
+zerion sign-typed-data --data '<json>' --chain <chain>     # EIP-712 typed data (EVM only)
+zerion sign-typed-data --file <path>                       # Read typed data from file
+cat typed.json | zerion sign-typed-data                    # Read typed data from stdin
 ```
 
 Typed data must be a JSON object with `{ domain, types, primaryType, message }`. Include `EIP712Domain` in `types` when the signer requires it.

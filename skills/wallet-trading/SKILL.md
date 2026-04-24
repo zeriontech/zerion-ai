@@ -103,12 +103,12 @@ zerion analyze <name|address> --period 7d
 For SIWE login, EIP-2612 `permit`, Permit2 approvals, Seaport orders. Unattended when an agent token is active, interactive otherwise.
 
 ```bash
-zerion wallet sign-message "hello" --chain ethereum               # EIP-191 personal_sign
-zerion wallet sign-message 0xdeadbeef --encoding hex              # Raw hex bytes
-zerion wallet sign-message "hi" --chain solana                    # Raw ed25519 (Solana)
-zerion wallet sign-typed-data --data '<json>' --chain base        # EIP-712 (EVM only)
-zerion wallet sign-typed-data --file permit.json                  # From file
-cat permit.json | zerion wallet sign-typed-data                   # From stdin
+zerion sign-message "hello" --chain ethereum               # EIP-191 personal_sign
+zerion sign-message 0xdeadbeef --encoding hex              # Raw hex bytes
+zerion sign-message "hi" --chain solana                    # Raw ed25519 (Solana)
+zerion sign-typed-data --data '<json>' --chain base        # EIP-712 (EVM only)
+zerion sign-typed-data --file permit.json                  # From file
+cat permit.json | zerion sign-typed-data                   # From stdin
 ```
 
 Security: signing arbitrary messages or typed data can authorize unlimited token allowances. Only sign payloads whose domain and primaryType you recognize.

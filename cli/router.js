@@ -31,8 +31,13 @@ function printUsage() {
       "wallet delete <name>": "Permanently delete a wallet (requires passphrase)",
       "wallet sync --wallet <name>": "Sync wallet to Zerion app via QR code",
       "wallet sync --all": "Sync all wallets to Zerion app",
-      "wallet sign-message <message> --chain <chain>": "Sign an EIP-191 (EVM) or raw (Solana) message",
-      "wallet sign-typed-data --file <path>": "Sign EIP-712 typed data (EVM only; --data, --file, or stdin)",
+    },
+    signing: {
+      "sign-message <message> --chain <chain>": "Sign an EIP-191 (EVM) or raw (Solana) message",
+      "sign-message <message> --encoding hex": "Treat message as hex bytes",
+      "sign-typed-data --data '<json>'": "Sign EIP-712 typed data (EVM only)",
+      "sign-typed-data --file <path>": "Read EIP-712 typed data from file",
+      "cat typed.json | sign-typed-data": "Read EIP-712 typed data from stdin",
     },
     analysis: {
       "analyze <address|name>": "Full analysis (portfolio, positions, txs, PnL in parallel)",
