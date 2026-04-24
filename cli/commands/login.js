@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { setConfigValue, getApiKey } from "../lib/config.js";
 import { print, printError } from "../lib/util/output.js";
 import { browserLogin } from "../lib/auth/browser-flow.js";
+import { readSecret } from "../lib/util/prompt.js";
 import { API_BASE, CONFIG_PATH } from "../lib/util/constants.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,12 @@ function maskKey(key) {
   return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }
 
+// Dashboard issues keys prefixed `zk_dev_` or `zk_prod_`. Older guidance
+// mentioned `zk-` so we accept either to avoid rejecting valid keys.
+function isValidKeyFormat(key) {
+  return typeof key === "string" && /^zk[_-]/.test(key);
+}
+
 function successBlock({ team, method, key }) {
   const w = (s) => process.stderr.write(s + "\n");
   w("");
@@ -55,9 +62,12 @@ export default async function loginCmd(args, flags) {
   }
 
   if (flags["api-key"]) {
+    if (flags.browser) {
+      process.stderr.write("Note: --api-key takes precedence over --browser.\n");
+    }
     const key = flags["api-key"];
-    if (typeof key !== "string" || !key.startsWith("zk-")) {
-      printError("invalid_key_format", "API keys start with 'zk-'");
+    if (!isValidKeyFormat(key)) {
+      printError("invalid_key_format", "API keys start with 'zk_' (e.g. zk_dev_…)");
       process.exit(1);
     }
     setConfigValue("apiKey", key);
@@ -68,6 +78,16 @@ export default async function loginCmd(args, flags) {
   if (flags.browser) {
     banner();
     return runBrowser();
+  }
+
+  // Interactive menu needs a TTY. In non-TTY contexts (CI, pipes, containers),
+  // an interactive prompt blocks forever — fail loudly with a fix.
+  if (!process.stdin.isTTY) {
+    printError(
+      "no_tty",
+      "Interactive login requires a terminal. Use --browser, --api-key <key>, or set ZERION_API_KEY."
+    );
+    process.exit(1);
   }
 
   banner();
@@ -90,9 +110,9 @@ export default async function loginCmd(args, flags) {
     process.exit(1);
   }
 
-  const key = await prompt("Enter your Zerion API key: ");
-  if (!key || !key.startsWith("zk-")) {
-    printError("invalid_key_format", "API keys start with 'zk-'");
+  const key = await readSecret("Enter your Zerion API key: ", { mask: true });
+  if (!isValidKeyFormat(key)) {
+    printError("invalid_key_format", "API keys start with 'zk_' (e.g. zk_dev_…)");
     process.exit(1);
   }
   setConfigValue("apiKey", key);

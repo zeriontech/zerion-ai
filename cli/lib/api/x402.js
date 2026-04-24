@@ -26,7 +26,3 @@ export async function getX402Fetch() {
 export function isX402Enabled() {
   return process.env.ZERION_X402 === "true";
 }
-
-export function resolveX402(flags = {}) {
-  return flags.x402 === true || isX402Enabled();
-}

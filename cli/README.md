@@ -21,7 +21,12 @@ Requires Node.js 20 or later.
 See the [root README](../README.md#1-choose-your-authentication-method) for full auth setup (API key, x402, agent tokens).
 
 ```bash
-# Option A: API key
+# Option A: API key via interactive login (browser or paste)
+zerion login --browser        # opens dashboard, auto-saves key
+zerion login --api-key zk-... # non-interactive
+zerion logout                 # clear saved key + agent tokens
+
+# Or set the env var directly (takes precedence over saved config)
 export ZERION_API_KEY="zk_dev_..."
 
 # Option B: x402 pay-per-call (no API key needed)

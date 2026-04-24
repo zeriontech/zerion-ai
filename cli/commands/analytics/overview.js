@@ -6,7 +6,7 @@
 import { fetchAPI } from "../../lib/api/client.js";
 import { summarizeAnalyze } from "../../lib/util/analyze.js";
 import { print, printError } from "../../lib/util/output.js";
-import { resolveX402 } from "../../lib/api/x402.js";
+import { isX402Enabled } from "../../lib/api/x402.js";
 import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
 import { validateChain } from "../../lib/util/validate.js";
 
@@ -18,7 +18,7 @@ export default async function walletAnalyze(args, flags) {
   }
 
   const { walletName, address: resolved } = await resolveAddressOrWallet(args, flags);
-  const useX402 = resolveX402(flags);
+  const useX402 = flags.x402 === true || isX402Enabled();
   const addr = encodeURIComponent(resolved);
   const txLimit = flags.limit ? parseInt(flags.limit, 10) : 10;
 
