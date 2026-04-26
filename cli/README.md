@@ -132,6 +132,22 @@ zerion config set slippage <percent>     Set slippage tolerance (default: 2%)
 zerion config unset <key>                Remove a config value
 ```
 
+### Manual operations — agent skills & MCP setup
+
+Convenience wrappers for installing Zerion as agent skills (Claude Code, Codex, Cursor, Gemini CLI, OpenCode, …) or wiring the hosted MCP into a coding agent's config.
+
+```
+zerion setup skills                                  Install Zerion skills via `npx skills add` (interactive)
+zerion setup skills --agent claude-code -y           Non-interactive install into Claude Code
+zerion setup skills -g                               Install globally (cross-project)
+zerion setup mcp --print                             Print the canonical Zerion MCP config fragment
+zerion setup mcp --agent cursor                      Merge Zerion server into project .cursor/mcp.json
+zerion setup mcp --agent claude-code -g              Merge into ~/.claude/settings.json (global)
+zerion setup mcp --agent claude-desktop -g           Merge into Claude Desktop's app config
+```
+
+`setup skills` delegates to [vercel-labs/skills](https://github.com/vercel-labs/skills) and installs from [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent). For the full plugin (skills + slash commands + MCP) inside Claude Code, use `/plugin install zerion-agent@zerion` instead.
+
 ### Other
 
 ```

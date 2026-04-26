@@ -121,6 +121,11 @@ function printUsage() {
       "defaultChain": "Default chain (default: ethereum)",
       "slippage": "Default slippage % for swaps (default: 2)",
     },
+    setup: {
+      "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-agent` (45+ hosts)",
+      "setup mcp --agent <name>": "Write the Zerion hosted-MCP fragment into a detected agent's config (cursor, claude-code, claude-desktop)",
+      "setup mcp --print": "Print the canonical MCP fragment to stdout",
+    },
     chains: [
       "ethereum", "base", "arbitrum", "optimism", "polygon",
       "binance-smart-chain", "avalanche", "gnosis", "scroll",
