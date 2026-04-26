@@ -1,4 +1,4 @@
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getAgentTokenForWallet, listSavedAgentTokens, setConfigValue } from "../../utils/config.js";
 
 export default async function agentUseToken(args, flags) {

@@ -5,7 +5,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { runPolicyFromStdin } from "../utils/util/prompt.js";
+import { runPolicyFromStdin } from "../utils/common/prompt.js";
 
 export function check(ctx) {
   const tx = ctx.transaction || {};

@@ -7,8 +7,8 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, relative, dirname, join } from "node:path";
 import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById, listWallets } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
-import { printError } from "../util/output.js";
-import { confirm } from "../util/prompt.js";
+import { printError } from "../common/output.js";
+import { confirm } from "../common/prompt.js";
 import agentCreateToken from "../../commands/agent/create-token.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

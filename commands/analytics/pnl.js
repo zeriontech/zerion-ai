@@ -1,7 +1,7 @@
 import * as api from "../../utils/api/client.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { formatPnl } from "../../utils/util/format.js";
+import { formatPnl } from "../../utils/common/format.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 
 export default async function pnl(args, flags) {

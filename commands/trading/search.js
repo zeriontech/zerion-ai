@@ -1,6 +1,6 @@
 import * as api from "../../utils/api/client.js";
-import { print, printError } from "../../utils/util/output.js";
-import { formatSearch } from "../../utils/util/format.js";
+import { print, printError } from "../../utils/common/output.js";
+import { formatSearch } from "../../utils/common/format.js";
 
 export default async function search(args, flags) {
   const query = args.join(" ");

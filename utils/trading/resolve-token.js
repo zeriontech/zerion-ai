@@ -3,7 +3,7 @@
  */
 
 import * as api from "../api/client.js";
-import { NATIVE_ASSET_ADDRESS } from "../util/constants.js";
+import { NATIVE_ASSET_ADDRESS } from "../common/constants.js";
 
 // Hardcoded aliases for the most common tokens — avoids API call for basic swaps
 const NATIVE_ALIASES = new Map([

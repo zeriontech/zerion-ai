@@ -7,7 +7,7 @@ import { mainnet } from "viem/chains";
 import * as ows from "./keystore.js";
 import { getConfigValue } from "../config.js";
 import { isSolana } from "../chain/registry.js";
-import { printError } from "../util/output.js";
+import { printError } from "../common/output.js";
 import { resolveWatchAddress } from "./watchlist.js";
 
 const ENS_TIMEOUT_MS = 10_000;

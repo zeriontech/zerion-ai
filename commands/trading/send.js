@@ -4,12 +4,12 @@ import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutableP
 import * as api from "../../utils/api/client.js";
 import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../utils/trading/transaction.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { getEvmAddress } from "../../utils/wallet/keystore.js";
-import { NATIVE_ASSET_ADDRESS } from "../../utils/util/constants.js";
-import { formatSwapQuote } from "../../utils/util/format.js";
-import { validateChain } from "../../utils/util/validate.js";
+import { NATIVE_ASSET_ADDRESS } from "../../utils/common/constants.js";
+import { formatSwapQuote } from "../../utils/common/format.js";
+import { validateChain } from "../../utils/common/validate.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",

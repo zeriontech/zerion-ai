@@ -1,7 +1,7 @@
 import * as ows from "../../utils/wallet/keystore.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../utils/config.js";
-import { formatWalletList } from "../../utils/util/format.js";
+import { formatWalletList } from "../../utils/common/format.js";
 import { fromCaip2 } from "../../utils/chain/registry.js";
 
 /**

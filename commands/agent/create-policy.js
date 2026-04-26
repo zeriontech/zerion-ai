@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { createPolicy, toCaip2, allChainNames } from "../../utils/wallet/keystore.js";
-import { shortenScriptPaths } from "../../utils/util/format.js";
+import { shortenScriptPaths } from "../../utils/common/format.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const POLICIES_DIR = join(__dirname, "..", "..", "policies");

@@ -4,11 +4,11 @@
  */
 
 import * as api from "../../utils/api/client.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { validateChain, validatePositions, resolvePositionFilter } from "../../utils/util/validate.js";
+import { validateChain, validatePositions, resolvePositionFilter } from "../../utils/common/validate.js";
 import { resolveAuth } from "../../utils/api/auth.js";
-import { formatPositions } from "../../utils/util/format.js";
+import { formatPositions } from "../../utils/common/format.js";
 
 export default async function walletPositions(args, flags) {
   const chainErr = validateChain(flags.chain);

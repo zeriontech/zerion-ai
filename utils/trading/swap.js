@@ -11,7 +11,7 @@ import { signSwapTransaction, broadcastAndWait, approveErc20 } from "./transacti
 import { signAndBroadcastSolana } from "../chain/solana.js";
 import { isSolana } from "../chain/registry.js";
 import { getConfigValue } from "../config.js";
-import { NATIVE_ASSET_ADDRESS, DEFAULT_SLIPPAGE } from "../util/constants.js";
+import { NATIVE_ASSET_ADDRESS, DEFAULT_SLIPPAGE } from "../common/constants.js";
 import { enforceExecutablePolicies } from "./guards.js";
 
 /**

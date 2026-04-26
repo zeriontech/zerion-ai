@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DIR, CONFIG_PATH, DEFAULT_SLIPPAGE, DEFAULT_CHAIN, WALLET_ORIGIN } from "./util/constants.js";
+import { CONFIG_DIR, CONFIG_PATH, DEFAULT_SLIPPAGE, DEFAULT_CHAIN, WALLET_ORIGIN } from "./common/constants.js";
 
 const DEFAULTS = {
   apiKey: null,

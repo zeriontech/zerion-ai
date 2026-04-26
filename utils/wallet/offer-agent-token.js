@@ -6,7 +6,7 @@
  */
 
 import * as ows from "./keystore.js";
-import { print } from "../util/output.js";
+import { print } from "../common/output.js";
 import { saveAgentToken } from "../config.js";
 import { pickPolicyInteractive } from "./policy-picker.js";
 

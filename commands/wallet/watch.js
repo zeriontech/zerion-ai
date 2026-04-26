@@ -1,6 +1,6 @@
 import { addWatch, removeWatch, listWatch } from "../../utils/wallet/watchlist.js";
 import { resolveAddress } from "../../utils/wallet/resolve.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 
 export default async function watch(args, flags) {
   const action = args[0];

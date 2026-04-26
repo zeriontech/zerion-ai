@@ -1,7 +1,7 @@
 import * as ows from "../../utils/wallet/keystore.js";
-import { printError } from "../../utils/util/output.js";
+import { printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
-import { readPassphrase } from "../../utils/util/prompt.js";
+import { readPassphrase } from "../../utils/common/prompt.js";
 
 export default async function walletBackup(args, flags) {
   const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");

@@ -1,5 +1,5 @@
 import * as api from "../../utils/api/client.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 
 export default async function swapTokens(args, flags) {
   const fromChain = flags["from-chain"] || flags.chain || "ethereum";

@@ -5,7 +5,7 @@
 // only analytics commands call. Trading commands hit this fallback and
 // always use the API key regardless of ZERION_X402 / ZERION_MPP env vars.
 
-import { API_BASE } from "../util/constants.js";
+import { API_BASE } from "../common/constants.js";
 import { basicAuthHeader, resolveApiKeyAuth } from "./auth.js";
 import { getX402Fetch } from "./x402.js";
 import { getMppFetch } from "./mpp.js";

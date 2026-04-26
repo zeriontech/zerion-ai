@@ -1,10 +1,10 @@
 import { getSwapQuote, executeSwap } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
-import { formatSwapQuote } from "../../utils/util/format.js";
-import { validateChain } from "../../utils/util/validate.js";
+import { formatSwapQuote } from "../../utils/common/format.js";
+import { validateChain } from "../../utils/common/validate.js";
 
 export default async function swap(args, flags) {
   const [fromToken, toToken, amount] = args;

@@ -4,11 +4,11 @@
  */
 
 import { fetchAPI } from "../../utils/api/client.js";
-import { summarizeAnalyze } from "../../utils/util/analyze.js";
-import { print, printError } from "../../utils/util/output.js";
+import { summarizeAnalyze } from "../../utils/common/analyze.js";
+import { print, printError } from "../../utils/common/output.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { validateChain } from "../../utils/util/validate.js";
+import { validateChain } from "../../utils/common/validate.js";
 
 export default async function walletAnalyze(args, flags) {
   const chainErr = validateChain(flags.chain);

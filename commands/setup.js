@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { print, printError } from "../utils/util/output.js";
+import { print, printError } from "../utils/common/output.js";
 
 const ZERION_AGENT_REPO = "zeriontech/zerion-agent";
 

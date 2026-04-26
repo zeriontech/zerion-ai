@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import * as ows from "../../utils/wallet/keystore.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { requireAgentToken } from "../../utils/trading/guards.js";
 import { toCaip2, SUPPORTED_CHAINS } from "../../utils/chain/registry.js";

@@ -1,5 +1,5 @@
 import * as ows from "../../utils/wallet/keystore.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { removeAgentTokensForWallet } from "../../utils/config.js";
 
 export default async function agentRevokeToken(args, flags) {

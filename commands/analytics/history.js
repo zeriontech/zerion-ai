@@ -1,7 +1,7 @@
 import * as api from "../../utils/api/client.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { formatHistory } from "../../utils/util/format.js";
+import { formatHistory } from "../../utils/common/format.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 
 export default async function history(args, flags) {

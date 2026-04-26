@@ -4,7 +4,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { CONFIG_DIR } from "../util/constants.js";
+import { CONFIG_DIR } from "../common/constants.js";
 
 const WATCHLIST_PATH = `${CONFIG_DIR}/watchlist.json`;
 

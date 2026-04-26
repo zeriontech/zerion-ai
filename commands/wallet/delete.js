@@ -1,7 +1,7 @@
 import * as ows from "../../utils/wallet/keystore.js";
-import { print, printError } from "../../utils/util/output.js";
+import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue, setConfigValue, unsetConfigValue, removeAgentTokensForWallet, removeWalletOrigin } from "../../utils/config.js";
-import { readPassphrase, readSecret } from "../../utils/util/prompt.js";
+import { readPassphrase, readSecret } from "../../utils/common/prompt.js";
 
 export default async function walletDelete(args, flags) {
   const walletName = flags.wallet || args[0];
