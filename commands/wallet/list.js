@@ -1,8 +1,8 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../lib/config.js";
-import { formatWalletList } from "../../lib/util/format.js";
-import { fromCaip2 } from "../../lib/chain/registry.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../utils/config.js";
+import { formatWalletList } from "../../utils/util/format.js";
+import { fromCaip2 } from "../../utils/chain/registry.js";
 
 /**
  * Find the newest agent token for a wallet and resolve policy details.

@@ -1,5 +1,5 @@
-import { loadConfig, getConfigValue, setConfigValue, unsetConfigValue } from "../lib/config.js";
-import { print, printError } from "../lib/util/output.js";
+import { loadConfig, getConfigValue, setConfigValue, unsetConfigValue } from "../utils/config.js";
+import { print, printError } from "../utils/util/output.js";
 
 const VALID_KEYS = ["apiKey", "defaultWallet", "slippage", "defaultChain"];
 const SENSITIVE_KEYS = new Set(["apiKey"]);

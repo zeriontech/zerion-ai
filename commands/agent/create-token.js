@@ -1,8 +1,8 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue, setConfigValue, saveAgentToken } from "../../lib/config.js";
-import { readPassphrase } from "../../lib/util/prompt.js";
-import { pickPolicyInteractive } from "../../lib/wallet/policy-picker.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue, setConfigValue, saveAgentToken } from "../../utils/config.js";
+import { readPassphrase } from "../../utils/util/prompt.js";
+import { pickPolicyInteractive } from "../../utils/wallet/policy-picker.js";
 
 export default async function agentCreateToken(args, flags) {
   const name = flags.name || args[0];

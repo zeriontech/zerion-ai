@@ -1,9 +1,9 @@
-import { getSwapQuote, executeSwap } from "../../lib/trading/swap.js";
-import { requireAgentToken, parseTimeout, handleTradingError } from "../../lib/trading/guards.js";
-import { resolveWallet } from "../../lib/wallet/resolve.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue } from "../../lib/config.js";
-import { validateChain } from "../../lib/util/validate.js";
+import { getSwapQuote, executeSwap } from "../../utils/trading/swap.js";
+import { requireAgentToken, parseTimeout, handleTradingError } from "../../utils/trading/guards.js";
+import { resolveWallet } from "../../utils/wallet/resolve.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue } from "../../utils/config.js";
+import { validateChain } from "../../utils/util/validate.js";
 
 export default async function bridge(args, flags) {
   const [token, targetChain, amount] = args;

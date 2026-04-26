@@ -8,7 +8,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-import { runPolicyFromStdin } from "../lib/util/prompt.js";
+import { runPolicyFromStdin } from "../utils/util/prompt.js";
 
 const BLOCKED_SELECTORS = ["0x095ea7b3", "0x39509351"];
 

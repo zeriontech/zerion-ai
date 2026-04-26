@@ -1,5 +1,5 @@
-import { deletePolicy } from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
+import { deletePolicy } from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
 
 export default async function agentDeletePolicy(args, flags) {
   const id = flags.id || flags.name || args[0];

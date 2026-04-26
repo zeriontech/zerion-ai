@@ -1,5 +1,5 @@
-import { print, printError } from "../../lib/util/output.js";
-import { getAgentTokenForWallet, listSavedAgentTokens, setConfigValue } from "../../lib/config.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getAgentTokenForWallet, listSavedAgentTokens, setConfigValue } from "../../utils/config.js";
 
 export default async function agentUseToken(args, flags) {
   const walletName = flags.wallet || args[0];

@@ -1,7 +1,7 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../lib/config.js";
-import { WALLET_ORIGIN } from "../../lib/util/constants.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../utils/config.js";
+import { WALLET_ORIGIN } from "../../utils/util/constants.js";
 
 export default async function walletFund(args, flags) {
   const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");

@@ -1,8 +1,8 @@
-import * as api from "../../lib/api/client.js";
-import { print, printError } from "../../lib/util/output.js";
-import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
-import { formatPnl } from "../../lib/util/format.js";
-import { resolveAuth } from "../../lib/api/auth.js";
+import * as api from "../../utils/api/client.js";
+import { print, printError } from "../../utils/util/output.js";
+import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
+import { formatPnl } from "../../utils/util/format.js";
+import { resolveAuth } from "../../utils/api/auth.js";
 
 export default async function pnl(args, flags) {
   const { walletName, address } = await resolveAddressOrWallet(args, flags);

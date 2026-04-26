@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseFlags } from "#zerion/lib/util/flags.js";
+import { parseFlags } from "#zerion/utils/util/flags.js";
 
 describe("parseFlags", () => {
   it("returns empty rest and flags for empty argv", () => {

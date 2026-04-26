@@ -1,6 +1,6 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { removeAgentTokensForWallet } from "../../lib/config.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { removeAgentTokensForWallet } from "../../utils/config.js";
 
 export default async function agentRevokeToken(args, flags) {
   const nameOrId = flags.name || flags.id || args[0];

@@ -6,8 +6,8 @@
  */
 
 import { register, registerSingle, dispatch } from "./router.js";
-import { printError, setPrettyMode } from "./lib/util/output.js";
-import { migrateFromZerionCli } from "./lib/util/migrate.js";
+import { printError, setPrettyMode } from "./utils/util/output.js";
+import { migrateFromZerionCli } from "./utils/util/migrate.js";
 
 // Migrate config from ~/.zerion-cli → ~/.zerion on first run after upgrade
 migrateFromZerionCli();

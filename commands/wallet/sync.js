@@ -1,6 +1,6 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError, isPrettyMode } from "../../lib/util/output.js";
-import { getConfigValue } from "../../lib/config.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError, isPrettyMode } from "../../utils/util/output.js";
+import { getConfigValue } from "../../utils/config.js";
 
 export default async function walletSync(args, flags) {
   try {

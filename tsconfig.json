@@ -13,7 +13,7 @@
     "zerion.js",
     "router.js",
     "commands/**/*",
-    "lib/**/*",
+    "utils/**/*",
     "policies/**/*",
     "tests/**/*"
   ]

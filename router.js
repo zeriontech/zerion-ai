@@ -3,8 +3,8 @@
  * Pattern: zerion <scope> <action> [args...] [--flags]
  */
 
-import { parseFlags } from "./lib/util/flags.js";
-import { printError } from "./lib/util/output.js";
+import { parseFlags } from "./utils/util/flags.js";
+import { printError } from "./utils/util/output.js";
 
 const commands = new Map();
 

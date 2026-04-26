@@ -11,10 +11,9 @@
     "zerion.js",
     "router.js",
     "commands/",
-    "lib/",
+    "utils/",
     "policies/",
     "README.md",
-    "COMMANDS.md",
     "LICENSE"
   ],
   "scripts": {

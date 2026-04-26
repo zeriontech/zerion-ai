@@ -1,6 +1,6 @@
-import { listPolicies } from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { formatPolicyRules } from "../../lib/util/format.js";
+import { listPolicies } from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { formatPolicyRules } from "../../utils/util/format.js";
 
 export default async function agentListPolicies(_args, _flags) {
   try {

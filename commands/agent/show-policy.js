@@ -1,6 +1,6 @@
-import { getPolicy } from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { formatPolicyRules, shortenScriptPaths } from "../../lib/util/format.js";
+import { getPolicy } from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { formatPolicyRules, shortenScriptPaths } from "../../utils/util/format.js";
 
 export default async function agentShowPolicy(args, flags) {
   const id = flags.id || flags.name || args[0];

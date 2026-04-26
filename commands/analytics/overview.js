@@ -3,12 +3,12 @@
  * Returns a concise summary (portfolio, top positions, recent txs, PnL).
  */
 
-import { fetchAPI } from "../../lib/api/client.js";
-import { summarizeAnalyze } from "../../lib/util/analyze.js";
-import { print, printError } from "../../lib/util/output.js";
-import { resolveAuth } from "../../lib/api/auth.js";
-import { resolveAddressOrWallet } from "../../lib/wallet/resolve.js";
-import { validateChain } from "../../lib/util/validate.js";
+import { fetchAPI } from "../../utils/api/client.js";
+import { summarizeAnalyze } from "../../utils/util/analyze.js";
+import { print, printError } from "../../utils/util/output.js";
+import { resolveAuth } from "../../utils/api/auth.js";
+import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
+import { validateChain } from "../../utils/util/validate.js";
 
 export default async function walletAnalyze(args, flags) {
   const chainErr = validateChain(flags.chain);

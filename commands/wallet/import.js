@@ -1,9 +1,9 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { setConfigValue, getConfigValue, setWalletOrigin, getWalletAddresses } from "../../lib/config.js";
-import { readSecret, readPassphrase } from "../../lib/util/prompt.js";
-import { offerAgentToken } from "../../lib/wallet/offer-agent-token.js";
-import { WALLET_ORIGIN, PASSPHRASE_WARNING } from "../../lib/util/constants.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { setConfigValue, getConfigValue, setWalletOrigin, getWalletAddresses } from "../../utils/config.js";
+import { readSecret, readPassphrase } from "../../utils/util/prompt.js";
+import { offerAgentToken } from "../../utils/wallet/offer-agent-token.js";
+import { WALLET_ORIGIN, PASSPHRASE_WARNING } from "../../utils/util/constants.js";
 
 export default async function walletImport(args, flags) {
   const name = flags.name || args[0] || `imported-${Date.now()}`;

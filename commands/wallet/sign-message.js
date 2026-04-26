@@ -1,8 +1,8 @@
-import * as ows from "../../lib/wallet/keystore.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue } from "../../lib/config.js";
-import { requireAgentToken } from "../../lib/trading/guards.js";
-import { toCaip2, SUPPORTED_CHAINS } from "../../lib/chain/registry.js";
+import * as ows from "../../utils/wallet/keystore.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue } from "../../utils/config.js";
+import { requireAgentToken } from "../../utils/trading/guards.js";
+import { toCaip2, SUPPORTED_CHAINS } from "../../utils/chain/registry.js";
 
 export default async function walletSignMessage(args, flags) {
   const walletName = flags.wallet || getConfigValue("defaultWallet");

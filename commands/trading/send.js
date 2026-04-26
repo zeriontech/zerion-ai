@@ -1,15 +1,15 @@
 import { encodeFunctionData, parseAbi, parseEther, parseUnits, formatEther, formatUnits } from "viem";
-import { resolveToken } from "../../lib/trading/resolve-token.js";
-import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutablePolicies } from "../../lib/trading/guards.js";
-import * as api from "../../lib/api/client.js";
-import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../lib/trading/transaction.js";
-import { resolveWallet } from "../../lib/wallet/resolve.js";
-import { print, printError } from "../../lib/util/output.js";
-import { getConfigValue } from "../../lib/config.js";
-import { getEvmAddress } from "../../lib/wallet/keystore.js";
-import { NATIVE_ASSET_ADDRESS } from "../../lib/util/constants.js";
-import { formatSwapQuote } from "../../lib/util/format.js";
-import { validateChain } from "../../lib/util/validate.js";
+import { resolveToken } from "../../utils/trading/resolve-token.js";
+import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutablePolicies } from "../../utils/trading/guards.js";
+import * as api from "../../utils/api/client.js";
+import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../utils/trading/transaction.js";
+import { resolveWallet } from "../../utils/wallet/resolve.js";
+import { print, printError } from "../../utils/util/output.js";
+import { getConfigValue } from "../../utils/config.js";
+import { getEvmAddress } from "../../utils/wallet/keystore.js";
+import { NATIVE_ASSET_ADDRESS } from "../../utils/util/constants.js";
+import { formatSwapQuote } from "../../utils/util/format.js";
+import { validateChain } from "../../utils/util/validate.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
