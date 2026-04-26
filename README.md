@@ -2,9 +2,7 @@
 
 **Maintained by Zerion.**
 
-`zerion` is the unified, JSON-first CLI for using [Zerion](https://zerion.io) from AI agents, developer tools, and command-based runtimes. It covers wallet analysis (portfolio, positions, transactions, PnL) and autonomous trading (swap, bridge, send) across 14 chains, plus wallet/agent-token/policy management.
-
-> **Looking for skills, plugins, or MCP setup?** See the agent-side companion repo: [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent). The same `zerion` CLI on this page powers those skills under the hood.
+`zerion` is the unified, JSON-first CLI for [Zerion](https://zerion.io). It covers wallet analysis (portfolio, positions, transactions, PnL) and on-chain trading (swap, bridge, send, sign) across 14 EVM chains and Solana, plus encrypted local wallets and agent-token policy management.
 
 ## Install
 
@@ -12,7 +10,7 @@
 npm install -g zerion
 ```
 
-Or run directly:
+Or run directly without installing:
 
 ```bash
 npx zerion --help
@@ -22,9 +20,9 @@ Requires Node.js 20 or later.
 
 ## Authentication
 
-Three options. CLI auto-detects which is active.
+Three options. The CLI auto-detects which is active.
 
-### Option A: API key
+### A) API key
 
 ```bash
 export ZERION_API_KEY="zk_dev_..."
@@ -32,9 +30,9 @@ export ZERION_API_KEY="zk_dev_..."
 
 - HTTP Basic Auth, dev keys begin with `zk_dev_`
 - Current dev-key limits: **120 requests/minute**, **5k requests/day**
-- Get one: [dashboard.zerion.io](https://dashboard.zerion.io)
+- Get one at [dashboard.zerion.io](https://dashboard.zerion.io)
 
-### Option B: x402 pay-per-call
+### B) x402 pay-per-call
 
 **No API key needed.** Pay $0.01 USDC per request via the [x402 protocol](https://www.x402.org/). Supports EVM (Base) and Solana.
 
@@ -45,7 +43,7 @@ export WALLET_PRIVATE_KEY="0x..."     # EVM (Base) — 0x-prefixed hex
 export WALLET_PRIVATE_KEY="5C1y..."   # Solana — base58 encoded keypair
 
 zerion wallet analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --x402
-# or
+# or enable globally:
 export ZERION_X402=true
 ```
 
@@ -57,17 +55,17 @@ export SOLANA_PRIVATE_KEY="5C1y..."
 export ZERION_X402_PREFER_SOLANA=true   # optional, prefers Solana when both set
 ```
 
-### Option C: MPP pay-per-call
+### C) MPP pay-per-call
 
 **No API key needed.** Pay $0.01 USDC per request via the [MPP protocol](https://mpp.dev) on [Tempo](https://tempo.xyz). EVM only.
 
 ```bash
-export WALLET_PRIVATE_KEY="0x..."   # EVM private key with USDC on Tempo
-# or
+export WALLET_PRIVATE_KEY="0x..."   # EVM key with USDC on Tempo
+# or use a dedicated key:
 export TEMPO_PRIVATE_KEY="0x..."
 
 zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --mpp
-# or
+# or enable globally:
 export ZERION_MPP=true
 ```
 
@@ -91,38 +89,52 @@ Example output:
 }
 ```
 
-For the full subcommand reference, see [`COMMANDS.md`](./COMMANDS.md).
-
-## Skills, plugin, MCP
-
-If you're using an AI coding agent (Claude Code, Cursor, Codex, Gemini CLI, OpenCode, etc.), don't write CLI prompts by hand — install [`zerion-agent`](https://github.com/zeriontech/zerion-agent) and the agent will know how to use these commands automatically.
-
-Three install paths:
+## Common commands
 
 ```bash
-# Any agentskills.io host (45+)
-npx skills add zeriontech/zerion-agent
+# Wallet analysis (read-only, supports --x402 / --mpp)
+zerion analyze <address|ens|wallet-name>     # full analysis
+zerion portfolio <address>                    # portfolio value + top positions
+zerion positions <address>                    # token + DeFi positions
+zerion history <address>                      # transaction history
+zerion pnl <address>                          # profit & loss
 
-# Claude Code marketplace
-/plugin marketplace add zeriontech/zerion-agent
-/plugin install zerion-agent@zerion
+# Trading (requires API key)
+zerion swap <from> <to> <amount> --chain <chain>
+zerion bridge <token> <chain> <amount> --from-chain <chain>
+zerion send <token> <amount> --to <address> --chain <chain>
+zerion search <query>
+zerion chains
+
+# Wallet management (interactive)
+zerion wallet create --name <name>
+zerion wallet import --name <name> --evm-key
+zerion wallet list
+zerion wallet sync --wallet <name>
+
+# Agent tokens (autonomous trading with scoped policies)
+zerion agent create-token --name <bot> --wallet <wallet>
+zerion agent list-tokens
+zerion agent create-policy --name <policy> --chains <list> --expires <duration>
+
+# Signing
+zerion sign-message <msg> --chain <chain>
+zerion sign-typed-data --data '<json>'
 ```
 
-`zerion-agent` also ships the hosted MCP config (`developers.zerion.io/mcp`) for MCP-native runtimes.
+Run `zerion --help` for the full command list and `zerion <command> --help` for per-command flags.
+
+## Output
+
+All commands emit JSON to stdout (default) for agent compatibility. Errors emit JSON to stderr. Use `--pretty` for human-readable output, `--quiet` for minimal.
 
 ## Example wallets
 
-This repo's docs and tests use the same public wallets:
+Used throughout tests and docs:
 
 - `vitalik.eth` / `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`
 - ENS DAO treasury / `0xFe89Cc7Abb2C4183683Ab71653c4cCd1b9cC194e`
 - Aave collector / `0x25F2226B597E8F9514B3F68F00F494CF4F286491`
-
-## What ships in this repo
-
-- `zerion.js`, `router.js`, `commands/`, `lib/`, `policies/` — the `zerion` CLI source, published to npm as `zerion-cli` with binary `zerion`. Full subcommand reference in [`COMMANDS.md`](./COMMANDS.md).
-- [`tests/`](./tests/) — unit + integration tests
-- [`docs/`](./docs/) — design docs, x402 endpoints reference, internal specs
 
 ## Failure modes
 
@@ -134,6 +146,8 @@ The CLI handles:
 - empty wallets / no positions
 - rate limits (HTTP 429)
 - upstream timeout or temporary unavailability
+
+All errors are emitted as structured JSON on stderr with a `code` field for programmatic handling.
 
 ## License
 

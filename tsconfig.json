@@ -10,8 +10,11 @@
     "resolveJsonModule": true
   },
   "include": [
-    "cli/**/*",
-    "tests/**/*",
-    "mcp/tools/**/*"
+    "zerion.js",
+    "router.js",
+    "commands/**/*",
+    "lib/**/*",
+    "policies/**/*",
+    "tests/**/*"
   ]
 }
