@@ -12,6 +12,8 @@
 
 **Working assumption:** Operator has push access to `zeriontech` org on GitHub, and `gh` CLI authenticated.
 
+**Visibility:** `zerion-agent` is created **private under `zeriontech`** for the initial scaffold + content migration. Flip to public (Task 35 Step 3) only after the content is reviewed and external distribution is ready. While private, the `npx skills add` and `/plugin install` GitHub-shorthand paths require GitHub auth on the consumer's machine — local-path testing is the default verification (Tasks 23–24).
+
 ---
 
 ## File structure after split
@@ -603,25 +605,27 @@ git commit -m "ci: release-please + lint workflows"
 
 ## Chunk 6: Push to GitHub + verify install paths
 
-### Task 20: Create remote GitHub repo
+### Task 20: Create remote GitHub repo (private for now)
 
-- [ ] **Step 1: Create repo via gh**
+- [ ] **Step 1: Create repo via gh — private**
 
 ```bash
-gh repo create zeriontech/zerion-agent --public \
+gh repo create zeriontech/zerion-agent --private \
   --description "Zerion skills, plugin, and MCP config for AI coding agents." \
   --homepage "https://zerion.io"
 ```
 
+Repo starts **private**. Flip to public later via `gh repo edit zeriontech/zerion-agent --visibility public` once content is reviewed and ready for distribution.
+
 If `gh` is not authenticated for the org, the operator runs this manually (web UI) or `gh auth refresh -s admin:org`.
 
-- [ ] **Step 2: Verify repo exists**
+- [ ] **Step 2: Verify repo exists + is private**
 
 ```bash
-gh repo view zeriontech/zerion-agent --json name,url
+gh repo view zeriontech/zerion-agent --json name,url,visibility
 ```
 
-Expected: JSON with name `zerion-agent` and URL.
+Expected: `{"name":"zerion-agent","url":"…","visibility":"PRIVATE"}`.
 
 ### Task 21: Push initial main branch
 
@@ -665,11 +669,21 @@ gh release view --repo zeriontech/zerion-agent v0.1.0
 
 ### Task 23: Verify `npx skills add` end-to-end
 
+⚠️ **Repo is private.** `npx skills add zeriontech/zerion-agent` against a private repo requires the local machine to have GitHub auth (e.g., `gh auth login` or `GH_TOKEN`) that vercel-labs/skills can pick up. If the CLI fetches over plain HTTPS without auth, the install fails with 404. Two options:
+
+- **a)** Run install from a machine with `gh` auth set up; vercel-labs/skills picks up the token automatically if it shells out to `gh` or honors `GITHUB_TOKEN`.
+- **b)** Test against a local clone path: `npx -y skills add /Users/graysonho/Documents/GitHub/zerion-agent` — bypasses GitHub fetch and validates discovery layout end-to-end.
+
+For private-phase verification, prefer **(b)**.
+
 - [ ] **Step 1: Test in scratch dir**
 
 ```bash
 mkdir -p /tmp/zerion-skills-install && cd /tmp/zerion-skills-install
-npx -y skills add zeriontech/zerion-agent --scope project
+# Local clone path verification (works while repo is private)
+npx -y skills add /Users/graysonho/Documents/GitHub/zerion-agent --scope project
+# After repo is flipped public, also re-verify the GitHub-shorthand path:
+# npx -y skills add zeriontech/zerion-agent --scope project
 ```
 
 Expected: prompts to pick agent destination(s), then installs `wallet-analysis`, `wallet-trading`, `chains`, `zerion` into `./<agent>/skills/` for the chosen agents.
@@ -690,16 +704,25 @@ rm -rf /tmp/zerion-skills-install
 
 ### Task 24: Verify Claude Code `/plugin install` works
 
-- [ ] **Step 1: From Claude Code session, run**
+⚠️ **Repo is private.** `/plugin marketplace add zeriontech/zerion-agent` against a private repo will only succeed for users whose Claude Code session has GitHub auth resolved to that org. For private-phase, verify locally:
+
+- [ ] **Step 1: Add local marketplace path**
 
 ```
-/plugin marketplace add zeriontech/zerion-agent
-/plugin install zerion-agent@zeriontech
+/plugin marketplace add /Users/graysonho/Documents/GitHub/zerion-agent
+/plugin install zerion-agent
 ```
 
 - [ ] **Step 2: Confirm skills appear in `/help` or skill listing**
 
 If the marketplace doesn't recognize the manifest, re-run plugin-validator (Task 15) against the live repo and fix.
+
+- [ ] **Step 3: After flip-to-public, re-verify GitHub-shorthand path**
+
+```
+/plugin marketplace add zeriontech/zerion-agent
+/plugin install zerion-agent@zeriontech
+```
 
 ---
 
@@ -952,7 +975,9 @@ npx skills add zeriontech/zerion-agent
 
 ### Task 35: Announce split
 
-- [ ] **Step 1: Tag both repos with announcement-friendly release notes**
+⚠️ **Defer external announcement until `zerion-agent` flips to public.** While private, only the internal/cross-repo housekeeping in Step 2 happens. Public announcement (Twitter, docs site, partner outreach) waits for `gh repo edit zeriontech/zerion-agent --visibility public`.
+
+- [ ] **Step 1: Tag both repos with release notes (internal-visible only while private)**
 
 For zerion-agent v0.1.0: "Initial release — split from zerion-ai."
 For zerion-cli's next release (whatever release-please chooses): note the rename and the companion repo.
@@ -965,6 +990,14 @@ References to `zerion-ai` in:
 - engineering memory files (`/Users/graysonho/.claude/projects/.../memory/MEMORY.md`)
 
 Update by find-and-replace where appropriate.
+
+- [ ] **Step 3: When ready, flip to public + announce**
+
+```bash
+gh repo edit zeriontech/zerion-agent --visibility public --accept-visibility-change-consequences
+```
+
+Then publish external comms (release notes link, dev-rel post, partner heads-up).
 
 ---
 
