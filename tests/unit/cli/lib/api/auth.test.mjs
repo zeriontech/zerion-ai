@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveAuth, resolveApiKeyAuth, basicAuthHeader } from "#zerion/cli/lib/api/auth.js";
+import { resolveAuth, resolveApiKeyAuth, basicAuthHeader } from "#zerion/lib/api/auth.js";
 
 // Synthetic keys that pass the format detectors but are never used for
 // actual crypto operations — resolveAuth is pure and doesn't touch the network.

@@ -147,7 +147,7 @@ export async function dispatch(argv) {
     const { fileURLToPath } = await import("node:url");
     const { dirname, join } = await import("node:path");
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
+    const pkg = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf-8"));
     process.stdout.write(`${pkg.version}\n`);
     return;
   }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { summarizeAnalyze } from "#zerion/cli/lib/util/analyze.js";
+import { summarizeAnalyze } from "#zerion/lib/util/analyze.js";
 
 describe("summarizeAnalyze", () => {
   it("returns all fields for full valid data", () => {

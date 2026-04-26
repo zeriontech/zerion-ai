@@ -1,23 +1,24 @@
 # Contributing
 
-`zerion-ai` is maintained by the Zerion team.
+`zerion-cli` is maintained by the Zerion team.
 
 ## Scope
 
 This repo is intentionally narrow:
 
-- hosted Zerion MCP quickstarts
-- one flagship skill: `wallet-analysis`
-- a JSON-first CLI for OpenClaw-like environments
-- minimal examples that stay easy to verify
+- the `zerion` JSON-first CLI for AI agents and OpenClaw-like environments
+- 110+ unit and integration tests covering CLI behavior
+
+For agent skills, plugin manifests, and MCP setup, see the companion repo: [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent).
 
 Please prefer small, concrete improvements over broad abstractions.
 
 ## Development
 
 ```bash
+npm install
 npm test
-node ./cli/zerion.js --help
+node ./zerion.js --help
 ```
 
 ## Contribution Guidelines

@@ -6,7 +6,7 @@ import {
   resolvePositionFilter,
   CHAIN_IDS,
   POSITION_FILTERS,
-} from "#zerion/cli/lib/util/validate.js";
+} from "#zerion/lib/util/validate.js";
 
 describe("validateChain", () => {
   it("returns null for each valid chain", () => {

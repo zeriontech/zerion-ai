@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ZERION_BIN = fileURLToPath(new URL("../../../../cli/zerion.js", import.meta.url));
+const ZERION_BIN = fileURLToPath(new URL("../../../../zerion.js", import.meta.url));
 
 function runZerion(args, opts = {}) {
   return spawnSync("node", [ZERION_BIN, ...args], {

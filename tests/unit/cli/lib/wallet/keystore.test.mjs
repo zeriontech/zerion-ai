@@ -5,7 +5,7 @@ import {
   recoverMessageAddress,
   recoverTypedDataAddress,
 } from "viem";
-import * as ows from "#zerion/cli/lib/wallet/keystore.js";
+import * as ows from "#zerion/lib/wallet/keystore.js";
 
 const TEST_WALLET = "ows-unit-test";
 

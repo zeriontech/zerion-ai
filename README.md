@@ -91,7 +91,7 @@ Example output:
 }
 ```
 
-For the full subcommand reference, see [`cli/README.md`](./cli/README.md).
+For the full subcommand reference, see [`COMMANDS.md`](./COMMANDS.md).
 
 ## Skills, plugin, MCP
 
@@ -120,7 +120,7 @@ This repo's docs and tests use the same public wallets:
 
 ## What ships in this repo
 
-- [`cli/`](./cli/README.md) — `zerion` unified CLI, published to npm as `zerion-cli` with binary `zerion`
+- `zerion.js`, `router.js`, `commands/`, `lib/`, `policies/` — the `zerion` CLI source, published to npm as `zerion-cli` with binary `zerion`. Full subcommand reference in [`COMMANDS.md`](./COMMANDS.md).
 - [`tests/`](./tests/) — unit + integration tests
 - [`docs/`](./docs/) — design docs, x402 endpoints reference, internal specs
 

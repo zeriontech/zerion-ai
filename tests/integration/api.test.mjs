@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it, before } from "node:test";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { getApiKey } from "#zerion/cli/lib/config.js";
+import { getApiKey } from "#zerion/lib/config.js";
 
-const BIN = fileURLToPath(import.meta.resolve("#zerion/cli/zerion.js"));
+const BIN = fileURLToPath(import.meta.resolve("#zerion/zerion.js"));
 
 const API_KEY = getApiKey() || "";
 const SKIP = !API_KEY;

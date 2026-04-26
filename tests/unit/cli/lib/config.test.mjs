@@ -20,7 +20,7 @@ describe("config", () => {
     }
     mkdirSync(testDir, { recursive: true });
     // Fresh import each time
-    config = await import("#zerion/cli/lib/config.js");
+    config = await import("#zerion/lib/config.js");
   });
 
   afterEach(() => {
