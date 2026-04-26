@@ -1,6 +1,6 @@
 {
   "name": "zerion-cli",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Zerion for AI agents and developers: hosted MCP docs, wallet-analysis skill, and a JSON-first CLI.",
   "author": "Zerion",
   "type": "module",
