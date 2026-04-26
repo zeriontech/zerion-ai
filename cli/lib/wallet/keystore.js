@@ -210,6 +210,35 @@ export function signSolanaTransaction(walletName, txHex, passphrase) {
   return ows.signTransaction(walletName, "solana", txHex, passphrase);
 }
 
+/**
+ * Sign an arbitrary message with chain-specific formatting.
+ * EVM: EIP-191 personal_sign prefix.
+ * Solana: raw ed25519 over message bytes.
+ * @param {string} walletName
+ * @param {string} message - message to sign
+ * @param {string} [passphrase]
+ * @param {"utf8"|"hex"} [encoding="utf8"] - how `message` is encoded
+ * @param {string} [caip2ChainId] - CAIP-2 chain or "evm"/"solana"; default "evm"
+ * @returns {{ signature: string, recoveryId?: number }}
+ */
+export function signMessage(walletName, message, passphrase, encoding = "utf8", caip2ChainId) {
+  const network = caip2ChainId || "evm";
+  return ows.signMessage(walletName, network, message, passphrase, encoding);
+}
+
+/**
+ * Sign EIP-712 typed structured data (EVM only).
+ * @param {string} walletName
+ * @param {string} typedDataJson - JSON string with { domain, types, primaryType, message }
+ * @param {string} [passphrase]
+ * @param {string} [caip2ChainId] - CAIP-2 chain or "evm"; default "evm"
+ * @returns {{ signature: string, recoveryId?: number }}
+ */
+export function signTypedData(walletName, typedDataJson, passphrase, caip2ChainId) {
+  const network = caip2ChainId || "evm";
+  return ows.signTypedData(walletName, network, typedDataJson, passphrase);
+}
+
 // --- Policies ---
 // CAIP-2 mapping is derived from chains.js (single source of truth)
 import { SUPPORTED_CHAINS, toCaip2, fromCaip2 } from "../chain/registry.js";

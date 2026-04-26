@@ -84,16 +84,49 @@ export async function readPassphrase({ confirm = false } = {}) {
 
 /**
  * Simple y/n confirmation prompt. Returns true for yes, false for no.
+ * Defaults to yes on empty input (use `defaultYes: false` to invert).
  */
-export function confirm(message) {
+export function confirm(message, { defaultYes = true } = {}) {
   return new Promise((done) => {
     process.stderr.write(message);
+
+    const parse = (raw) => {
+      const a = raw.trim().toLowerCase();
+      if (a === "") return defaultYes;
+      if (a.startsWith("y")) return true;
+      if (a.startsWith("n")) return false;
+      return defaultYes;
+    };
+
+    if (process.stdin.isTTY) {
+      // Canonical mode: the terminal line-buffers input; Node delivers a full
+      // line (including trailing \n) in one `data` event when the user hits Enter.
+      process.stdin.setEncoding("utf8");
+      process.stdin.resume();
+      const onData = (chunk) => {
+        process.stdin.pause();
+        process.stdin.removeListener("data", onData);
+        done(parse(chunk));
+      };
+      process.stdin.on("data", onData);
+      return;
+    }
+
+    // Non-TTY (piped): use readline so we get one line, then resolve.
+    // IMPORTANT: resolve via `done()` before calling `rl.close()` — close fires
+    // synchronously and the close handler would otherwise race the line result.
+    let resolved = false;
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      done(value);
+    };
     const rl = createInterface({ input: process.stdin, output: process.stderr, terminal: false });
     rl.once("line", (line) => {
+      finish(parse(line));
       rl.close();
-      done(line.trim().toLowerCase().startsWith("y"));
     });
-    rl.once("close", () => done(false)); // treat EOF as "no"
+    rl.once("close", () => finish(defaultYes));
   });
 }
 

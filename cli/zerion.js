@@ -26,6 +26,8 @@ import walletFund from "./commands/wallet/fund.js";
 import walletBackup from "./commands/wallet/backup.js";
 import walletDelete from "./commands/wallet/delete.js";
 import walletSync from "./commands/wallet/sync.js";
+import walletSignMessage from "./commands/wallet/sign-message.js";
+import walletSignTypedData from "./commands/wallet/sign-typed-data.js";
 import watch from "./commands/wallet/watch.js";
 register("wallet", "create", walletCreate);
 register("wallet", "import", walletImport);
@@ -34,6 +36,8 @@ register("wallet", "fund", walletFund);
 register("wallet", "backup", walletBackup);
 register("wallet", "delete", walletDelete);
 register("wallet", "sync", walletSync);
+registerSingle("sign-message", walletSignMessage);
+registerSingle("sign-typed-data", walletSignTypedData);
 registerSingle("watch", watch);
 
 // --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---
