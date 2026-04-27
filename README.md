@@ -11,13 +11,7 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, swap and bridge on-
 npm install -g zerion-cli
 ```
 
-Or run without installing:
-
-```bash
-npx zerion-cli --help
-```
-
-The npm package is `zerion-cli`; the installed binary is `zerion`. Requires Node.js 20 or later.
+Requires Node.js 20 or later.
 
 ### Setup Skills and MCP
 
