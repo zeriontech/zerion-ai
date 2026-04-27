@@ -97,6 +97,11 @@ registerSingle("config", configCmd);
 import setupCmd from "./commands/setup.js";
 registerSingle("setup", setupCmd);
 
+// --- Init (one-shot onboarding: install + auth + skills) ---
+
+import initCmd from "./commands/init.js";
+registerSingle("init", initCmd);
+
 // --- Dispatch ---
 
 try {

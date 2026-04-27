@@ -12,7 +12,7 @@ const SKIP_MSG = "Skipping: no API key found (set ZERION_API_KEY or run `zerion 
 
 const VITALIK = "0x42b9dF65B219B3dD36FF330A4dD8f327A6Ada990";
 
-function run(args) {
+function runOnce(args) {
   return new Promise((resolve) => {
     execFile(
       "node",
@@ -23,11 +23,28 @@ function run(args) {
           code: error?.code ?? 0,
           stdout,
           stderr,
-          json: (() => { try { return JSON.parse(stdout); } catch { return null; } })()
+          json: (() => {
+            try { return JSON.parse(stdout); } catch {}
+            try { return JSON.parse(stderr); } catch {}
+            return null;
+          })(),
         });
       }
     );
   });
+}
+
+// Live integration tests share the dev-key rate budget. Parallel `node --test`
+// runs trip 429 in bursts, so retry rate-limited responses with backoff before
+// failing the assertion.
+async function run(args, { retries = 3 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const result = await runOnce(args);
+    const msg = result.json?.error?.message ?? "";
+    const rateLimited = result.code !== 0 && /429|too many requests|rate limit/i.test(msg);
+    if (!rateLimited || attempt === retries) return result;
+    await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+  }
 }
 
 describe("integration tests (requires ZERION_API_KEY)", () => {

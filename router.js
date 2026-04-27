@@ -122,6 +122,8 @@ function printUsage() {
       "slippage": "Default slippage % for swaps (default: 2)",
     },
     setup: {
+      "init": "One-shot onboarding: install CLI globally, configure API key, install agent skills",
+      "init -y --browser": "Non-interactive init that opens dashboard.zerion.io for the API key",
       "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-agent` (45+ hosts)",
       "setup mcp --agent <name>": "Write the Zerion hosted-MCP fragment into a detected agent's config (cursor, claude-code, claude-desktop)",
       "setup mcp --print": "Print the canonical MCP fragment to stdout",
