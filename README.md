@@ -41,11 +41,14 @@ zerion setup mcp --agent <claude-code|cursor|claude-desktop>
 
 ### Agent skills
 
-The `init` command installs the Zerion agent skill bundle into AI coding agents (Cursor, Claude Code, Windsurf, etc.). The bundle teaches them how to drive the CLI:
+The `init` command installs the Zerion agent skill bundle into AI coding agents (Cursor, Claude Code, Windsurf, etc.). Six skills ship in the bundle:
 
-- **Wallet analysis** — when to call `analyze` vs `portfolio` vs `pnl`, and how to read the JSON
-- **Trading** — preflight checks, slippage defaults, agent-token + policy setup before `swap`, `bridge`, `send`
-- **Authentication** — picking between API key, x402, and MPP based on the task
+- **`zerion`** — entry point with install, authentication, and routing to the right capability skill
+- **`zerion-wallet`** — local encrypted wallets: create, import (key or mnemonic), list, fund, backup, delete, sync to the Zerion app
+- **`zerion-agent-management`** — mint and scope agent tokens + policies (chain locks, allowlists, transfer/approval gates, expiry) for autonomous trading and signing
+- **`zerion-analyze`** — read-only wallet insights: portfolio, positions, history, PnL, watchlist; supports x402 / MPP pay-per-call
+- **`zerion-sign`** — off-chain signatures (EIP-191, EIP-712, Solana raw) without broadcasting a transaction; requires an agent token
+- **`zerion-trading`** — swap, bridge, and send across 14 EVM chains and Solana; uses an API key + agent token
 
 To reinstall skills manually:
 
@@ -59,8 +62,8 @@ Skills live in [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-
 
 Zerion CLI splits into two surfaces, by design.
 
-- **Wallet, signing, and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase, as do `sign-message` and `sign-typed-data`. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop.
-- **Analysis, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, trades fire immediately.
+- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop.
+- **Analysis, signing, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `sign-message`, `sign-typed-data`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, signing and trading fire immediately — the token authorizes operations on behalf of the wallet without a passphrase prompt.
 
 Setup gestures (`init`, `setup skills`, `setup mcp`, `config set/unset/list`, `watch` add/remove) are one-time configuration steps you run yourself before automation takes over.
 
