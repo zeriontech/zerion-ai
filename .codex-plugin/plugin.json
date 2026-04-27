@@ -1,0 +1,41 @@
+{
+  "name": "zerion-agent",
+  "version": "1.0.0",
+  "description": "Zerion skills for OpenAI Codex — wallet analysis, swaps/bridges across 14 chains, agent-token policies.",
+  "author": {
+    "name": "Zerion",
+    "email": "support@zerion.io",
+    "url": "https://zerion.io"
+  },
+  "homepage": "https://github.com/zeriontech/zerion-ai",
+  "repository": "https://github.com/zeriontech/zerion-ai",
+  "license": "MIT",
+  "keywords": [
+    "zerion",
+    "wallet",
+    "defi",
+    "trading",
+    "crypto",
+    "swap",
+    "bridge"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Zerion",
+    "shortDescription": "Wallet analysis and on-chain trading for AI agents.",
+    "longDescription": "Use Zerion to analyze any crypto wallet (portfolio, positions, transactions, PnL) and execute trades (swap, bridge, send) across 14 EVM chains and Solana. Includes agent-token policies for safe autonomous trading.",
+    "developerName": "Zerion",
+    "category": "Crypto",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Analyze the wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045.",
+      "Swap 100 USDC for ETH on Base.",
+      "What's my PnL across all wallets?"
+    ],
+    "brandColor": "#2962EF"
+  }
+}

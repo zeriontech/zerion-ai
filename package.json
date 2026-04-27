@@ -5,27 +5,33 @@
   "author": "Zerion",
   "type": "module",
   "bin": {
-    "zerion": "./zerion.js"
+    "zerion": "./cli/zerion.js"
   },
   "files": [
-    "zerion.js",
-    "router.js",
-    "commands/",
-    "utils/",
-    "policies/",
+    "cli/zerion.js",
+    "cli/router.js",
+    "cli/commands/",
+    "cli/utils/",
+    "cli/policies/",
+    "skills/",
+    "plugins/",
+    ".agents/",
+    ".claude-plugin/",
+    ".codex-plugin/",
+    "gemini-extension.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test 'tests/unit/**/*.test.mjs'",
-    "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
-    "test:integration": "node --test --test-concurrency=1 'tests/integration/**/*.test.mjs'",
-    "test:integration:auth": "node --test tests/integration/auth.test.mjs",
-    "test:all": "node --test 'tests/**/*.test.mjs'",
+    "test": "node --test 'cli/tests/unit/**/*.test.mjs'",
+    "test:unit": "node --test 'cli/tests/unit/**/*.test.mjs'",
+    "test:integration": "node --test --test-concurrency=1 'cli/tests/integration/**/*.test.mjs'",
+    "test:integration:auth": "node --test cli/tests/integration/auth.test.mjs",
+    "test:all": "node --test 'cli/tests/**/*.test.mjs'",
     "prepublishOnly": "npm test"
   },
   "imports": {
-    "#zerion/*": "./*",
+    "#zerion/*": "./cli/*",
     "#zerion": "./package.json"
   },
   "engines": {

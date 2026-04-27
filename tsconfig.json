@@ -10,11 +10,11 @@
     "resolveJsonModule": true
   },
   "include": [
-    "zerion.js",
-    "router.js",
-    "commands/**/*",
-    "utils/**/*",
-    "policies/**/*",
-    "tests/**/*"
+    "cli/zerion.js",
+    "cli/router.js",
+    "cli/commands/**/*",
+    "cli/utils/**/*",
+    "cli/policies/**/*",
+    "cli/tests/**/*"
   ]
 }

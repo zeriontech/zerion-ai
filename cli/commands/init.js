@@ -3,7 +3,7 @@ import { print, printError } from "../utils/common/output.js";
 import { readSecret } from "../utils/common/prompt.js";
 import { getApiKey, setConfigValue } from "../utils/config.js";
 
-const ZERION_AGENT_REPO = "zeriontech/zerion-agent";
+const ZERION_AGENT_REPO = "zeriontech/zerion-ai";
 const DASHBOARD_URL = "https://dashboard.zerion.io";
 
 const HELP = {

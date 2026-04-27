@@ -1,0 +1,24 @@
+{
+  "name": "zerion-agent",
+  "version": "1.0.0",
+  "description": "Zerion skills and slash commands for AI coding agents — wallet analysis, swaps/bridges, chain reference, agent-token policies.",
+  "author": {
+    "name": "Zerion",
+    "email": "support@zerion.io",
+    "url": "https://zerion.io"
+  },
+  "homepage": "https://github.com/zeriontech/zerion-ai",
+  "repository": "https://github.com/zeriontech/zerion-ai",
+  "license": "MIT",
+  "keywords": [
+    "zerion",
+    "wallet",
+    "defi",
+    "trading",
+    "crypto",
+    "swap",
+    "bridge",
+    "ens",
+    "x402"
+  ]
+}

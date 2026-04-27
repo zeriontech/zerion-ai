@@ -1,0 +1,5 @@
+{
+  "name": "zerion-agent",
+  "description": "Zerion skills for Gemini CLI — wallet analysis, swaps/bridges, chain reference, agent-token policies.",
+  "version": "1.0.0"
+}

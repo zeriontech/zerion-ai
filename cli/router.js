@@ -124,7 +124,7 @@ function printUsage() {
     setup: {
       "init": "One-shot onboarding: install CLI globally, configure API key, install agent skills",
       "init -y --browser": "Non-interactive init that opens dashboard.zerion.io for the API key",
-      "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-agent` (45+ hosts)",
+      "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-ai` (45+ hosts)",
     },
     chains: [
       "ethereum", "base", "arbitrum", "optimism", "polygon",
@@ -147,7 +147,7 @@ export async function dispatch(argv) {
     const { fileURLToPath } = await import("node:url");
     const { dirname, join } = await import("node:path");
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf-8"));
+    const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
     process.stdout.write(`${pkg.version}\n`);
     return;
   }

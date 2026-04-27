@@ -36,8 +36,8 @@ describe("zerion setup", () => {
       assert.equal(res.status, 0);
       const out = JSON.parse(res.stdout);
       assert.equal(out.dryRun, true);
-      assert.match(out.command, /npx -y skills add zeriontech\/zerion-agent/);
-      assert.equal(out.source, "zeriontech/zerion-agent");
+      assert.match(out.command, /npx -y skills add zeriontech\/zerion-ai/);
+      assert.equal(out.source, "zeriontech/zerion-ai");
     });
 
     it("--global passes -g to npx skills", () => {

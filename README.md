@@ -23,34 +23,91 @@ npx -y zerion-cli init -y --browser
 
 Requires Node.js 20 or later.
 
-### Setup Skills
+## Agent skills
 
-If you are using an AI coding agent (Claude Code, Cursor, Windsurf, Claude Desktop, etc.), you can also install the skills individually with:
+Six skills ship in this repo (under [`./skills/`](./skills/)):
 
-```bash
-zerion setup skills
-```
+| Skill | What it does |
+|-------|--------------|
+| [`zerion`](./skills/zerion/SKILL.md) | Umbrella: install, authentication, routing to specific skills, chains reference |
+| [`zerion-analyze`](./skills/zerion-analyze/SKILL.md) | Portfolio, positions, history, PnL, analyze, token search, watchlist (read-only; supports x402 / MPP) |
+| [`zerion-trading`](./skills/zerion-trading/SKILL.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
+| [`zerion-sign`](./skills/zerion-sign/SKILL.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
+| [`zerion-wallet`](./skills/zerion-wallet/SKILL.md) | Wallet management — create, import, list, fund, backup, delete, sync |
+| [`zerion-agent-management`](./skills/zerion-agent-management/SKILL.md) | Agent tokens + policies (the autonomous-trading primitives) |
 
-This installs skills globally across all detected coding agents by default. Use `--agent <name>` to scope it to one agent, or `-g` to force a global install.
+Skills follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
 
-### Agent skills
-
-The `init` command installs the Zerion agent skill bundle into AI coding agents (Cursor, Claude Code, Windsurf, etc.). Six skills ship in the bundle:
-
-- **`zerion`** — entry point with install, authentication, and routing to the right capability skill
-- **`zerion-wallet`** — local encrypted wallets: create, import (key or mnemonic), list, fund, backup, delete, sync to the Zerion app
-- **`zerion-agent-management`** — mint and scope agent tokens + policies (chain locks, allowlists, transfer/approval gates, expiry) for autonomous trading and signing
-- **`zerion-analyze`** — read-only wallet insights: portfolio, positions, history, PnL, watchlist; supports x402 / MPP pay-per-call
-- **`zerion-sign`** — off-chain signatures (EIP-191, EIP-712, Solana raw) without broadcasting a transaction; requires an agent token
-- **`zerion-trading`** — swap, bridge, and send across 14 EVM chains and Solana; uses an API key + agent token
-
-To reinstall skills manually:
+### Install via zerion CLI (recommended)
 
 ```bash
 zerion setup skills
 ```
 
-Skills live in [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent).
+Installs globally across all detected coding agents. Use `--agent <name>` to scope to one agent, or `-g` to force a global install.
+
+### Install via Claude Code
+
+```text
+/plugin marketplace add zeriontech/zerion-ai
+/plugin install zerion-agent@zerion
+```
+
+### Install via OpenAI Codex CLI
+
+```sh
+codex plugin marketplace add zeriontech/zerion-ai
+```
+
+Then run `/plugins` in Codex, choose the `zerion` marketplace, and install `zerion-agent`.
+
+### Install via Gemini CLI
+
+```bash
+gemini extensions install https://github.com/zeriontech/zerion-ai
+```
+
+### Install via agentskills.io (works with 20+ popular agents)
+
+```bash
+npx skills add zeriontech/zerion-ai
+```
+
+Auto-detects installed agents. Flags: `-g` (user-wide), `-a <agent>` (target one host), `-y` (non-interactive). Full ecosystem: <https://agentskills.io/clients>.
+
+## How to use
+
+After install, ask the agent in natural language.
+
+### Wallet analysis
+
+> Analyze the wallet `vitalik.eth`. Summarize total portfolio value, top 5 holdings, and recent transactions.
+
+> What's the PnL on `0xFe89Cc7Abb2C4183683Ab71653c4cCd1b9cC194e` over the last 30 days?
+
+> Show DeFi positions (lending, staking, LP) for my default wallet.
+
+### Trading
+
+> Swap 100 USDC to ETH on Base.
+
+> Bridge 50 USDC from Arbitrum to Optimism.
+
+> Send 0.1 ETH on Base to `vitalik.eth`.
+
+### Wallet management
+
+> Create a new encrypted wallet called `bot-1`.
+
+> Set up an agent token for `bot-1` that's allowed to swap on Base only, with a 7-day expiry.
+
+> List my wallets and which agent tokens are active.
+
+### Signing
+
+> Sign the EIP-712 message in `typed.json` using my `bot-1` wallet.
+
+The agent reaches for the right skill (e.g. `zerion-analyze` for "what's in this wallet", `zerion-trading` for swap/bridge/send) and invokes the underlying `zerion` CLI commands. Skills load only when relevant — agentskills.io's progressive disclosure keeps your context window clean. Multiple skills compose at runtime: a "create wallet, set up agent token, then swap" flow loads `zerion-wallet` → `zerion-agent-management` → `zerion-trading` in sequence.
 
 ## Manual setup, agent execution
 
@@ -298,7 +355,7 @@ npm install
 npm test                  # unit tests (fast, offline)
 npm run test:integration  # live API tests (requires ZERION_API_KEY, runs serially to avoid rate limits)
 npm run test:all          # both
-node ./zerion.js --help
+node ./cli/zerion.js --help
 ```
 
 ### Contribution guidelines
@@ -339,7 +396,7 @@ To force a specific version, add `Release-As: 2.0.0` in a commit message body.
 
 - **API documentation** — <https://developers.zerion.io/introduction>
 - **Get an API key** — <https://dashboard.zerion.io>
-- **Agent skills** — <https://github.com/zeriontech/zerion-agent>
+- **Agent skills** — [`./skills/`](./skills/) (also installable via `npx skills add zeriontech/zerion-ai`)
 - **Building with AI** — <https://developers.zerion.io/reference/building-with-ai>
 
 ## License

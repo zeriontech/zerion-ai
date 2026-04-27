@@ -1,0 +1,30 @@
+{
+  "name": "zerion",
+  "owner": {
+    "name": "Zerion",
+    "email": "support@zerion.io"
+  },
+  "metadata": {
+    "description": "Zerion plugins for AI coding agents."
+  },
+  "plugins": [
+    {
+      "name": "zerion-agent",
+      "source": "./",
+      "description": "Wallet analysis + trading skills and examples for Claude Code and other agentskills.io hosts.",
+      "category": "crypto",
+      "tags": [
+        "wallet",
+        "defi",
+        "trading",
+        "zerion",
+        "crypto",
+        "swap",
+        "bridge"
+      ],
+      "homepage": "https://github.com/zeriontech/zerion-ai",
+      "repository": "https://github.com/zeriontech/zerion-ai",
+      "license": "MIT"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { print, printError } from "../utils/common/output.js";
 
-const ZERION_AGENT_REPO = "zeriontech/zerion-agent";
+const ZERION_AGENT_REPO = "zeriontech/zerion-ai";
 
 const HELP = {
   usage: "zerion setup <skills> [options]",
