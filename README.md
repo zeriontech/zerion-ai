@@ -286,14 +286,6 @@ Track wallets by name without exposing addresses in commands.
 
 All commands emit JSON to stdout (default) for agent compatibility. Errors emit JSON to stderr with a `code` field for programmatic handling. Use `--pretty` for human-readable output, `--quiet` for minimal.
 
-## Example Wallets
-
-Used throughout tests and docs:
-
-- `vitalik.eth` / `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`
-- ENS DAO treasury / `0xFe89Cc7Abb2C4183683Ab71653c4cCd1b9cC194e`
-- Aave collector / `0x25F2226B597E8F9514B3F68F00F494CF4F286491`
-
 ## Failure Modes
 
 The CLI handles:
