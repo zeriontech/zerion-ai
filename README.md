@@ -1,11 +1,15 @@
 # Zerion CLI
 
-**Maintained by Zerion.**
+The unified, JSON-first CLI for [Zerion](https://zerion.io) — wallet analysis, on-chain trading, and agent-token policy management across 14 EVM chains and Solana.
 
-`zerion` is the unified, JSON-first CLI for [Zerion](https://zerion.io). Wallet analysis (portfolio, positions, transactions, PnL) and on-chain trading (swap, bridge, send, sign) across 14 EVM chains and Solana, plus encrypted local wallets and agent-token policy management.
+> [!WARNING]
+> **Alpha Preview** — This CLI is under active development. Commands, flags, and output formats may change or be removed without notice between releases. Do not depend on current behavior in production workflows.
 
-> [!NOTE]
-> **Built for agents.** This CLI is designed primarily for AI agents and automation pipelines. JSON-first output by default, no interactive confirmations on data commands, structured error codes on stderr. Wallet operations and token revocations require explicit passphrases or flags — but trades execute immediately when an agent token is configured. Treat agent tokens like API keys with spending power.
+### Built for agents
+
+This CLI is designed primarily for AI agents and automation pipelines, not as a general-purpose interactive terminal tool. JSON-first output by default, no confirmation prompts on data commands, structured error codes on stderr. Every command executes immediately and returns parsable output.
+
+**This means destructive commands are truly destructive.** Once an agent token is configured, `zerion swap` and `zerion bridge` execute trades immediately — no "are you sure?" dialog. Treat agent tokens like API keys with spending power and use [agent policies](#agent-policies) to scope what they can do.
 
 ## Install
 
@@ -21,39 +25,53 @@ npx zerion-cli --help
 
 The npm package is `zerion-cli`; the installed binary is `zerion`. Requires Node.js 20 or later.
 
-## Quick Start
+### Setup Skills and MCP
+
+If you are using an AI coding agent (Claude Code, Cursor, Windsurf, Claude Desktop, etc.), install the Zerion skills so the agent knows how to drive the CLI on your behalf:
 
 ```bash
-npm install -g zerion-cli
-export ZERION_API_KEY="zk_dev_..."
-zerion analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+zerion setup skills
 ```
 
-Example output:
+This installs the [Zerion agent skills](https://github.com/zeriontech/zerion-agent) into every detected coding agent. Use `--agent <name>` to scope it to one editor, or `-g` for global install.
 
-```json
-{
-  "wallet": { "query": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-  "portfolio": { "total": 450000, "currency": "usd" },
-  "positions": { "count": 42 },
-  "transactions": { "sampled": 10 },
-  "pnl": { "available": true }
-}
+To install the Zerion hosted MCP server (live Zerion API docs as a tool):
+
+```bash
+zerion setup mcp
 ```
+
+### Agent skills
+
+The skill bundle teaches AI coding agents how to use Zerion correctly:
+
+- **Wallet analysis** — when to call `analyze` vs `portfolio` vs `pnl`, how to interpret the JSON
+- **Trading** — preflight checks, slippage defaults, agent-token + policy setup before swap/bridge/send
+- **Authentication** — choosing between API key, x402, and MPP based on the task
+
+Reinstall any time with `zerion setup skills`. Skills live in [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent).
 
 ## Authentication
 
 Three options. The CLI auto-detects which is active.
 
-### A) API key
+### A) API key (recommended)
+
+Get a key at **[dashboard.zerion.io](https://dashboard.zerion.io)** — it's free and takes a minute. Dev keys begin with `zk_dev_`.
 
 ```bash
 export ZERION_API_KEY="zk_dev_..."
 ```
 
-- HTTP Basic Auth, dev keys begin with `zk_dev_`
+- HTTP Basic Auth
 - Current dev-key limits: **120 requests/minute**, **5k requests/day**
-- Get one at [dashboard.zerion.io](https://dashboard.zerion.io)
+- Required for all trading commands (swap, bridge, send)
+
+You can also persist it via config:
+
+```bash
+zerion config set apiKey zk_dev_...
+```
 
 ### B) x402 pay-per-call
 
@@ -92,7 +110,29 @@ zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --mpp
 export ZERION_MPP=true
 ```
 
+## Quick Start
+
+```bash
+npm install -g zerion-cli
+export ZERION_API_KEY="zk_dev_..."
+zerion analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+```
+
+Example output:
+
+```json
+{
+  "wallet": { "query": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  "portfolio": { "total": 450000, "currency": "usd" },
+  "positions": { "count": 42 },
+  "transactions": { "sampled": 10 },
+  "pnl": { "available": true }
+}
+```
+
 ## Commands
+
+Every command supports `--help` for full flag documentation. Run `zerion --help` for the top-level command list.
 
 ### Wallet Analysis
 
@@ -191,6 +231,15 @@ Track wallets by name without exposing addresses in commands.
 | `zerion watch remove <name>` | Remove from watchlist |
 | `zerion analyze <name>` | Analyze a watched wallet by name |
 
+### Setup
+
+| Command | Description |
+|---------|-------------|
+| `zerion setup skills` | Install Zerion agent skills into detected coding agents |
+| `zerion setup skills --agent claude-code` | Install into a specific agent |
+| `zerion setup mcp` | Merge the Zerion hosted-MCP fragment into an agent's config |
+| `zerion setup mcp --print` | Print the canonical MCP fragment without writing |
+
 ### Configuration
 
 | Command | Description |
@@ -198,8 +247,6 @@ Track wallets by name without exposing addresses in commands.
 | `zerion config set <key> <value>` | Set config (`apiKey`, `defaultWallet`, `defaultChain`, `slippage`) |
 | `zerion config unset <key>` | Remove a config value (resets to default) |
 | `zerion config list` | Show current configuration |
-
-Run `zerion --help` for the full command list and `zerion <command> --help` for per-command flags.
 
 ## Global Flags
 
@@ -261,15 +308,6 @@ The CLI handles:
 
 All errors are emitted as structured JSON on stderr with a `code` field.
 
-## Scope
-
-This repo is intentionally narrow:
-
-- the `zerion` JSON-first CLI for AI agents and automation pipelines
-- 110+ unit and integration tests covering CLI behavior
-
-For agent skills, plugin manifests, and MCP setup, see the companion repo: [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent).
-
 ## Development
 
 ```bash
@@ -312,12 +350,12 @@ To force a specific version, add `Release-As: 2.0.0` in a commit message body.
 - `.github/workflows/release-please.yml` handles release PR creation and npm publish
 - `.github/workflows/test.yml` runs tests on PRs and pushes to main
 
-## Issues and questions
+## Resources
 
-For Zerion API questions, start with the public docs:
-
-- <https://developers.zerion.io/reference/getting-started>
-- <https://developers.zerion.io/reference/building-with-ai>
+- **API documentation** — <https://developers.zerion.io/introduction>
+- **Get an API key** — <https://dashboard.zerion.io>
+- **Agent skills + MCP** — [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent)
+- **Building with AI** — <https://developers.zerion.io/reference/building-with-ai>
 
 ## License
 
