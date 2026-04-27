@@ -345,7 +345,7 @@ To force a specific version, add `Release-As: 2.0.0` in a commit message body.
 
 - **API documentation** — <https://developers.zerion.io/introduction>
 - **Get an API key** — <https://dashboard.zerion.io>
-- **Agent skills + MCP** — [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent)
+- **Agent skills + MCP** — <https://github.com/zeriontech/zerion-agent>
 - **Building with AI** — <https://developers.zerion.io/reference/building-with-ai>
 
 ## License
