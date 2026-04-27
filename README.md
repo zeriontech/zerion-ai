@@ -135,77 +135,77 @@ Every command supports `--help` for full flag documentation. Run `zerion --help`
 
 Read-only. Supports `--x402` and `--mpp` for pay-per-call.
 
-| Command | Description |
-|---------|-------------|
-| `zerion analyze <address\|ens>` | Full analysis — portfolio, positions, transactions, PnL in parallel |
-| `zerion portfolio <address\|ens>` | Portfolio value and top positions |
-| `zerion positions <address\|ens>` | Token + DeFi positions (`--positions all\|simple\|defi`) |
-| `zerion history <address\|ens>` | Transaction history (`--limit`, `--chain`) |
-| `zerion pnl <address\|ens>` | Profit & loss (realized, unrealized, fees) |
-| `zerion search <query>` | Search tokens by name or symbol |
-| `zerion chains` | List supported chains |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion analyze <address\|ens>` | Full analysis — portfolio, positions, transactions, PnL in parallel | `zerion analyze vitalik.eth` |
+| `zerion portfolio <address\|ens>` | Portfolio value and top positions | `zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` |
+| `zerion positions <address\|ens>` | Token + DeFi positions (`--positions all\|simple\|defi`) | `zerion positions vitalik.eth --positions defi` |
+| `zerion history <address\|ens>` | Transaction history (`--limit`, `--chain`) | `zerion history vitalik.eth --limit 10 --chain ethereum` |
+| `zerion pnl <address\|ens>` | Profit & loss (realized, unrealized, fees) | `zerion pnl vitalik.eth` |
+| `zerion search <query>` | Search tokens by name or symbol | `zerion search USDC` |
+| `zerion chains` | List supported chains | `zerion chains` |
 
 ### Trading
 
 Requires an API key (or agent token for unattended use).
 
-| Command | Description |
-|---------|-------------|
-| `zerion swap <from> <to> <amount>` | Swap tokens on a single chain |
-| `zerion swap <from> <to> <amount> --to-chain <chain>` | Cross-chain swap |
-| `zerion swap tokens [chain]` | List tokens available for swap |
-| `zerion bridge <token> <chain> <amount>` | Bridge tokens cross-chain |
-| `zerion bridge <token> <chain> <amount> --to-token <tok>` | Bridge + swap on destination |
-| `zerion send <token> <amount> --to <address> --chain <chain>` | Send tokens |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion swap <from> <to> <amount>` | Swap tokens on a single chain | `zerion swap usdc eth 100 --chain ethereum` |
+| `zerion swap <from> <to> <amount> --to-chain <chain>` | Cross-chain swap | `zerion swap usdc eth 100 --chain base --to-chain ethereum` |
+| `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens base` |
+| `zerion bridge <token> <chain> <amount>` | Bridge tokens cross-chain | `zerion bridge usdc base 100` |
+| `zerion bridge <token> <chain> <amount> --to-token <tok>` | Bridge + swap on destination | `zerion bridge usdc base 100 --to-token eth` |
+| `zerion send <token> <amount> --to <address> --chain <chain>` | Send tokens | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
 
 ### Wallet Management
 
 Encrypted local wallets. EVM + Solana supported. Passphrase required for all destructive ops.
 
-| Command | Description |
-|---------|-------------|
-| `zerion wallet create --name <name>` | Create encrypted wallet (EVM + Solana) |
-| `zerion wallet import --name <name> --evm-key` | Import from EVM private key (interactive) |
-| `zerion wallet import --name <name> --sol-key` | Import from Solana private key (interactive) |
-| `zerion wallet import --name <name> --mnemonic` | Import from seed phrase (all chains) |
-| `zerion wallet list` | List all wallets |
-| `zerion wallet fund` | Show deposit addresses for funding |
-| `zerion wallet backup --wallet <name>` | Export recovery phrase |
-| `zerion wallet delete <name>` | Permanently delete a wallet (requires passphrase) |
-| `zerion wallet sync --wallet <name>` | Sync wallet to Zerion app via QR code |
-| `zerion wallet sync --all` | Sync all wallets to Zerion app |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion wallet create --name <name>` | Create encrypted wallet (EVM + Solana) | `zerion wallet create --name trading-bot` |
+| `zerion wallet import --name <name> --evm-key` | Import from EVM private key (interactive) | `zerion wallet import --name old-wallet --evm-key` |
+| `zerion wallet import --name <name> --sol-key` | Import from Solana private key (interactive) | `zerion wallet import --name sol-bot --sol-key` |
+| `zerion wallet import --name <name> --mnemonic` | Import from seed phrase (all chains) | `zerion wallet import --name backup --mnemonic` |
+| `zerion wallet list` | List all wallets | `zerion wallet list` |
+| `zerion wallet fund` | Show deposit addresses for funding | `zerion wallet fund --wallet trading-bot` |
+| `zerion wallet backup --wallet <name>` | Export recovery phrase | `zerion wallet backup --wallet trading-bot` |
+| `zerion wallet delete <name>` | Permanently delete a wallet (requires passphrase) | `zerion wallet delete trading-bot` |
+| `zerion wallet sync --wallet <name>` | Sync wallet to Zerion app via QR code | `zerion wallet sync --wallet trading-bot` |
+| `zerion wallet sync --all` | Sync all wallets to Zerion app | `zerion wallet sync --all` |
 
 ### Signing
 
-| Command | Description |
-|---------|-------------|
-| `zerion sign-message <message> --chain <chain>` | Sign EIP-191 (EVM) or raw (Solana) message |
-| `zerion sign-message <message> --encoding hex` | Treat message as hex bytes |
-| `zerion sign-typed-data --data '<json>'` | Sign EIP-712 typed data (EVM only) |
-| `zerion sign-typed-data --file <path>` | Read EIP-712 typed data from file |
-| `cat typed.json \| zerion sign-typed-data` | Read EIP-712 typed data from stdin |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion sign-message <message> --chain <chain>` | Sign EIP-191 (EVM) or raw (Solana) message | `zerion sign-message "Login to dApp" --chain ethereum` |
+| `zerion sign-message <message> --encoding hex` | Treat message as hex bytes | `zerion sign-message 0xdeadbeef --encoding hex --chain ethereum` |
+| `zerion sign-typed-data --data '<json>'` | Sign EIP-712 typed data (EVM only) | `zerion sign-typed-data --data "$(cat permit.json)"` |
+| `zerion sign-typed-data --file <path>` | Read EIP-712 typed data from file | `zerion sign-typed-data --file permit.json` |
+| `cat typed.json \| zerion sign-typed-data` | Read EIP-712 typed data from stdin | `cat permit.json \| zerion sign-typed-data` |
 
 ### Agent Tokens
 
 Scoped API tokens for unattended trading. Token auto-saves to config; required for `swap`, `bridge`, `send`.
 
-| Command | Description |
-|---------|-------------|
-| `zerion agent create-token --name <bot> --wallet <wallet>` | Create scoped token |
-| `zerion agent list-tokens` | List active agent tokens |
-| `zerion agent use-token --wallet <wallet>` | Switch active token by wallet |
-| `zerion agent revoke-token --name <bot>` | Revoke a token |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion agent create-token --name <bot> --wallet <wallet>` | Create scoped token | `zerion agent create-token --name dca-bot --wallet trading-bot` |
+| `zerion agent list-tokens` | List active agent tokens | `zerion agent list-tokens` |
+| `zerion agent use-token --wallet <wallet>` | Switch active token by wallet | `zerion agent use-token --wallet trading-bot` |
+| `zerion agent revoke-token --name <bot>` | Revoke a token | `zerion agent revoke-token --name dca-bot` |
 
 ### Agent Policies
 
 Restrict what an agent token can do — chains, expiry, transfers, approvals, allowlists.
 
-| Command | Description |
-|---------|-------------|
-| `zerion agent create-policy --name <policy>` | Create security policy (flags below) |
-| `zerion agent list-policies` | List all policies |
-| `zerion agent show-policy <id>` | Show policy details |
-| `zerion agent delete-policy <id>` | Delete a policy |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion agent create-policy --name <policy>` | Create security policy (flags below) | `zerion agent create-policy --name safe-base --chains base --expires 24h --deny-transfers` |
+| `zerion agent list-policies` | List all policies | `zerion agent list-policies` |
+| `zerion agent show-policy <id>` | Show policy details | `zerion agent show-policy safe-base` |
+| `zerion agent delete-policy <id>` | Delete a policy | `zerion agent delete-policy safe-base` |
 
 Policy flags:
 
@@ -221,31 +221,31 @@ Policy flags:
 
 Track wallets by name without exposing addresses in commands.
 
-| Command | Description |
-|---------|-------------|
-| `zerion watch <address> --name <label>` | Add wallet to watchlist |
-| `zerion watch list` | List watched wallets |
-| `zerion watch remove <name>` | Remove from watchlist |
-| `zerion analyze <name>` | Analyze a watched wallet by name |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion watch <address> --name <label>` | Add wallet to watchlist | `zerion watch 0xFe89Cc7Abb2C4183683Ab71653c4cCd1b9cC194e --name ens-dao` |
+| `zerion watch list` | List watched wallets | `zerion watch list` |
+| `zerion watch remove <name>` | Remove from watchlist | `zerion watch remove ens-dao` |
+| `zerion analyze <name>` | Analyze a watched wallet by name | `zerion analyze ens-dao` |
 
 ### Setup
 
-| Command | Description |
-|---------|-------------|
-| `zerion init` | One-shot onboarding — install CLI globally, configure API key, install agent skills |
-| `zerion init -y --browser` | Non-interactive init that opens dashboard.zerion.io for the API key |
-| `zerion setup skills` | Install Zerion agent skills into detected coding agents |
-| `zerion setup skills --agent claude-code` | Install into a specific agent |
-| `zerion setup mcp --agent <name>` | Merge the Zerion hosted-MCP fragment into an agent's config |
-| `zerion setup mcp --print` | Print the canonical MCP fragment without writing |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion init` | One-shot onboarding — install CLI globally, configure API key, install agent skills | `zerion init` |
+| `zerion init -y --browser` | Non-interactive init that opens dashboard.zerion.io for the API key | `npx -y zerion-cli init -y --browser` |
+| `zerion setup skills` | Install Zerion agent skills into detected coding agents | `zerion setup skills` |
+| `zerion setup skills --agent claude-code` | Install into a specific agent | `zerion setup skills --agent claude-code` |
+| `zerion setup mcp --agent <name>` | Merge the Zerion hosted-MCP fragment into an agent's config | `zerion setup mcp --agent cursor` |
+| `zerion setup mcp --print` | Print the canonical MCP fragment without writing | `zerion setup mcp --print` |
 
 ### Configuration
 
-| Command | Description |
-|---------|-------------|
-| `zerion config set <key> <value>` | Set config (`apiKey`, `defaultWallet`, `defaultChain`, `slippage`) |
-| `zerion config unset <key>` | Remove a config value (resets to default) |
-| `zerion config list` | Show current configuration |
+| Command | Description | Example |
+|---------|-------------|---------|
+| `zerion config set <key> <value>` | Set config (`apiKey`, `defaultWallet`, `defaultChain`, `slippage`) | `zerion config set defaultChain base` |
+| `zerion config unset <key>` | Remove a config value (resets to default) | `zerion config unset defaultChain` |
+| `zerion config list` | Show current configuration | `zerion config list` |
 
 ## Global Flags
 
