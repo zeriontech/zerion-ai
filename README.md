@@ -137,11 +137,11 @@ Read-only. Supports `--x402` and `--mpp` for pay-per-call.
 
 | Command | Description |
 |---------|-------------|
-| `zerion analyze <address\|ens\|name>` | Full analysis — portfolio, positions, transactions, PnL in parallel |
-| `zerion portfolio <address>` | Portfolio value and top positions |
-| `zerion positions <address>` | Token + DeFi positions (`--positions all\|simple\|defi`) |
-| `zerion history <address>` | Transaction history (`--limit`, `--chain`) |
-| `zerion pnl <address>` | Profit & loss (realized, unrealized, fees) |
+| `zerion analyze <address\|ens>` | Full analysis — portfolio, positions, transactions, PnL in parallel |
+| `zerion portfolio <address\|ens>` | Portfolio value and top positions |
+| `zerion positions <address\|ens>` | Token + DeFi positions (`--positions all\|simple\|defi`) |
+| `zerion history <address\|ens>` | Transaction history (`--limit`, `--chain`) |
+| `zerion pnl <address\|ens>` | Profit & loss (realized, unrealized, fees) |
 | `zerion search <query>` | Search tokens by name or symbol |
 | `zerion chains` | List supported chains |
 
