@@ -10,21 +10,21 @@
 ## Install
 
 ```bash
-npm install -g zerion
+npm install -g zerion-cli
 ```
 
 Or run without installing:
 
 ```bash
-npx zerion --help
+npx zerion-cli --help
 ```
 
-Requires Node.js 20 or later.
+The npm package is `zerion-cli`; the installed binary is `zerion`. Requires Node.js 20 or later.
 
 ## Quick Start
 
 ```bash
-npm install -g zerion
+npm install -g zerion-cli
 export ZERION_API_KEY="zk_dev_..."
 zerion analyze 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 ```
