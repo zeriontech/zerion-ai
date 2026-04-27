@@ -5,13 +5,7 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, swap and bridge on-
 > [!NOTE]
 > **Alpha Preview** — This CLI is under active development. Commands, flags, and output formats may change or be removed without notice between releases. Do not depend on current behavior in production workflows.
 
-### Built for agents
-
-This CLI is designed primarily for AI agents and automation pipelines, not as a general-purpose interactive terminal tool. JSON-first output by default, no confirmation prompts on data commands, structured error codes on stderr. Every command executes immediately and returns parsable output.
-
-**This means destructive commands are truly destructive.** Once an agent token is configured, `zerion swap` and `zerion bridge` execute trades immediately — no "are you sure?" dialog. Treat agent tokens like API keys with spending power and use [agent policies](#agent-policies) to scope what they can do.
-
-## Install
+## Installation
 
 ```bash
 npm install -g zerion-cli
@@ -50,6 +44,15 @@ The skill bundle teaches AI coding agents how to use Zerion correctly:
 - **Authentication** — choosing between API key, x402, and MPP based on the task
 
 Reinstall any time with `zerion setup skills`. Skills live in [`zeriontech/zerion-agent`](https://github.com/zeriontech/zerion-agent).
+
+## Manual setup, agent execution
+
+Zerion CLI splits into two surfaces, by design.
+
+- **Wallet management is manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. These commands assume a human at the keyboard — no key material moves without an explicit gesture.
+- **Analysis and trading are for agents.** `analyze`, `portfolio`, `swap`, `bridge`, and `send` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, trades fire immediately.
+
+The split is the point. You stage a wallet by hand once — create or import a key, set a passphrase, mint an agent token, attach a policy — then hand the agent token to an automation that can only do what the policy allows. Treat agent tokens like API keys with spending power; use [agent policies](#agent-policies) to scope them down to specific chains, addresses, or expiry windows.
 
 ## Authentication
 
