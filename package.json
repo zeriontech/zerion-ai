@@ -17,10 +17,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test 'tests/**/*.test.mjs'",
+    "test": "node --test 'tests/unit/**/*.test.mjs'",
     "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
-    "test:integration": "node --test 'tests/integration/**/*.test.mjs'",
+    "test:integration": "node --test --test-concurrency=1 'tests/integration/**/*.test.mjs'",
     "test:integration:auth": "node --test tests/integration/auth.test.mjs",
+    "test:all": "node --test 'tests/**/*.test.mjs'",
     "prepublishOnly": "npm test"
   },
   "imports": {

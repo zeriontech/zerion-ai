@@ -1,6 +1,6 @@
 # Zerion CLI
 
-CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bridge on-chain with agent-managed wallets across EVM chains and Solana, all from the command line.
+CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bridge on-chain with agent-managed wallets across EVM chains and Solana, all from the command line. Wallet management is built on the [Open Wallet Standard](https://github.com/open-wallet-standard/core).
 
 > [!NOTE]
 > **Alpha Preview** — This CLI is under active development. Commands, flags, and output formats may change or be removed without notice between releases. Do not depend on current behavior in production workflows.
@@ -303,7 +303,9 @@ All errors are emitted as structured JSON on stderr with a `code` field.
 
 ```bash
 npm install
-npm test
+npm test                  # unit tests (fast, offline)
+npm run test:integration  # live API tests (requires ZERION_API_KEY, runs serially to avoid rate limits)
+npm run test:all          # both
 node ./zerion.js --help
 ```
 
