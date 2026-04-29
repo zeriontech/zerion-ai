@@ -25,11 +25,21 @@ Three modes. Pick one for analytics; trading always uses an API key.
 
 ### A) API key (recommended)
 
+Run the browser-based login flow — opens [dashboard.zerion.io](https://dashboard.zerion.io), waits for the user to click **Authorize**, and saves the key automatically (PKCE; no manual paste):
+
 ```bash
-export ZERION_API_KEY="zk_dev_..."
+zerion login              # browser-based PKCE flow, saves to ~/.zerion/config.json
+zerion logout             # clear saved key + agent tokens
 ```
 
-Get yours at [dashboard.zerion.io](https://dashboard.zerion.io). Dev keys begin with `zk_dev_`. Limits: 120 req/min, 5K req/day.
+For non-interactive contexts (CI, scripts, headless agents) supply the key directly:
+
+```bash
+zerion login --api-key zk_dev_...   # save a key non-interactively
+export ZERION_API_KEY="zk_dev_..."  # or just export it; CLI auto-detects
+```
+
+Get a key at [dashboard.zerion.io](https://dashboard.zerion.io). Dev keys begin with `zk_dev_`. Limits: 120 req/min, 5K req/day.
 
 ### B) x402 pay-per-call (no signup, analytics only)
 

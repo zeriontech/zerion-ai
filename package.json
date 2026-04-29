@@ -5,7 +5,7 @@
   "author": "Zerion",
   "type": "module",
   "bin": {
-    "zerion": "./cli/zerion.js"
+    "zerion": "cli/zerion.js"
   },
   "files": [
     "cli/zerion.js",
@@ -60,6 +60,7 @@
     "@x402/fetch": "^2.6.0",
     "@x402/svm": "^2.8.0",
     "mppx": "^0.6.2",
+    "open": "^10.1.0",
     "qrcode-terminal": "^0.12.0",
     "viem": "^2.0.0"
   },

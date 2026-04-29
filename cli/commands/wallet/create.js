@@ -4,6 +4,7 @@ import { setConfigValue, getConfigValue } from "../../utils/config.js";
 import { readPassphrase, readSecret } from "../../utils/common/prompt.js";
 import { PASSPHRASE_WARNING } from "../../utils/common/constants.js";
 import { offerAgentToken } from "../../utils/wallet/offer-agent-token.js";
+import { offerLogin } from "../../utils/wallet/offer-login.js";
 
 export default async function walletCreate(args, flags) {
   const name = flags.name || args[0] || generateName();
@@ -39,6 +40,9 @@ export default async function walletCreate(args, flags) {
       created: true,
       isDefault: getConfigValue("defaultWallet") === name,
     });
+
+    // Offer API key login first — agent tokens / trading / analysis all need one.
+    await offerLogin();
 
     // Offer agent token creation as part of wallet setup
     await offerAgentToken(name, passphrase);

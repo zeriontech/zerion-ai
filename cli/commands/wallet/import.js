@@ -3,6 +3,7 @@ import { print, printError } from "../../utils/common/output.js";
 import { setConfigValue, getConfigValue, setWalletOrigin, getWalletAddresses } from "../../utils/config.js";
 import { readSecret, readPassphrase } from "../../utils/common/prompt.js";
 import { offerAgentToken } from "../../utils/wallet/offer-agent-token.js";
+import { offerLogin } from "../../utils/wallet/offer-login.js";
 import { WALLET_ORIGIN, PASSPHRASE_WARNING } from "../../utils/common/constants.js";
 
 export default async function walletImport(args, flags) {
@@ -60,6 +61,7 @@ export default async function walletImport(args, flags) {
       imported: true,
     });
 
+    await offerLogin();
     await offerAgentToken(name, passphrase);
   } catch (err) {
     printError("ows_error", `Failed to import wallet: ${err.message}`);

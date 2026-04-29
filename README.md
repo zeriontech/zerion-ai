@@ -11,15 +11,15 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bri
 npm install -g zerion-cli
 ```
 
-Or set up everything in one command (install CLI globally, configure your API key, and add skills across all detected coding agents):
+Or set up everything in one command (install CLI globally, authenticate via browser, and add skills across all detected coding agents):
 
 ```bash
-npx -y zerion-cli init -y --browser
+npx -y zerion-cli init
 ```
 
-- `-y` runs setup non-interactively
-- `--browser` opens [dashboard.zerion.io](https://dashboard.zerion.io) so you can grab an API key and paste it back
+- opens your browser to [dashboard.zerion.io](https://dashboard.zerion.io), waits for you to click **Authorize**, then saves the API key automatically (PKCE flow — no manual paste)
 - skills install globally to every detected AI coding agent by default
+- pass `-y` to run non-interactively in CI; auth is skipped and you can finish later with `zerion login`
 
 Requires Node.js 20 or later.
 
@@ -126,20 +126,23 @@ Three options. The CLI auto-detects which is active.
 
 ### A) API key (recommended)
 
-Get a key at **[dashboard.zerion.io](https://dashboard.zerion.io)** — it's free and takes a minute. Keys begin with `zk_`.
+Run the browser-based login flow — it opens [dashboard.zerion.io](https://dashboard.zerion.io), waits for you to click **Authorize**, and saves the key for you (PKCE; no manual paste):
 
 ```bash
-export ZERION_API_KEY="zk_..."
+zerion login              # opens browser, completes via PKCE, saves the key
+zerion logout             # clear the saved API key (and any agent tokens)
 ```
 
-- HTTP Basic Auth
-- Required for analysis and trading commands (analysis can also use x402 / MPP pay-per-call instead — see options B and C)
+You only do this once — the key persists in `~/.zerion/config.json` (mode 0o600).
 
-You can also persist it via config:
+For non-interactive setups (CI, scripts, containers) you can supply the key directly:
 
 ```bash
-zerion config set apiKey zk_...
+zerion login --api-key zk_...    # save a key non-interactively
+export ZERION_API_KEY="zk_..."   # or just export it; CLI auto-detects
 ```
+
+Keys begin with `zk_` (e.g. `zk_dev_…`). Required for analysis and trading commands — analysis can also use x402 / MPP pay-per-call instead (see options B and C).
 
 ### B) x402 pay-per-call
 
@@ -283,8 +286,11 @@ Track wallets by name without exposing addresses in commands.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion init` | One-shot onboarding — install CLI globally, configure API key, install agent skills | `zerion init` |
-| `zerion init -y --browser` | Non-interactive init that opens dashboard.zerion.io for the API key | `npx -y zerion-cli init -y --browser` |
+| `zerion init` | One-shot onboarding — install CLI globally, browser-auth via PKCE, install agent skills | `zerion init` |
+| `zerion init -y` | Non-interactive init for CI; skips auth (run `zerion login` later) | `npx -y zerion-cli init -y` |
+| `zerion login` | Browser-based login (PKCE) — opens dashboard.zerion.io and saves the key | `zerion login` |
+| `zerion login --api-key zk_...` | Non-interactive login with a key you already have | `zerion login --api-key zk_dev_...` |
+| `zerion logout` | Clear the saved API key and any agent tokens | `zerion logout` |
 | `zerion setup skills` | Install Zerion agent skills into detected coding agents | `zerion setup skills` |
 | `zerion setup skills --agent claude-code` | Install into a specific agent | `zerion setup skills --agent claude-code` |
 

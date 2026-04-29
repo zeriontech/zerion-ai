@@ -73,6 +73,13 @@ function printUsage() {
       "watch remove <name>": "Remove from watchlist",
       "analyze <name|address>": "Analyze wallet trading activity",
     },
+    auth: {
+      "login": "Interactive login (prompts for browser or manual paste)",
+      "login --browser": "Open dashboard, auto-save API key after Authorize",
+      "login --api-key <key>": "Save API key non-interactively",
+      "login --force": "Replace the currently saved API key",
+      "logout": "Remove saved API key and agent tokens",
+    },
     other: {
       "chains": "List supported chains",
       "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage)",
