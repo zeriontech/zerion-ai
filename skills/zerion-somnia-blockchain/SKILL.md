@@ -329,6 +329,61 @@ enum ResponseStatus { Pending, Success, Failed, TimedOut }
 
 ---
 
+## Using with Zerion CLI
+
+This skill is most useful when paired with `zerion-cli`. The CLI handles wallet, analysis, and trading; this skill teaches the agent **how Somnia behaves** so those CLI calls succeed and compose with on-chain logic.
+
+**Direct mappings:**
+
+| Zerion CLI action | What this skill adds |
+|---|---|
+| `zerion swap` / `zerion bridge` on Somnia | Chain IDs (50312 / 5031), gas-cost expectations, slippage guidance |
+| `zerion wallet create` then deploying a contract | `--gas-estimate-multiplier 200` for Foundry; Hardhat/viem network configs |
+| Tight loops of `zerion swap` (bot-style) | Switch to Session RPCs — no nonce, no per-tx signing |
+| `zerion analyze` output that needs LLM follow-up | Pipe into Somnia Agents (`createRequest`) for on-chain inference |
+| `zerion sign-typed-data` with a custom contract | Skill provides the EIP-712 domain (chainId, verifyingContract patterns) |
+
+**Example — high-throughput bot with Zerion-side risk rails:**
+
+```bash
+# 1. Provision a Zerion agent token scoped tightly
+zerion agent create-token --name somnia-bot --wallet trading-bot
+zerion agent create-policy --name safe-somnia \
+  --chains somnia --expires 7d --deny-transfers
+```
+
+```typescript
+// 2. Use a Somnia Session client for the actual on-chain trades —
+//    no nonce conflicts even at hundreds of tx/sec
+import { createSessionClient, somniaTestnet } from '@somnia-chain/viem-session-account'
+
+const client = await createSessionClient({ seed, chain: somniaTestnet, transport: http() })
+
+// fire trades through the session client; use the Zerion token only for
+// risk-policied actions that need their facilitator
+```
+
+**Example — `zerion analyze` → Somnia Agent on-chain decision:**
+
+```bash
+zerion analyze 0xUserWallet --json > /tmp/portfolio.json
+```
+
+```solidity
+// pass the portfolio summary into a Somnia Agent invocation;
+// validators run an LLM and return a rebalance recommendation on-chain
+somniaAgents.createRequest{value: deposit}(
+    LLM_INFERENCE_AGENT_ID,
+    address(this),
+    this.handleRebalance.selector,
+    abi.encode(portfolioSummary)
+);
+```
+
+For event-driven combos (copy-trade, scheduled DCA, live dashboards), see the `somnia-reactivity` skill.
+
+---
+
 ## Somnia Gas Model
 
 Somnia's gas model differs **significantly** from Ethereum. You must account for these differences when writing and optimizing contracts.
