@@ -551,6 +551,83 @@ Somnia RPC limits `eth_getLogs` to 1000 blocks per query:
 
 ---
 
+## Using with Zerion CLI
+
+Reactivity is the trigger layer; `zerion-cli` is the action layer. The pattern is always:
+
+> **Somnia event** → handler decides → **`zerion` command executes**
+
+For off-chain handlers, this is a Node process subscribing via WSS and shelling out to `zerion`. For on-chain handlers, it's a Solidity contract emitting an event that an off-chain runner picks up and translates into a CLI call.
+
+### Pattern 1 — Copy-trade a watched wallet
+
+```typescript
+import { SDK } from '@somnia-chain/reactivity'
+import { execSync } from 'node:child_process'
+
+await sdk.subscribe({
+  event: { address: WHALE_WALLET, topics: [TRANSFER_TOPIC] },
+  ethCalls: [],
+  onData: ({ event }) => {
+    // mirror the whale's swap on the same chain
+    execSync(`zerion swap usdc somi 100 --chain somnia`)
+  },
+})
+```
+
+`zerion watch <whale> --name whale-1` first, so the agent operator can re-discover the wallet by name later without leaking the address.
+
+### Pattern 2 — Scheduled DCA with no external cron
+
+```typescript
+import { SDK } from '@somnia-chain/reactivity'
+
+// fires once at the given timestamp, then auto-deletes
+await sdk.scheduleOnchainCronJob({
+  timestampMs: nextMondayMs(),
+  handlerContractAddress: DCA_HANDLER,
+  priorityFeePerGas: parseGwei('2'),
+  maxFeePerGas: parseGwei('10'),
+  gasLimit: 500_000n,
+})
+```
+
+The handler emits a `DcaTick` event; an off-chain runner listens for it and runs `zerion swap usdc somi 100 --chain somnia`. Re-schedule from inside the handler for a recurring cadence.
+
+### Pattern 3 — Live multi-chain dashboard
+
+```typescript
+// Somnia: push, no polling
+await sdk.subscribe({
+  ethCalls: [{ to: USER, data: '0x' /* balance */ }],
+  onData: ({ state }) => updateSomniaPanel(state),
+})
+
+// Other chains: pull via Zerion CLI
+const portfolio = JSON.parse(
+  execSync('zerion analyze 0xUser --json').toString()
+)
+updateOtherChains(portfolio)
+```
+
+Result: instant Somnia updates via WSS, cross-chain coverage via Zerion CLI's 14 EVM chains + Solana — one unified view.
+
+### Pattern 4 — Reactive risk policy
+
+```solidity
+// On-chain handler triggered when user balance drops below threshold
+function _onEvent(address emitter, bytes32[] calldata topics, bytes calldata data) internal override {
+    uint256 balance = abi.decode(data, (uint256));
+    if (balance < SAFETY_THRESHOLD) {
+        emit ProtectiveSwapRequested(user, balance);
+    }
+}
+```
+
+Off-chain runner sees `ProtectiveSwapRequested` → fires `zerion swap somi usdc <amount> --chain somnia` to convert to stables. The Zerion-side `--allowlist` policy on the agent token prevents the runner from doing anything beyond the protective swap.
+
+---
+
 ## Quick Reference
 
 | Task | Method |
