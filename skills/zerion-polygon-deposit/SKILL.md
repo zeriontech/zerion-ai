@@ -1,39 +1,29 @@
 ---
 name: zerion-polygon-deposit
-description: "Deposit tokens into DeFi vaults on Polygon (chainId 137) using the Trails SDK. Handles cross-chain bridging + vault deposit in a single intent: user sends tokens from any chain and they land directly in the vault. Supports ERC-4626 vaults, Aave, and custom deposit contracts. Use when the user asks to 'deposit into a vault', 'earn yield on Polygon', 'bridge and stake', or 'put tokens into a DeFi protocol on Polygon'."
+description: "Deposit tokens into DeFi vaults on Polygon (chainId 137) using the Trails SDK. Handles cross-chain bridging + vault deposit in a single intent: user sends tokens from any chain and they land directly in the vault. Supports Aave, Morpho, and custom ERC-4626 vaults via composable actions or calldata. Use when the user asks to 'deposit into a vault', 'earn yield on Polygon', 'bridge and stake', or 'put tokens into a DeFi protocol on Polygon'."
 license: MIT
 allowed-tools: Bash, Read, Edit, Write
 ---
 
 # Zerion — Polygon DeFi Vault Deposit (Trails)
 
-Bridge tokens from any chain and deposit directly into a DeFi vault on Polygon in a single intent, powered by [Trails](https://docs.trails.build). Trails handles routing, cross-chain settlement, and the vault `deposit` call atomically — no manual approve + deposit step needed.
+Bridge tokens from any chain and deposit directly into a DeFi vault on Polygon in a single intent, powered by [Trails](https://docs.trails.build). Trails handles routing, cross-chain settlement, and the vault deposit call atomically.
 
 ## Setup
 
 ### 1. Get a Trails API key
 
-Visit [https://dashboard.trails.build](https://dashboard.trails.build) to create an account and generate a key. Then add it to your environment:
-
-```bash
-# Client-side (Widget / Headless SDK)
-NEXT_PUBLIC_TRAILS_API_KEY=your_key
-
-# Server-side (Direct API)
-TRAILS_API_KEY=your_key
-```
+Visit [https://dashboard.trails.build](https://dashboard.trails.build) to create an account and generate a key.
 
 ### 2. Install
 
 ```bash
-# Widget or Headless SDK (React / Next.js)
-npm install @0xtrails/trails viem
+# Widget or hooks (React / Next.js) + calldata encoding
+npm install 0xtrails viem
 
 # Direct API (Node.js / backend)
-npm install @0xtrails/trails-api viem
+npm install @0xtrails/api viem
 ```
-
-`viem` is used to encode the deposit calldata. Requires React 19.1+ for Widget/Headless. Node.js 18+ for Direct API.
 
 ---
 
@@ -43,9 +33,10 @@ npm install @0xtrails/trails-api viem
 - "Bridge ETH from Ethereum and deposit into Aave on Polygon"
 - "Stake into a yield vault on Polygon from any chain"
 - "Put my tokens to work on Polygon"
-- Any ERC-4626-compatible vault or custom `deposit(uint256, address)` contract on Polygon
+- Any Aave/Morpho lending market or custom ERC-4626 vault on Polygon
 
-**Polygon chain ID**: `137`
+**Polygon chain ID**: `137`  
+**Polygon chain name** (widget/hooks): `"polygon"`
 
 Common deposit tokens on Polygon:
 
@@ -59,47 +50,31 @@ Common deposit tokens on Polygon:
 
 ---
 
-## Core concept: Fund mode + calldata
+## Core concept: placeholder amount
 
-Trails **Fund mode** is `EXACT_INPUT` — the user specifies an input amount and the vault receives the computed output. Because the final settled amount isn't known at encoding time, use the placeholder constant that Trails replaces at execution:
+Trails deposits are `EXACT_INPUT` — the user specifies the input amount and the vault receives the computed settled amount. Because the final amount isn't known at calldata encoding time, import and use `TRAILS_ROUTER_PLACEHOLDER_AMOUNT` from `0xtrails`:
 
 ```typescript
-// Trails recognizes this value and substitutes the real settled amount
-const PLACEHOLDER_AMOUNT = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
+import { TRAILS_ROUTER_PLACEHOLDER_AMOUNT } from '0xtrails'
+
+// Trails replaces this with the real settled amount at execution time
+args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT, receiverAddress]
 ```
+
+Do not use this placeholder for functions that read the token balance internally (e.g. `deposit(address receiver)` without an explicit amount arg).
 
 ---
 
 ## Integration: Widget (React / Next.js)
 
-### Provider setup
+Import from `0xtrails/widget`. Components are self-contained and take `apiKey` directly.
+
+### Fund widget — custom vault via calldata
 
 ```tsx
-// app/layout.tsx or _app.tsx
-import { TrailsProvider } from '@0xtrails/trails';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      <TrailsProvider trailsApiKey={process.env.NEXT_PUBLIC_TRAILS_API_KEY!}>
-        {children}
-      </TrailsProvider>
-    </WagmiProvider>
-  );
-}
-```
-
-### ERC-4626 vault deposit widget
-
-```tsx
-import { TrailsWidget } from '@0xtrails/trails';
-import { encodeFunctionData } from 'viem';
-
-const PLACEHOLDER_AMOUNT = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
+import { Fund } from '0xtrails/widget'
+import { TRAILS_ROUTER_PLACEHOLDER_AMOUNT } from '0xtrails'
+import { encodeFunctionData } from 'viem'
 
 const erc4626Abi = [
   {
@@ -111,97 +86,160 @@ const erc4626Abi = [
     ],
     outputs: [{ name: 'shares', type: 'uint256' }],
   },
-] as const;
+] as const
 
 function VaultDepositWidget({
   vaultAddress,
   userAddress,
 }: {
-  vaultAddress: `0x${string}`;
-  userAddress: `0x${string}`;
+  vaultAddress: `0x${string}`
+  userAddress: `0x${string}`
 }) {
   const calldata = encodeFunctionData({
     abi: erc4626Abi,
     functionName: 'deposit',
-    args: [PLACEHOLDER_AMOUNT, userAddress],  // Trails fills real amount at execution
-  });
+    args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT, userAddress],
+  })
 
   return (
-    <TrailsWidget
-      mode="fund"
-      destinationChainId={137}
-      destinationTokenAddress="0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"  // USDC on Polygon
-      destinationRecipient={vaultAddress}
-      destinationCalldata={calldata}
+    <Fund
+      apiKey="YOUR_TRAILS_API_KEY"
+      to={{
+        recipient: vaultAddress,
+        currency: "USDC",
+        chain: "polygon",
+        calldata,
+      }}
+      onFundingSuccess={({ sessionId }) => {
+        console.log('Deposit complete:', sessionId)
+      }}
+      onFundingError={({ error }) => console.error(error)}
     />
-  );
+  )
 }
 ```
 
-### Aave v3 supply widget (Polygon)
+### Earn widget — for yield/lending protocols
 
-Aave uses a `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)` signature:
+For supported protocols (Aave, Morpho, Yearn, Compound), use the `Earn` component with composable actions — no manual ABI encoding needed:
 
 ```tsx
-import { TrailsWidget } from '@0xtrails/trails';
-import { encodeFunctionData } from 'viem';
+import { Earn } from '0xtrails/widget'
 
-const PLACEHOLDER_AMOUNT = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
-
-// Aave v3 Pool on Polygon: 0x794a61358D6845594F94dc1DB02A252b5b4814aD
-const aavePoolAbi = [
-  {
-    name: 'supply',
-    type: 'function',
-    inputs: [
-      { name: 'asset', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'onBehalfOf', type: 'address' },
-      { name: 'referralCode', type: 'uint16' },
-    ],
-    outputs: [],
-  },
-] as const;
-
-function AaveSupplyWidget({
-  userAddress,
-}: {
-  userAddress: `0x${string}`;
-}) {
-  const USDC_POLYGON = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359' as const;
-  const AAVE_POOL_POLYGON = '0x794a61358D6845594F94dc1DB02A252b5b4814aD' as const;
-
-  const calldata = encodeFunctionData({
-    abi: aavePoolAbi,
-    functionName: 'supply',
-    args: [USDC_POLYGON, PLACEHOLDER_AMOUNT, userAddress, 0],
-  });
-
+function AaveDepositWidget() {
   return (
-    <TrailsWidget
-      mode="fund"
-      destinationChainId={137}
-      destinationTokenAddress={USDC_POLYGON}
-      destinationRecipient={AAVE_POOL_POLYGON}
-      destinationCalldata={calldata}
+    <Earn
+      apiKey="YOUR_TRAILS_API_KEY"
+      onEarnSuccess={({ sessionId }) => {
+        console.log('Earned:', sessionId)
+      }}
     />
-  );
+  )
 }
 ```
+
+For a specific Polygon lending market, add a `to` config:
+
+```tsx
+<Earn
+  apiKey="YOUR_TRAILS_API_KEY"
+  to={{
+    chain: "polygon",
+    currency: "USDC",
+  }}
+  onEarnSuccess={({ sessionId }) => console.log(sessionId)}
+/>
+```
+
+**Widget props reference:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `apiKey` | string | Trails API key (required) |
+| `to.recipient` | string | Vault contract address |
+| `to.currency` | string | Token symbol or address |
+| `to.chain` | string \| number | Chain name, ID, or viem Chain |
+| `to.calldata` | string | ABI-encoded deposit call (use `TRAILS_ROUTER_PLACEHOLDER_AMOUNT`) |
+| `to.amount` | string | Fixed deposit amount (optional) |
+| `paymentMethod` | string | `"CONNECTED_WALLET"` (default), `"CRYPTO_TRANSFER"`, `"CREDIT_DEBIT_CARD"`, `"EXCHANGE"` |
 
 ---
 
-## Integration: Headless SDK (React + custom UI)
+## Integration: Headless hooks (React + custom UI)
+
+Import hooks from `0xtrails`. Hooks require `TrailsProvider` context.
+
+### Provider setup
 
 ```tsx
-import { TrailsProvider, TrailsHookModal, useTrailsSendTransaction } from '@0xtrails/trails';
-import { encodeFunctionData } from 'viem';
+import { TrailsProvider } from '0xtrails'
 
-const PLACEHOLDER_AMOUNT = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <TrailsProvider trailsApiKey="YOUR_TRAILS_API_KEY">
+      {children}
+    </TrailsProvider>
+  )
+}
+```
+
+### Aave deposit via composable actions
+
+For supported protocols, use `lend()` from `0xtrails` — Trails handles the contract calls internally:
+
+```tsx
+import { useTrailsSendTransaction, lend, useEarnMarkets } from '0xtrails'
+
+function AaveDepositButton({ amount }: { amount: string }) {
+  const { data: markets } = useEarnMarkets({ chain: 'polygon', provider: 'aave' })
+
+  const { sendTransaction, isPending } = useTrailsSendTransaction({
+    actions: [
+      lend({
+        marketId: 'polygon-usdc-aave-v3-lending', // use useEarnMarkets to discover IDs
+        amount,
+      }),
+    ],
+  })
+
+  return (
+    <button onClick={() => sendTransaction()} disabled={isPending}>
+      {isPending ? 'Depositing...' : 'Deposit to Aave on Polygon'}
+    </button>
+  )
+}
+```
+
+Use `useEarnMarkets` to discover available `marketId` values at runtime rather than hardcoding them:
+
+```tsx
+import { useEarnMarkets } from '0xtrails'
+
+function MarketPicker() {
+  const { data: markets } = useEarnMarkets({
+    chain: 'polygon',
+    type: 'lending',      // optional: 'lending' | 'vault'
+    provider: 'aave',     // optional: filter by protocol
+    sortBy: 'apy',        // optional
+  })
+
+  return (
+    <ul>
+      {markets?.map(m => (
+        <li key={m.marketId}>{m.name} — {m.apy}% APY</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Custom vault deposit via calldata
+
+For protocols not natively supported by Trails, encode calldata manually:
+
+```tsx
+import { useTrailsSendTransaction, TRAILS_ROUTER_PLACEHOLDER_AMOUNT } from '0xtrails'
+import { encodeFunctionData } from 'viem'
 
 const erc4626Abi = [
   {
@@ -213,45 +251,29 @@ const erc4626Abi = [
     ],
     outputs: [{ name: 'shares', type: 'uint256' }],
   },
-] as const;
+] as const
 
-// Provider setup (in app root)
-function App() {
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      <TrailsProvider trailsApiKey={process.env.NEXT_PUBLIC_TRAILS_API_KEY!}>
-        <TrailsHookModal />
-        {children}
-      </TrailsProvider>
-    </WagmiProvider>
-  );
-}
+function useCustomVaultDeposit(vaultAddress: `0x${string}`, userAddress: `0x${string}`) {
+  const { sendTransaction, isPending } = useTrailsSendTransaction()
 
-// Deposit hook
-function useVaultDeposit(
-  vaultAddress: `0x${string}`,
-  userAddress: `0x${string}`,
-  depositTokenAddress: `0x${string}`,
-) {
-  const { sendTransaction, isPending } = useTrailsSendTransaction();
-
-  const deposit = (inputAmount: string) => {
+  const deposit = () => {
     const calldata = encodeFunctionData({
       abi: erc4626Abi,
       functionName: 'deposit',
-      args: [PLACEHOLDER_AMOUNT, userAddress],
-    });
+      args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT, userAddress],
+    })
 
     sendTransaction({
-      destinationChainId: 137,
-      destinationTokenAddress: depositTokenAddress,
-      destinationRecipient: vaultAddress,
-      destinationCalldata: calldata,
-      sourceAmount: inputAmount,
-    });
-  };
+      to: {
+        recipient: vaultAddress,
+        currency: "USDC",
+        chain: "polygon",
+        calldata,
+      },
+    })
+  }
 
-  return { deposit, isPending };
+  return { deposit, isPending }
 }
 ```
 
@@ -259,17 +281,14 @@ function useVaultDeposit(
 
 ## Integration: Direct API (Node.js / backend)
 
-Full control over quote → commit → execute → wait. Use for server-side automations or non-React environments.
+Full control over quote → commit → execute → wait. Use for server-side automation or non-React environments.
 
 ```typescript
-import { TrailsAPI } from '@0xtrails/trails-api';
-import { encodeFunctionData } from 'viem';
+import { TrailsApi, TradeType } from '@0xtrails/api'
+import { TRAILS_ROUTER_PLACEHOLDER_AMOUNT } from '0xtrails'
+import { encodeFunctionData } from 'viem'
 
-const trails = new TrailsAPI({ apiKey: process.env.TRAILS_API_KEY! });
-
-const PLACEHOLDER_AMOUNT = BigInt(
-  '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
-);
+const trailsApi = new TrailsApi('YOUR_TRAILS_API_KEY')
 
 const erc4626Abi = [
   {
@@ -281,72 +300,89 @@ const erc4626Abi = [
     ],
     outputs: [{ name: 'shares', type: 'uint256' }],
   },
-] as const;
+] as const
 
 async function depositToPolygonVault(params: {
-  userAddress: string;
-  vaultAddress: string;
-  depositTokenAddress: string;    // token the vault accepts (on Polygon)
-  sourceChainId: number;
-  sourceTokenAddress: string;
-  inputAmount: string;            // in source token's smallest unit
+  userAddress: string
+  vaultAddress: string
+  depositTokenAddress: string   // token the vault accepts on Polygon
+  originChainId: number
+  originTokenAddress: string
+  originTokenAmount: bigint     // in source token's smallest unit
 }) {
-  const { userAddress, vaultAddress, depositTokenAddress, sourceChainId, sourceTokenAddress, inputAmount } = params;
+  const { userAddress, vaultAddress, depositTokenAddress, originChainId, originTokenAddress, originTokenAmount } = params
 
-  // Encode the vault deposit calldata (placeholder replaced at execution)
-  const calldata = encodeFunctionData({
+  // Encode vault deposit call — Trails replaces TRAILS_ROUTER_PLACEHOLDER_AMOUNT at execution
+  const destinationCallData = encodeFunctionData({
     abi: erc4626Abi,
     functionName: 'deposit',
-    args: [PLACEHOLDER_AMOUNT, userAddress as `0x${string}`],
-  });
+    args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT, userAddress as `0x${string}`],
+  })
 
-  // 1. Quote — includes bridge + swap + deposit in one route
-  const quote = await trails.quoteIntent({
-    sourceChainId,
-    sourceTokenAddress,
-    destinationChainId: 137,           // Polygon
+  // 1. Quote — includes bridge + swap + vault deposit in one route
+  const { intent, gasFeeOptions } = await trailsApi.quoteIntent({
+    ownerAddress: userAddress,
+    originChainId,
+    originTokenAddress,
+    originTokenAmount,
+    destinationChainId: 137,            // Polygon
     destinationTokenAddress: depositTokenAddress,
-    amount: inputAmount,
-    tradeType: 'EXACT_INPUT',
-    userAddress,
-    destinationRecipient: vaultAddress,
-    destinationCalldata: calldata,
-  });
+    destinationToAddress: vaultAddress,
+    destinationCallData,                 // capital D
+    tradeType: TradeType.EXACT_INPUT,
+    options: {
+      slippageTolerance: 0.005,
+    },
+  })
 
-  console.log('Estimated vault input:', quote.estimatedOutput);
-  console.log('Quote expires:', quote.expiresAt);
+  // 2. Commit — pass the full intent object; must execute within 10 minutes
+  const { intentId } = await trailsApi.commitIntent({ intent })
 
-  // 2. Commit
-  const intent = await trails.commitIntent({ quoteId: quote.quoteId });
+  // 3. Execute — user signs the intent (gasless path)
+  await trailsApi.executeIntent({
+    intentId,
+    depositSignature: {
+      intentSignature: await signIntent(intent, walletClient), // EIP-712 sign
+      selectedGasFeeOption: gasFeeOptions.feeOptions[0],
+      userNonce: 1,
+      deadline: Math.floor(Date.now() / 1000) + 3600,
+    },
+  })
 
-  // 3. Execute (user must sign)
-  await trails.executeIntent({
-    intentId: intent.intentId,
-    signature: '0x...', // user's EIP-712 signature
-  });
+  // Alternative: user submits deposit transaction manually
+  // await trailsApi.executeIntent({ intentId, depositTransactionHash: '0x...' })
 
-  // 4. Wait for settlement — bridge + vault deposit can take 1-5 min
-  const receipt = await trails.waitIntentReceipt({
-    intentId: intent.intentId,
-    timeout: 300000,    // 5 min for cross-chain + deposit
-    pollInterval: 5000,
-  });
+  // 4. Poll until bridge + vault deposit settles (can take 1-5 min)
+  let done = false
+  let intentReceipt
+  while (!done) {
+    ;({ intentReceipt, done } = await trailsApi.waitIntentReceipt({ intentId }))
+  }
 
-  console.log('Deposit complete. Status:', receipt.status);
-  console.log('Destination tx:', receipt.destinationTransactionHash);
-  return receipt;
+  if (intentReceipt.status === 'SUCCEEDED') {
+    console.log('Vault deposit complete:', intentReceipt.destinationTransaction?.txnHash)
+  } else {
+    throw new Error(`Deposit failed: ${intentReceipt.originTransaction?.statusReason}`)
+  }
+
+  return intentReceipt
 }
 ```
 
+**Note on `signIntent`:** This is your wallet's EIP-712 signing function applied to the intent data. With viem, use `signTypedData` on the intent's structured data. Refer to the [Trails execution docs](https://docs.trails.build) for the exact typed data schema.
+
 ---
 
-## Vault ABI patterns
+## Calldata patterns
 
-### ERC-4626 (standard)
+### ERC-4626 standard
 
 ```typescript
-const erc4626Abi = [
-  {
+import { TRAILS_ROUTER_PLACEHOLDER_AMOUNT } from '0xtrails'
+import { encodeFunctionData } from 'viem'
+
+const calldata = encodeFunctionData({
+  abi: [{
     name: 'deposit',
     type: 'function',
     inputs: [
@@ -354,83 +390,75 @@ const erc4626Abi = [
       { name: 'receiver', type: 'address' },
     ],
     outputs: [{ name: 'shares', type: 'uint256' }],
-  },
-] as const;
-
-const calldata = encodeFunctionData({
-  abi: erc4626Abi,
+  }] as const,
   functionName: 'deposit',
-  args: [PLACEHOLDER_AMOUNT, receiverAddress],
-});
+  args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT, receiverAddress],
+})
 ```
 
-### Custom deposit(uint256)
+### Custom deposit(uint256) only
 
 ```typescript
-const simpleDepositAbi = [
-  {
+const calldata = encodeFunctionData({
+  abi: [{
     name: 'deposit',
     type: 'function',
     inputs: [{ name: 'amount', type: 'uint256' }],
     outputs: [],
-  },
-] as const;
-
-const calldata = encodeFunctionData({
-  abi: simpleDepositAbi,
+  }] as const,
   functionName: 'deposit',
-  args: [PLACEHOLDER_AMOUNT],
-});
+  args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT],
+})
 ```
 
 ### Staking contract
 
 ```typescript
-const stakingAbi = [
-  {
+const calldata = encodeFunctionData({
+  abi: [{
     name: 'stake',
     type: 'function',
     inputs: [{ name: 'amount', type: 'uint256' }],
     outputs: [],
-  },
-] as const;
-
-const calldata = encodeFunctionData({
-  abi: stakingAbi,
+  }] as const,
   functionName: 'stake',
-  args: [PLACEHOLDER_AMOUNT],
-});
+  args: [TRAILS_ROUTER_PLACEHOLDER_AMOUNT],
+})
 ```
 
 ---
 
-## Output & config reference
+## Direct API parameter reference
 
-| Parameter | Description |
-|-----------|-------------|
-| `destinationChainId` | `137` for Polygon |
-| `destinationRecipient` | Vault contract address |
-| `destinationCalldata` | ABI-encoded deposit call with `PLACEHOLDER_AMOUNT` |
-| `tradeType` | Always `EXACT_INPUT` for Fund/Earn mode |
-| `mode` | `"fund"` or `"earn"` in Widget |
-| `timeout` | Set ≥ 300000 ms for cross-chain + deposit flows |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ownerAddress` | string | User's wallet address |
+| `originChainId` | number | Source chain ID |
+| `originTokenAddress` | string | Source token address |
+| `originTokenAmount` | bigint | Amount in smallest unit |
+| `destinationChainId` | number | `137` for Polygon |
+| `destinationTokenAddress` | string | Token the vault accepts |
+| `destinationToAddress` | string | Vault contract address |
+| `destinationCallData` | string | ABI-encoded vault call (capital D) |
+| `tradeType` | TradeType | `TradeType.EXACT_INPUT` for all deposit flows |
 
 ## Safety checklist
 
-1. **Verify the vault contract** — confirm `destinationRecipient` is a trusted contract on Polygon.
-2. **Use `PLACEHOLDER_AMOUNT`** — never hardcode the amount in calldata for Fund/Earn flows; Trails substitutes the real settled amount.
+1. **Import `TRAILS_ROUTER_PLACEHOLDER_AMOUNT`** — do not use a raw `BigInt('0xff...')` constant.
+2. **Verify the vault contract** — confirm `destinationToAddress` / `to.recipient` is a trusted contract.
 3. **Check token decimals** — USDC uses 6 decimals; WETH and POL use 18.
-4. **Test on testnet** — encode and simulate calldata before using in production.
-5. **Confirm vault accepts bridged token** — some vaults accept only native USDC (0x3c49...), not USDC.e (0x2791...).
+4. **Test calldata encoding** — decode with `decodeFunctionData` from `viem` before using in production.
+5. **Confirm vault accepts bridged token** — some vaults accept native USDC (`0x3c49...`) only, not USDC.e (`0x2791...`).
+6. **Committed intents expire in 10 minutes** — quote and execute promptly.
 
 ## Common errors
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `missing_api_key` | `TRAILS_API_KEY` not set | Set env var; visit dashboard.trails.build |
+| `missing_api_key` | API key not set | Check `TRAILS_API_KEY` or `apiKey` prop |
 | `quote_failed` | No route to vault token | Confirm vault's deposit token is Trails-supported |
-| `quote_expired` | Too long between quote and commit | Re-quote and commit immediately |
+| `quote_expired` | >5 min since quote | Re-quote and commit immediately |
+| `intent_expired` | >10 min since commit | Re-quote, re-commit, then execute |
 | `tx_reverted` | Vault deposit call reverted | Verify ABI, token address, and placeholder usage |
 | `slippage_exceeded` | Price moved beyond tolerance | Increase `slippageTolerance` or retry |
-| `intent_timeout` | Bridge + deposit didn't settle | Increase `timeout` to 300000+; check tx on explorer |
-| `unsupported_chain` | Polygon not available | Call `getSupportedChains()` to verify |
+| `unsupported_chain` | Polygon not available | Call `getChains()` to verify |

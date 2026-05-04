@@ -1,6 +1,6 @@
 ---
 name: zerion-polygon-crosschainswap
-description: "Cross-chain token swaps to and from Polygon (chainId 137) using the Trails SDK. Use when the user wants to bridge or swap tokens across chains where Polygon is the source or destination — e.g. 'swap ETH on Ethereum to USDC on Polygon', 'bridge USDC from Arbitrum to Polygon', or 'swap to POL from any chain'. Supports Widget (drop-in React UI), Headless SDK (custom UX), and Direct API (server-side) integration modes."
+description: "Cross-chain token swaps to and from Polygon (chainId 137) using the Trails SDK. Use when the user wants to bridge or swap tokens across chains where Polygon is the source or destination — e.g. 'swap ETH on Ethereum to USDC on Polygon', 'bridge USDC from Arbitrum to Polygon', or 'swap to POL from any chain'. Supports Widget (drop-in React UI), Headless hooks (custom UX), and Direct API (server-side) integration modes."
 license: MIT
 allowed-tools: Bash, Read, Edit, Write
 ---
@@ -13,27 +13,17 @@ Cross-chain and same-chain token swaps involving Polygon, powered by [Trails](ht
 
 ### 1. Get a Trails API key
 
-Visit [https://dashboard.trails.build](https://dashboard.trails.build) to create an account and generate a key. Then add it to your environment:
-
-```bash
-# Client-side (Widget / Headless SDK)
-NEXT_PUBLIC_TRAILS_API_KEY=your_key
-
-# Server-side (Direct API)
-TRAILS_API_KEY=your_key
-```
+Visit [https://dashboard.trails.build](https://dashboard.trails.build) to create an account and generate a key.
 
 ### 2. Install
 
 ```bash
-# Widget or Headless SDK (React / Next.js)
-npm install @0xtrails/trails
+# Widget or hooks (React / Next.js)
+npm install 0xtrails
 
 # Direct API (Node.js / backend)
-npm install @0xtrails/trails-api
+npm install @0xtrails/api
 ```
-
-Requires React 19.1+ for Widget/Headless (React 18+ supported). Node.js 18+ for Direct API.
 
 ---
 
@@ -45,7 +35,8 @@ Requires React 19.1+ for Widget/Headless (React 18+ supported). Node.js 18+ for 
 - Same-chain swap on Polygon (e.g. USDC → WETH on Polygon)
 - Automate cross-chain settlement where Polygon is source or destination
 
-**Polygon chain ID**: `137`
+**Polygon chain ID**: `137`  
+**Polygon chain name** (for widget/hooks): `"polygon"`
 
 Common Polygon token addresses:
 
@@ -57,105 +48,157 @@ Common Polygon token addresses:
 | WETH | `0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619` |
 | WMATIC / POL | `0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270` |
 
-Use `getSupportedTokens({ chainId: 137 })` for the live token list.
-
 ---
 
 ## Integration: Widget (React / Next.js)
 
-Drop-in UI. Recommended for most React apps.
-
-### Provider setup
-
-```tsx
-// app/layout.tsx or _app.tsx
-import { TrailsProvider } from '@0xtrails/trails';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <WagmiProvider config={wagmiConfig}>
-      <TrailsProvider trailsApiKey={process.env.NEXT_PUBLIC_TRAILS_API_KEY!}>
-        {children}
-      </TrailsProvider>
-    </WagmiProvider>
-  );
-}
-```
+Import from `0xtrails/widget`. Each component is self-contained and takes `apiKey` directly — no provider wrapper needed.
 
 ### Cross-chain swap to Polygon
 
 ```tsx
-import { TrailsWidget } from '@0xtrails/trails';
+import { Swap } from '0xtrails/widget'
 
 // User swaps any token from any chain → USDC on Polygon
-// EXACT_INPUT: user picks input amount, receives computed USDC
-<TrailsWidget
-  mode="swap"
-  destinationChainId={137}
-  destinationTokenAddress="0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
-  destinationRecipient="0xUserWalletAddress"
+<Swap
+  apiKey="YOUR_TRAILS_API_KEY"
+  to={{
+    currency: "USDC",
+    chain: "polygon",
+    recipient: "0xUserWalletAddress",
+  }}
+  onSwapSuccess={({ sessionId }) => {
+    console.log('Swap complete:', sessionId)
+  }}
+  onSwapError={({ error }) => console.error(error)}
 />
 ```
 
-### Exact-output payment to Polygon
+### Pre-configure source chain
 
 ```tsx
-// User pays exactly N USDC on Polygon — input amount is computed
-<TrailsWidget
-  mode="pay"
-  destinationChainId={137}
-  destinationTokenAddress="0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
-  destinationAmount="10000000"   // 10 USDC (6 decimals)
-  destinationRecipient="0xMerchantAddress"
+import { Swap } from '0xtrails/widget'
+
+// ETH on Ethereum → USDC on Polygon, source pre-set
+<Swap
+  apiKey="YOUR_TRAILS_API_KEY"
+  from={{
+    currency: "ETH",
+    chain: "ethereum",
+  }}
+  to={{
+    currency: "USDC",
+    chain: "polygon",
+    recipient: "0xUserWalletAddress",
+  }}
+  slippageTolerance={0.005}
+  onSwapSuccess={({ sessionId }) => console.log('Done:', sessionId)}
 />
 ```
+
+### Fixed payment to Polygon (EXACT_OUTPUT)
+
+```tsx
+import { Pay } from '0xtrails/widget'
+
+// Merchant receives exactly 10 USDC on Polygon; user pays whatever is needed
+<Pay
+  apiKey="YOUR_TRAILS_API_KEY"
+  to={{
+    currency: "USDC",
+    chain: "polygon",
+    recipient: "0xMerchantAddress",
+    amount: "10",           // fixed output amount (human-readable)
+  }}
+  onPaySuccess={({ sessionId }) => console.log('Payment done:', sessionId)}
+/>
+```
+
+**Widget props reference:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `apiKey` | string | Trails API key (required) |
+| `from.currency` | string | Token symbol or address |
+| `from.chain` | string \| number | Chain name, ID, or viem Chain |
+| `from.amount` | string | Pre-filled source amount |
+| `to.currency` | string | Destination token |
+| `to.chain` | string \| number | Destination chain |
+| `to.recipient` | string | Recipient address |
+| `to.amount` | string | Fixed output amount (EXACT_OUTPUT) |
+| `slippageTolerance` | number | e.g. `0.005` for 0.5% |
+| `bridgeProvider` | string | e.g. `"CCTP"`, `"RELAY"` |
+| `paymentMethod` | string | `"CONNECTED_WALLET"` (default), `"CRYPTO_TRANSFER"`, `"CREDIT_DEBIT_CARD"`, `"EXCHANGE"` |
 
 ---
 
-## Integration: Headless SDK (React + custom UI)
+## Integration: Headless hooks (React + custom UI)
 
-Use when you need full control over the UI.
+Import hooks from `0xtrails`. Hooks require `TrailsProvider` context.
 
-### Provider + modal
+### Provider setup
 
 ```tsx
-import { TrailsProvider, TrailsHookModal } from '@0xtrails/trails';
+import { TrailsProvider } from '0xtrails'
 
-function App() {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <TrailsProvider trailsApiKey={process.env.NEXT_PUBLIC_TRAILS_API_KEY!}>
-        <TrailsHookModal />   {/* required for headless flows */}
-        {children}
-      </TrailsProvider>
-    </WagmiProvider>
-  );
+    <TrailsProvider trailsApiKey="YOUR_TRAILS_API_KEY">
+      {children}
+    </TrailsProvider>
+  )
 }
 ```
 
-### Cross-chain swap hook
+### Custom swap UI with `useQuote`
 
 ```tsx
-import { useTrailsSendTransaction, useSupportedTokens } from '@0xtrails/trails';
+import { useQuote } from '0xtrails'
+import { useWalletClient } from 'wagmi'
 
-function PolygonSwapButton({ inputAmount }: { inputAmount: string }) {
-  const { sendTransaction, isPending } = useTrailsSendTransaction();
-  const { data: polygonTokens } = useSupportedTokens({ chainId: 137 });
+function PolygonSwapPanel({ inputAmount }: { inputAmount: string }) {
+  const { data: walletClient } = useWalletClient()
 
-  const handleSwap = () => {
-    sendTransaction({
-      destinationChainId: 137,
-      destinationTokenAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', // USDC on Polygon
-      sourceAmount: inputAmount,   // user-specified input
-    });
-  };
+  const { quote, send, isLoadingQuote, quoteError } = useQuote({
+    walletClient,
+    from: {
+      token: "ETH",
+      chain: "ethereum",
+      amount: inputAmount,           // human-readable decimal string
+    },
+    to: {
+      token: "USDC",
+      chain: "polygon",
+      recipient: "0xUserWalletAddress",
+    },
+    slippageTolerance: '0.005',
+    onStatusUpdate: (states) => console.log('Status:', states),
+  })
 
   return (
-    <button onClick={handleSwap} disabled={isPending}>
-      {isPending ? 'Swapping...' : 'Swap to Polygon'}
-    </button>
-  );
+    <div>
+      {isLoadingQuote && <p>Fetching quote...</p>}
+      {quoteError && <p>Error: {quoteError.message}</p>}
+      {quote && (
+        <div>
+          <p>You receive: {quote.destinationAmountFormatted} USDC</p>
+          <p>Fee: {quote.totalFeeAmountUsdDisplay}</p>
+          <p>ETA: {quote.completionEstimateSeconds}s</p>
+          <button onClick={() => send()}>Swap</button>
+        </div>
+      )}
+    </div>
+  )
 }
+```
+
+### Check supported tokens
+
+```tsx
+import { useSupportedTokens, useSupportedChains } from '0xtrails'
+
+const { data: polygonTokens } = useSupportedTokens({ chainId: 137 })
+const { data: chains } = useSupportedChains()
 ```
 
 ---
@@ -165,88 +208,127 @@ function PolygonSwapButton({ inputAmount }: { inputAmount: string }) {
 Full control over the intent lifecycle. Use for server-side automation or non-React environments.
 
 ```typescript
-import { TrailsAPI } from '@0xtrails/trails-api';
+import { TrailsApi, TradeType } from '@0xtrails/api'
 
-const trails = new TrailsAPI({ apiKey: process.env.TRAILS_API_KEY! });
+const trailsApi = new TrailsApi('YOUR_TRAILS_API_KEY')
 
-async function crossChainSwapToPolygon(
-  userAddress: string,
-  sourceChainId: number,
-  sourceTokenAddress: string,
-  inputAmount: string,               // in source token's smallest unit
-) {
-  // 1. Quote
-  const quote = await trails.quoteIntent({
-    sourceChainId,
-    sourceTokenAddress,
-    destinationChainId: 137,         // Polygon
+async function crossChainSwapToPolygon(params: {
+  userAddress: string
+  originChainId: number
+  originTokenAddress: string
+  originTokenAmount: bigint       // in token's smallest unit (wei / atomic)
+}) {
+  const { userAddress, originChainId, originTokenAddress, originTokenAmount } = params
+
+  // 1. Quote — returns full intent object + gas fee options
+  const { intent, gasFeeOptions } = await trailsApi.quoteIntent({
+    ownerAddress: userAddress,
+    originChainId,
+    originTokenAddress,
+    originTokenAmount,
+    destinationChainId: 137,                                          // Polygon
     destinationTokenAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', // USDC
-    amount: inputAmount,
-    tradeType: 'EXACT_INPUT',
-    userAddress,
-  });
+    destinationToAddress: userAddress,
+    tradeType: TradeType.EXACT_INPUT,
+    options: {
+      slippageTolerance: 0.005,
+    },
+  })
 
-  console.log('Estimated output:', quote.estimatedOutput);
-  console.log('Quote expires:', quote.expiresAt);
+  // 2. Commit — pass the full intent object; returns intentId
+  // Must execute within 10 minutes of committing
+  const { intentId } = await trailsApi.commitIntent({ intent })
 
-  // 2. Commit (locks the quote)
-  const intent = await trails.commitIntent({ quoteId: quote.quoteId });
+  // 3. Execute — user signs the intent (gasless path)
+  await trailsApi.executeIntent({
+    intentId,
+    depositSignature: {
+      intentSignature: await signIntent(intent, walletClient), // EIP-712 sign
+      selectedGasFeeOption: gasFeeOptions.feeOptions[0],
+      userNonce: 1,
+      deadline: Math.floor(Date.now() / 1000) + 3600,
+    },
+  })
 
-  // 3. Execute (requires user signature)
-  await trails.executeIntent({
-    intentId: intent.intentId,
-    signature: '0x...', // user's signature
-  });
+  // Alternative execute path: user submits the deposit transaction manually
+  // await trailsApi.executeIntent({ intentId, depositTransactionHash: '0x...' })
 
   // 4. Wait for cross-chain settlement
-  const receipt = await trails.waitIntentReceipt({
-    intentId: intent.intentId,
-    timeout: 180000,     // 3 min — cross-chain bridging can take 1-3 min
-    pollInterval: 4000,
-  });
+  let done = false
+  let intentReceipt
+  while (!done) {
+    ;({ intentReceipt, done } = await trailsApi.waitIntentReceipt({ intentId }))
+  }
 
-  console.log('Final status:', receipt.status);
-  console.log('Destination tx:', receipt.destinationTransactionHash);
-  return receipt;
+  if (intentReceipt.status === 'SUCCEEDED') {
+    console.log('Swap complete:', intentReceipt.destinationTransaction?.txnHash)
+  }
+  return intentReceipt
 }
+```
+
+**Note:** `signIntent` is your wallet's EIP-712 signing function. With viem:
+```typescript
+import { signTypedData } from 'viem/actions'
+// use intent.metaTxns or intent.calls to construct the typed data to sign
+// Refer to Trails documentation for the exact signing schema
 ```
 
 ### Check supported chains and tokens
 
 ```typescript
-import { getSupportedChains, getSupportedTokens } from '@0xtrails/trails';
+import { TrailsApi } from '@0xtrails/api'
 
-const chains = await getSupportedChains();
-const polygonTokens = await getSupportedTokens({ chainId: 137 });
+const trailsApi = new TrailsApi('YOUR_TRAILS_API_KEY')
+
+// Discover supported chains
+const { chains } = await trailsApi.getChains()
+
+// Discover tokens available on Polygon
+const { tokens } = await trailsApi.getTokenList({ chainIds: [137] })
+
+// Check if a specific route exists
+const { tokens: routes } = await trailsApi.getExactInputRoutes({
+  originChainId: 1,
+  originTokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
+  destinationChainId: 137,
+})
+const canRoute = routes.length > 0
 ```
 
 ---
 
-## Output & config reference
+## Direct API parameter reference
 
-| Parameter | Description |
-|-----------|-------------|
-| `destinationChainId` | `137` for Polygon |
-| `sourceChainId` | Any supported chain |
-| `tradeType` | `EXACT_INPUT` (user picks input) or `EXACT_OUTPUT` (user picks output) |
-| `amount` | Token amount in smallest unit (e.g. `1000000` = 1 USDC at 6 decimals) |
-| `timeout` | Max wait for cross-chain receipt in ms (default 120000; use 300000 for slow routes) |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `ownerAddress` | string | User's wallet address |
+| `originChainId` | number | Source chain ID |
+| `originTokenAddress` | string | Source token contract address |
+| `originTokenAmount` | bigint | Amount in smallest unit (e.g. `100000000n` = 100 USDC) |
+| `destinationChainId` | number | `137` for Polygon |
+| `destinationTokenAddress` | string | Destination token address |
+| `destinationToAddress` | string | Recipient on destination chain |
+| `tradeType` | TradeType | `TradeType.EXACT_INPUT` or `TradeType.EXACT_OUTPUT` |
+| `options.slippageTolerance` | number | e.g. `0.005` for 0.5% |
+| `options.bridgeProvider` | string | `"RELAY"`, `"CCTP"`, etc. |
 
 ## Safety checklist
 
-1. Confirm Polygon (137) appears in `getSupportedChains()` — the chain list can update.
-2. Use token addresses, not symbols, when the symbol is ambiguous across chains (multiple USDCs).
-3. Cross-chain swaps can take 1-5 minutes; set `timeout` ≥ 180000 ms.
-4. For EXACT_INPUT, quote `estimatedOutput` is approximate; final output settles on-chain.
+1. Confirm Polygon (`137`) appears in `getChains()` — the supported chain list can change.
+2. Cross-chain swaps can take 1-5 minutes — poll `waitIntentReceipt` until `done: true`.
+3. Committed intents must be executed within 10 minutes; quotes expire after 5 minutes.
+4. For EXACT_INPUT the output amount is estimated; final amount settles on-chain.
+5. Use token addresses, not symbols, when the same symbol exists on multiple chains.
 
 ## Common errors
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `missing_api_key` | `TRAILS_API_KEY` not set | Set env var; visit dashboard.trails.build |
-| `unsupported_chain` | Chain not supported by Trails | Call `getSupportedChains()` for valid IDs |
-| `quote_failed` | No route between token pair | Try intermediate token (e.g. USDC) or different source chain |
-| `quote_expired` | Took too long between quote and commit | Re-quote and commit immediately |
-| `insufficient_balance` | Not enough input token | Check user balance before quoting |
+| `missing_api_key` | API key not set | Check `TRAILS_API_KEY` or `apiKey` prop |
+| `unsupported_chain` | Chain not available | Call `getChains()` for valid IDs |
+| `quote_failed` | No route between tokens | Try USDC as intermediate or different source chain |
+| `quote_expired` | >5 min between quote and commit | Re-quote and commit immediately |
+| `intent_expired` | >10 min between commit and execute | Re-quote, re-commit, then execute |
+| `insufficient_balance` | Not enough source token | Check balance before quoting |
 | `slippage_exceeded` | Price moved beyond tolerance | Increase `slippageTolerance` or retry |
-| `intent_timeout` | Bridge didn't settle in time | Increase `timeout`; check tx on explorer |
