@@ -189,8 +189,13 @@ export function formatHistory(data) {
 
 export function formatChains(data) {
   const lines = [`${BOLD}Supported Chains${RESET} (${data.count})\n`];
+  lines.push(`  ${DIM}${pad("ID", 22)} ${pad("Name", 20)} ${pad("Trade", 6)} ${pad("Bridge", 7)} ${"Send"}${RESET}`);
+  lines.push(`  ${DIM}${"─".repeat(64)}${RESET}`);
   for (const c of data.chains) {
-    lines.push(`  ${pad(c.id, 22)} ${pad(c.name, 14)} ${DIM}(${c.nativeCurrency})${RESET}`);
+    const t = c.supportsTrading ? "✓" : " ";
+    const b = c.supportsBridge ? "✓" : " ";
+    const s = c.supportsSending ? "✓" : " ";
+    lines.push(`  ${pad(c.id, 22)} ${pad(c.name, 20)} ${pad(t, 6)} ${pad(b, 7)} ${s}`);
   }
   return lines.join("\n");
 }
