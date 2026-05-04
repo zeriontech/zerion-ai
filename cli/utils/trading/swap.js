@@ -4,15 +4,25 @@
  * Flow: resolveTokens → getQuote → (simulate) → (approve) → sign → broadcast
  */
 
-import { parseUnits } from "viem";
+import { parseUnits, parseAbi } from "viem";
 import * as api from "../api/client.js";
 import { resolveToken } from "./resolve-token.js";
-import { signSwapTransaction, broadcastAndWait, approveErc20 } from "./transaction.js";
+import {
+  signSwapTransaction,
+  broadcastAndWait,
+  approveErc20,
+  getPublicClient,
+} from "./transaction.js";
 import { signAndBroadcastSolana } from "../chain/solana.js";
 import { isSolana } from "../chain/registry.js";
 import { getConfigValue } from "../config.js";
 import { NATIVE_ASSET_ADDRESS, DEFAULT_SLIPPAGE } from "../common/constants.js";
 import { enforceExecutablePolicies } from "./guards.js";
+import { getEvmAddress } from "../wallet/keystore.js";
+
+const ERC20_ALLOWANCE_ABI = parseAbi([
+  "function allowance(address owner, address spender) view returns (uint256)",
+]);
 
 /**
  * Get a swap/bridge quote from Zerion API.
@@ -158,34 +168,66 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
     preBalance = await getDestinationBalance(quote);
   }
 
-  // 1. Handle ERC-20 approval if needed
+  // 1. Handle ERC-20 approval if needed.
+  //
+  // We verify the allowance on-chain rather than trusting `enough_allowance`
+  // from the swap-offers API — the field is sometimes missing or stale,
+  // which used to silently skip the approval and let the swap revert with
+  // "transfer amount exceeds allowance".
+  let approvalHash = null;
   if (
-    quote.preconditions.enough_allowance === false &&
     quote.spender &&
+    quote.from.chainAddress &&
     quote.from.chainAddress !== NATIVE_ASSET_ADDRESS
   ) {
     const tokenAddr = quote.from.chainAddress;
     const approvalAmount = BigInt(quote.inputAmountRaw);
-    const approvalResult = await approveErc20(
-      tokenAddr,
-      quote.spender,
-      approvalAmount,
+    const owner = getEvmAddress(walletName);
+
+    const allowance = await getOnChainAllowance({
       zerionChainId,
-      walletName,
-      passphrase
-    );
+      tokenAddr,
+      owner,
+      spender: quote.spender,
+    });
 
-    if (approvalResult.status !== "success") {
-      const err = new Error(
-        `ERC-20 approval failed for ${quote.from.symbol} on ${zerionChainId}. ` +
-        `Token: ${tokenAddr}, Spender: ${quote.spender}. ` +
-        `Tx: ${approvalResult.hash}`
+    if (allowance < approvalAmount) {
+      process.stderr.write(
+        `Approving ${quote.spender} to spend ${quote.from.symbol} ` +
+        `(current allowance ${allowance}, needed ${approvalAmount})...\n`
       );
-      err.code = "approval_failed";
-      err.approvalHash = approvalResult.hash;
-      throw err;
-    }
 
+      // Run executable policies on the approval too — a swap policy that
+      // restricts contracts must also see the approval call.
+      await enforceExecutablePolicies({
+        to: tokenAddr,
+        value: 0n,
+        data: encodeApprovalCallData(quote.spender, approvalAmount),
+      });
+
+      const approvalResult = await approveErc20(
+        tokenAddr,
+        quote.spender,
+        approvalAmount,
+        zerionChainId,
+        walletName,
+        passphrase
+      );
+
+      if (approvalResult.status !== "success") {
+        const err = new Error(
+          `ERC-20 approval failed for ${quote.from.symbol} on ${zerionChainId}. ` +
+          `Token: ${tokenAddr}, Spender: ${quote.spender}. ` +
+          `Tx: ${approvalResult.hash}`
+        );
+        err.code = "approval_failed";
+        err.approvalHash = approvalResult.hash;
+        throw err;
+      }
+
+      approvalHash = approvalResult.hash;
+      process.stderr.write(`Approval confirmed: ${approvalHash}\n`);
+    }
   }
 
   // 2. Sign the swap transaction
@@ -216,6 +258,7 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
 
   return {
     ...result,
+    approvalHash,
     swap: {
       from: `${quote.inputAmount} ${quote.from.symbol}`,
       to: `~${quote.estimatedOutput} ${quote.to.symbol}`,
@@ -223,6 +266,30 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
       source: quote.liquiditySource,
     },
   };
+}
+
+async function getOnChainAllowance({ zerionChainId, tokenAddr, owner, spender }) {
+  try {
+    const client = await getPublicClient(zerionChainId);
+    return await client.readContract({
+      address: tokenAddr,
+      abi: ERC20_ALLOWANCE_ABI,
+      functionName: "allowance",
+      args: [owner, spender],
+    });
+  } catch (err) {
+    process.stderr.write(
+      `Warning: on-chain allowance check failed (${err.message}). ` +
+      `Assuming approval is needed.\n`
+    );
+    return 0n;
+  }
+}
+
+function encodeApprovalCallData(spender, amount) {
+  const cleanSpender = spender.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+  const cleanAmount = amount.toString(16).padStart(64, "0");
+  return `0x095ea7b3${cleanSpender}${cleanAmount}`;
 }
 
 /**
