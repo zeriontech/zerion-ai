@@ -46,6 +46,7 @@ function toConfig(item) {
     externalIdHex,
     chainIdNum: Number.isSafeInteger(chainIdNum) ? chainIdNum : null,
     rpcHttpUrls,
+    nativeFungibleId: item.relationships?.native_fungible?.data?.id || null,
     flags: {
       supportsTrading: flags.supports_trading ?? false,
       supportsBridge: flags.supports_bridge ?? false,
@@ -87,7 +88,47 @@ export async function listSendingChainIds() {
   return [...catalog.values()].filter((c) => c.flags.supportsSending).map((c) => c.id).sort();
 }
 
+// Lazy-fetch and cache a chain's native fungible (e.g. MON on monad, ETH on
+// ethereum). The native fungible carries the real symbol and decimals, which
+// the chains endpoint omits — needed to resolve queries like
+// `swap MON USDC --chain monad` to the native asset rather than wrapped MON.
+const nativeFungibleCache = new Map();
+
+export async function getNativeFungible(chainId) {
+  if (!chainId) return null;
+  if (nativeFungibleCache.has(chainId)) return nativeFungibleCache.get(chainId);
+
+  const config = await resolveChain(chainId);
+  if (!config?.nativeFungibleId) {
+    nativeFungibleCache.set(chainId, null);
+    return null;
+  }
+
+  const promise = api.getFungible(config.nativeFungibleId).then((res) => {
+    const data = res?.data;
+    if (!data) return null;
+    const attrs = data.attributes || {};
+    const impl =
+      (attrs.implementations || []).find((i) => i.chain_id === chainId) ||
+      attrs.implementations?.[0] ||
+      {};
+    return {
+      fungibleId: data.id,
+      symbol: attrs.symbol || "",
+      name: attrs.name || "",
+      decimals: impl.decimals ?? 18,
+    };
+  }).catch((err) => {
+    nativeFungibleCache.delete(chainId);
+    throw err;
+  });
+
+  nativeFungibleCache.set(chainId, promise);
+  return promise;
+}
+
 // Test seam — let unit tests inject a fixture catalog without hitting the network.
 export function __setCatalogForTests(map) {
   catalogPromise = map ? Promise.resolve(map) : null;
+  nativeFungibleCache.clear();
 }

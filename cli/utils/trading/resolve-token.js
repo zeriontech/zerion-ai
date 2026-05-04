@@ -5,6 +5,7 @@
 import * as api from "../api/client.js";
 import { NATIVE_ASSET_ADDRESS } from "../common/constants.js";
 import { rerankByRelevance } from "./rank-fungibles.js";
+import { getNativeFungible } from "../chain/catalog.js";
 
 // Hardcoded aliases for the most common tokens — avoids API call for basic swaps
 const NATIVE_ALIASES = new Map([
@@ -26,7 +27,29 @@ const NATIVE_ALIASES = new Map([
 export async function resolveToken(query, chainId) {
   const upper = query.toUpperCase();
 
-  // 1. Check native aliases
+  // 1a. Match the chain's native currency before checking the static alias
+  // table — chains like Monad/BNB/Avalanche have native symbols not in
+  // NATIVE_ALIASES, and their native fungible is what users mean when they
+  // type the symbol with --chain set.
+  if (chainId) {
+    try {
+      const native = await getNativeFungible(chainId);
+      if (native && native.symbol && native.symbol.toUpperCase() === upper) {
+        return {
+          fungibleId: native.fungibleId,
+          symbol: native.symbol,
+          name: native.name || native.symbol,
+          decimals: native.decimals ?? 18,
+          address: NATIVE_ASSET_ADDRESS,
+        };
+      }
+    } catch {
+      // fall through — native lookup is best-effort, the search path can
+      // still resolve the query if the catalog call is rate-limited
+    }
+  }
+
+  // 1b. Check native aliases (ETH, USDC, …)
   if (NATIVE_ALIASES.has(upper)) {
     return { ...NATIVE_ALIASES.get(upper), name: upper };
   }
