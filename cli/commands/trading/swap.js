@@ -4,7 +4,7 @@ import { resolveWallet } from "../../utils/wallet/resolve.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { formatSwapQuote } from "../../utils/common/format.js";
-import { validateChain } from "../../utils/common/validate.js";
+import { validateTradingChainAsync } from "../../utils/common/validate.js";
 
 export default async function swap(args, flags) {
   const [fromToken, toToken, amount] = args;
@@ -23,15 +23,23 @@ export default async function swap(args, flags) {
     process.exit(1);
   }
 
-  const chainErr = validateChain(flags.chain) || validateChain(flags["from-chain"]) || validateChain(flags["to-chain"]);
-  if (chainErr) {
-    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
-    process.exit(1);
-  }
-
   const { walletName, address } = resolveWallet(flags);
   const fromChain = flags.chain || flags["from-chain"] || getConfigValue("defaultChain") || "ethereum";
   const toChain = flags["to-chain"] || fromChain;
+
+  const isCrossChain = fromChain !== toChain;
+  const fromCheck = await validateTradingChainAsync(fromChain, isCrossChain ? "bridge" : "trade");
+  if (fromCheck.error) {
+    printError(fromCheck.error.code, fromCheck.error.message, { supportedChains: fromCheck.error.supportedChains });
+    process.exit(1);
+  }
+  if (isCrossChain) {
+    const toCheck = await validateTradingChainAsync(toChain, "bridge");
+    if (toCheck.error) {
+      printError(toCheck.error.code, toCheck.error.message, { supportedChains: toCheck.error.supportedChains });
+      process.exit(1);
+    }
+  }
 
   try {
     // 1. Get quote
@@ -54,7 +62,6 @@ export default async function swap(args, flags) {
     }
 
     // 3. Show quote
-    const isCrossChain = fromChain !== toChain;
     const quoteSummary = {
       swap: {
         input: `${amount} ${quote.from.symbol}`,

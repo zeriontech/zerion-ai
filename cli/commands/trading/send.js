@@ -9,7 +9,7 @@ import { getConfigValue } from "../../utils/config.js";
 import { getEvmAddress } from "../../utils/wallet/keystore.js";
 import { NATIVE_ASSET_ADDRESS } from "../../utils/common/constants.js";
 import { formatSwapQuote } from "../../utils/common/format.js";
-import { validateChain } from "../../utils/common/validate.js";
+import { validateTradingChainAsync } from "../../utils/common/validate.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -40,14 +40,14 @@ export default async function send(args, flags) {
     process.exit(1);
   }
 
-  const chainErr = validateChain(flags.chain);
-  if (chainErr) {
-    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
-    process.exit(1);
-  }
-
   const { walletName, address } = resolveWallet(flags);
   const chain = flags.chain || getConfigValue("defaultChain") || "ethereum";
+
+  const chainCheck = await validateTradingChainAsync(chain, "send");
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, { supportedChains: chainCheck.error.supportedChains });
+    process.exit(1);
+  }
 
   try {
     // Resolve token to get decimals and on-chain address
@@ -85,7 +85,7 @@ export default async function send(args, flags) {
     // Agent token required — no interactive passphrase for trading
     const passphrase = await requireAgentToken("for trading", walletName);
 
-    const client = getPublicClient(chain);
+    const client = await getPublicClient(chain);
     const walletAddress = getEvmAddress(walletName);
 
     const [nonce, feeData] = await Promise.all([
@@ -156,7 +156,7 @@ export default async function send(args, flags) {
     }
 
     await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data });
-    const signedTxHex = signAndSerialize(tx, chain, walletName, passphrase);
+    const signedTxHex = await signAndSerialize(tx, chain, walletName, passphrase);
     const timeout = parseTimeout(flags.timeout);
     const result = await broadcastAndWait(client, signedTxHex, { timeout });
 

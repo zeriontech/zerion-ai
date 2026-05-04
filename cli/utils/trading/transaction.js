@@ -6,10 +6,11 @@ import {
   serializeTransaction,
   createPublicClient,
   http,
+  fallback,
   encodeFunctionData,
   parseAbi,
 } from "viem";
-import { getViemChain, toCaip2 } from "../chain/registry.js";
+import { resolveChain } from "../chain/catalog.js";
 import * as ows from "../wallet/keystore.js";
 
 const ERC20_APPROVE_ABI = parseAbi([
@@ -17,12 +18,38 @@ const ERC20_APPROVE_ABI = parseAbi([
 ]);
 
 /**
- * Get a viem public client for a Zerion chain ID.
+ * Resolve a Zerion chain ID to a viem chain config via the live API catalog.
+ * Throws if the chain is unknown or missing the metadata needed for signing.
  */
-export function getPublicClient(zerionChainId) {
-  const viemChain = getViemChain(zerionChainId);
-  if (!viemChain) throw new Error(`Unsupported chain: ${zerionChainId}`);
-  return createPublicClient({ chain: viemChain, transport: http() });
+async function getChainConfig(zerionChainId) {
+  const config = await resolveChain(zerionChainId);
+  if (!config || !config.viemChain || !config.chainIdNum) {
+    const err = new Error(`Unsupported chain: ${zerionChainId}`);
+    err.code = "unsupported_chain";
+    throw err;
+  }
+  return config;
+}
+
+// Public RPCs in the chain catalog rotate (some return 403/429 today, work
+// tomorrow). Stack them behind a fallback transport so viem retries the next
+// one on failure instead of bailing on the first dead endpoint.
+function buildTransport(rpcHttpUrls) {
+  if (!rpcHttpUrls || rpcHttpUrls.length === 0) return http();
+  if (rpcHttpUrls.length === 1) return http(rpcHttpUrls[0]);
+  return fallback(rpcHttpUrls.map((url) => http(url)), { rank: false });
+}
+
+/**
+ * Get a viem public client for a Zerion chain ID. Async — the chain catalog is
+ * fetched from the API on first use and cached for the rest of the process.
+ */
+export async function getPublicClient(zerionChainId) {
+  const config = await getChainConfig(zerionChainId);
+  return createPublicClient({
+    chain: config.viemChain,
+    transport: buildTransport(config.rpcHttpUrls),
+  });
 }
 
 /**
@@ -34,7 +61,11 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
     throw new Error("No transaction data from swap API — the quote may require more balance or the pair is unsupported");
   }
 
-  const client = getPublicClient(zerionChainId);
+  const config = await getChainConfig(zerionChainId);
+  const client = createPublicClient({
+    chain: config.viemChain,
+    transport: buildTransport(config.rpcHttpUrls),
+  });
   const walletAddress = ows.getEvmAddress(walletName);
 
   // Get nonce and gas prices from chain.
@@ -45,9 +76,8 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
     client.estimateFeesPerGas(),
   ]);
 
-  // Parse chain ID from Zerion API response — may be hex string ("0x2105"), decimal string ("8453"), or number
-  // Always prefer our known chain ID from the --chain flag to avoid mismatches
-  const chainId = getViemChain(zerionChainId).id;
+  // Always prefer the catalog's chain ID over whatever the swap API echoed back.
+  const chainId = config.chainIdNum;
 
   const tx = {
     type: "eip1559",
@@ -61,7 +91,7 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
     nonce,
   };
 
-  const signedTxHex = signAndSerialize(tx, zerionChainId, walletName, passphrase);
+  const signedTxHex = await signAndSerialize(tx, zerionChainId, walletName, passphrase);
   return { signedTxHex, client, tx };
 }
 
@@ -69,9 +99,10 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
  * Sign a transaction object with OWS and return the serialized signed hex.
  * Centralizes the serialize -> sign -> split-signature -> re-serialize pattern.
  */
-export function signAndSerialize(tx, zerionChainId, walletName, passphrase) {
+export async function signAndSerialize(tx, zerionChainId, walletName, passphrase) {
+  const config = await getChainConfig(zerionChainId);
   const unsignedTxHex = serializeTransaction(tx);
-  const signResult = ows.signEvmTransaction(walletName, unsignedTxHex, passphrase, toCaip2(zerionChainId));
+  const signResult = ows.signEvmTransaction(walletName, unsignedTxHex, passphrase, config.caip2);
 
   const sigHex = signResult.signature;
   const r = `0x${sigHex.slice(0, 64)}`;
@@ -146,7 +177,11 @@ export async function broadcastAndWait(client, signedTxHex, { timeout = 120, isC
  * Approves only the exact amount needed (not unlimited).
  */
 export async function approveErc20(tokenAddress, spender, amount, zerionChainId, walletName, passphrase) {
-  const client = getPublicClient(zerionChainId);
+  const config = await getChainConfig(zerionChainId);
+  const client = createPublicClient({
+    chain: config.viemChain,
+    transport: buildTransport(config.rpcHttpUrls),
+  });
   const walletAddress = ows.getEvmAddress(walletName);
 
   const [nonce, feeData] = await Promise.all([
@@ -160,7 +195,7 @@ export async function approveErc20(tokenAddress, spender, amount, zerionChainId,
     args: [spender, amount],
   });
 
-  const chainId = getViemChain(zerionChainId).id;
+  const chainId = config.chainIdNum;
 
   // Estimate gas for the approval — don't hardcode, chains vary
   let gasEstimate;
@@ -190,6 +225,6 @@ export async function approveErc20(tokenAddress, spender, amount, zerionChainId,
     nonce,
   };
 
-  const signedTxHex = signAndSerialize(tx, zerionChainId, walletName, passphrase);
+  const signedTxHex = await signAndSerialize(tx, zerionChainId, walletName, passphrase);
   return broadcastAndWait(client, signedTxHex);
 }

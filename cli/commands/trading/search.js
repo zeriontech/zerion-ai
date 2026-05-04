@@ -1,6 +1,7 @@
 import * as api from "../../utils/api/client.js";
 import { print, printError } from "../../utils/common/output.js";
 import { formatSearch } from "../../utils/common/format.js";
+import { rerankByRelevance, dedupeBySymbol } from "../../utils/trading/rank-fungibles.js";
 
 const FETCH_POOL_SIZE = 50;
 const DEFAULT_DISPLAY_LIMIT = 10;
@@ -86,41 +87,3 @@ function parseLimit(value) {
   return { value: parsed };
 }
 
-// Score by text relevance first, then by verification and market cap.
-function rerankByRelevance(results, query) {
-  const q = query.toLowerCase().trim();
-  return [...results].sort((a, b) => {
-    const sa = relevanceScore(a, q);
-    const sb = relevanceScore(b, q);
-    if (sa !== sb) return sb - sa;
-    return (b.market_cap ?? 0) - (a.market_cap ?? 0);
-  });
-}
-
-function dedupeBySymbol(results) {
-  const seen = new Set();
-  const out = [];
-  for (const r of results) {
-    const key = (r.symbol || "").toLowerCase();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-  }
-  return out;
-}
-
-function relevanceScore(r, q) {
-  const symbol = (r.symbol || "").toLowerCase();
-  const name = (r.name || "").toLowerCase();
-  let score = 0;
-
-  if (symbol === q) score = 1000;
-  else if (name === q) score = 900;
-  else if (symbol.startsWith(q)) score = 700;
-  else if (name.split(/\s+/).includes(q)) score = 600;
-  else if (symbol.includes(q)) score = 400;
-  else if (name.includes(q)) score = 300;
-
-  if (score > 0 && r.verified) score += 25;
-  return score;
-}
