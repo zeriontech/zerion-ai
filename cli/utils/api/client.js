@@ -10,6 +10,32 @@ import { basicAuthHeader, resolveApiKeyAuth } from "./auth.js";
 import { getX402Fetch } from "./x402.js";
 import { getMppFetch } from "./mpp.js";
 
+const MAX_429_RETRIES = 5;
+const DEFAULT_429_BACKOFF_MS = 1000;
+
+function parseRetryDelayMs(response) {
+  // Prefer standard `Retry-After` (seconds or HTTP-date), then fall back to
+  // Zerion's `ratelimit-reset` (seconds until window resets). Demo tier is
+  // 1 RPS, so the typical reset is 1s — keep that as the floor.
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const asNumber = Number(retryAfter);
+    if (Number.isFinite(asNumber)) return Math.max(asNumber * 1000, DEFAULT_429_BACKOFF_MS);
+    const asDate = Date.parse(retryAfter);
+    if (Number.isFinite(asDate)) {
+      return Math.max(asDate - Date.now(), DEFAULT_429_BACKOFF_MS);
+    }
+  }
+  const reset = response.headers.get("ratelimit-reset");
+  if (reset) {
+    const asNumber = Number(reset);
+    if (Number.isFinite(asNumber)) return Math.max(asNumber * 1000, DEFAULT_429_BACKOFF_MS);
+  }
+  return DEFAULT_429_BACKOFF_MS;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function fetchAPI(pathname, params = {}, auth) {
   const resolved = auth || resolveApiKeyAuth();
 
@@ -36,30 +62,43 @@ export async function fetchAPI(pathname, params = {}, auth) {
       throw new Error(`fetchAPI: unknown auth kind: ${resolved.kind}`);
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
-  const response = await fetchFn(url, { headers, signal: controller.signal });
-  clearTimeout(timer);
+  let attempt = 0;
+  while (true) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    const response = await fetchFn(url, { headers, signal: controller.signal });
+    clearTimeout(timer);
 
-  const text = await response.text();
-  let payload;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    payload = { _rawText: text.slice(0, 500) };
+    if (response.status === 429 && attempt < MAX_429_RETRIES) {
+      const delay = parseRetryDelayMs(response);
+      // Drain the body so the connection can be reused.
+      await response.text().catch(() => {});
+      attempt += 1;
+      await sleep(delay);
+      continue;
+    }
+
+    const text = await response.text();
+    let payload;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = { _rawText: text.slice(0, 500) };
+    }
+
+    if (!response.ok) {
+      const err = new Error(
+        `Zerion API error: ${response.status} ${response.statusText}`
+      );
+      err.code = "api_error";
+      err.status = response.status;
+      err.response = payload;
+      if (response.status === 429) err.retriesExhausted = attempt;
+      throw err;
+    }
+
+    return payload;
   }
-
-  if (!response.ok) {
-    const err = new Error(
-      `Zerion API error: ${response.status} ${response.statusText}`
-    );
-    err.code = "api_error";
-    err.status = response.status;
-    err.response = payload;
-    throw err;
-  }
-
-  return payload;
 }
 
 // --- Wallet endpoints ---
