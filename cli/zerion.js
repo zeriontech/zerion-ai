@@ -3,104 +3,120 @@
 /**
  * Zerion CLI — unified entry point for wallet analysis and trading.
  * Routes argv to command handlers via the router.
+ *
+ * Command modules are lazy-loaded so that --help, analytics, and trading
+ * commands work on platforms where the wallet/signing native binding
+ * (@open-wallet-standard/core) has no prebuilt artifact — currently Windows.
  */
 
 import { register, registerSingle, dispatch } from "./router.js";
 import { printError, setPrettyMode } from "./utils/common/output.js";
 import { migrateFromZerionCli } from "./utils/common/migrate.js";
 
-// Migrate config from ~/.zerion-cli → ~/.zerion on first run after upgrade
 migrateFromZerionCli();
 
-// Enable --pretty if flag present or auto-detect TTY
 if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.includes("--json"))) {
   setPrettyMode(true);
 }
 
+// `@open-wallet-standard/core` ships no Windows binary (no win32 napi triple,
+// no `core-win32-*-msvc` optional dep). Its auto-generated index.js still
+// tries to require those packages on win32, throwing MODULE_NOT_FOUND.
+// We catch that here and convert it to a clear, actionable error instead of
+// a raw stack trace from Node's loader.
+function isOwsLoadError(err) {
+  const msg = (err && (err.message || String(err))) || "";
+  return (
+    msg.includes("@open-wallet-standard/core") ||
+    msg.includes("ows-node") ||
+    msg.includes("Failed to load native binding")
+  );
+}
+
+function lazy(loader) {
+  return async (args, flags) => {
+    let mod;
+    try {
+      mod = await loader();
+    } catch (err) {
+      if (process.platform === "win32" && isOwsLoadError(err)) {
+        printError(
+          "platform_unsupported",
+          "Wallet, signing, agent, and `send` commands are not yet supported on Windows. " +
+          "Upstream dependency @open-wallet-standard/core does not publish a Windows binary.",
+          {
+            supported_on_windows: [
+              "portfolio", "positions", "history", "pnl", "analyze",
+              "swap", "bridge", "search", "chains",
+              "watch", "config", "init", "setup",
+            ],
+            workarounds: [
+              "Use WSL2 (Ubuntu) for full functionality",
+              "Use macOS or Linux for wallet/signing commands",
+            ],
+            tracking_issue: "https://github.com/zeriontech/zerion-ai/issues",
+          }
+        );
+        process.exit(1);
+      }
+      throw err;
+    }
+    return mod.default(args, flags);
+  };
+}
+
 // --- Wallet management ---
 
-import walletCreate from "./commands/wallet/create.js";
-import walletImport from "./commands/wallet/import.js";
-import walletList from "./commands/wallet/list.js";
-import walletFund from "./commands/wallet/fund.js";
-import walletBackup from "./commands/wallet/backup.js";
-import walletDelete from "./commands/wallet/delete.js";
-import walletSync from "./commands/wallet/sync.js";
-import walletSignMessage from "./commands/wallet/sign-message.js";
-import walletSignTypedData from "./commands/wallet/sign-typed-data.js";
-import watch from "./commands/wallet/watch.js";
-register("wallet", "create", walletCreate);
-register("wallet", "import", walletImport);
-register("wallet", "list", walletList);
-register("wallet", "fund", walletFund);
-register("wallet", "backup", walletBackup);
-register("wallet", "delete", walletDelete);
-register("wallet", "sync", walletSync);
-registerSingle("sign-message", walletSignMessage);
-registerSingle("sign-typed-data", walletSignTypedData);
-registerSingle("watch", watch);
+register("wallet", "create", lazy(() => import("./commands/wallet/create.js")));
+register("wallet", "import", lazy(() => import("./commands/wallet/import.js")));
+register("wallet", "list", lazy(() => import("./commands/wallet/list.js")));
+register("wallet", "fund", lazy(() => import("./commands/wallet/fund.js")));
+register("wallet", "backup", lazy(() => import("./commands/wallet/backup.js")));
+register("wallet", "delete", lazy(() => import("./commands/wallet/delete.js")));
+register("wallet", "sync", lazy(() => import("./commands/wallet/sync.js")));
+registerSingle("sign-message", lazy(() => import("./commands/wallet/sign-message.js")));
+registerSingle("sign-typed-data", lazy(() => import("./commands/wallet/sign-typed-data.js")));
+registerSingle("watch", lazy(() => import("./commands/wallet/watch.js")));
 
 // --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---
 
-import positions from "./commands/analytics/positions.js";
-import portfolio from "./commands/analytics/portfolio.js";
-import pnl from "./commands/analytics/pnl.js";
-import history from "./commands/analytics/history.js";
-import analyze from "./commands/analytics/overview.js";
-registerSingle("portfolio", portfolio);
-registerSingle("positions", positions);
-registerSingle("pnl", pnl);
-registerSingle("history", history);
-registerSingle("analyze", analyze);
+registerSingle("portfolio", lazy(() => import("./commands/analytics/portfolio.js")));
+registerSingle("positions", lazy(() => import("./commands/analytics/positions.js")));
+registerSingle("pnl", lazy(() => import("./commands/analytics/pnl.js")));
+registerSingle("history", lazy(() => import("./commands/analytics/history.js")));
+registerSingle("analyze", lazy(() => import("./commands/analytics/overview.js")));
 
 // --- Trading (swap, bridge, search, chains) ---
 
-import swap from "./commands/trading/swap.js";
-import bridge from "./commands/trading/bridge.js";
-import send from "./commands/trading/send.js";
-import swapTokens from "./commands/trading/list-tokens.js";
-import search from "./commands/trading/search.js";
-import chainsCmd from "./commands/trading/chains.js";
-registerSingle("swap", swap);
-register("swap", "tokens", swapTokens);
-registerSingle("bridge", bridge);
-registerSingle("send", send);
-registerSingle("search", search);
-registerSingle("chains", chainsCmd);
+registerSingle("swap", lazy(() => import("./commands/trading/swap.js")));
+register("swap", "tokens", lazy(() => import("./commands/trading/list-tokens.js")));
+registerSingle("bridge", lazy(() => import("./commands/trading/bridge.js")));
+registerSingle("send", lazy(() => import("./commands/trading/send.js")));
+registerSingle("search", lazy(() => import("./commands/trading/search.js")));
+registerSingle("chains", lazy(() => import("./commands/trading/chains.js")));
 
 // --- Agent (tokens and policies) ---
 
-import agentCreateToken from "./commands/agent/create-token.js";
-import agentListTokens from "./commands/agent/list-tokens.js";
-import agentRevokeToken from "./commands/agent/revoke-token.js";
-import agentCreatePolicy from "./commands/agent/create-policy.js";
-import agentListPolicies from "./commands/agent/list-policies.js";
-import agentShowPolicy from "./commands/agent/show-policy.js";
-import agentDeletePolicy from "./commands/agent/delete-policy.js";
-import agentUseToken from "./commands/agent/use-token.js";
-register("agent", "create-token", agentCreateToken);
-register("agent", "list-tokens", agentListTokens);
-register("agent", "use-token", agentUseToken);
-register("agent", "revoke-token", agentRevokeToken);
-register("agent", "create-policy", agentCreatePolicy);
-register("agent", "list-policies", agentListPolicies);
-register("agent", "show-policy", agentShowPolicy);
-register("agent", "delete-policy", agentDeletePolicy);
+register("agent", "create-token", lazy(() => import("./commands/agent/create-token.js")));
+register("agent", "list-tokens", lazy(() => import("./commands/agent/list-tokens.js")));
+register("agent", "use-token", lazy(() => import("./commands/agent/use-token.js")));
+register("agent", "revoke-token", lazy(() => import("./commands/agent/revoke-token.js")));
+register("agent", "create-policy", lazy(() => import("./commands/agent/create-policy.js")));
+register("agent", "list-policies", lazy(() => import("./commands/agent/list-policies.js")));
+register("agent", "show-policy", lazy(() => import("./commands/agent/show-policy.js")));
+register("agent", "delete-policy", lazy(() => import("./commands/agent/delete-policy.js")));
 
 // --- Config ---
 
-import configCmd from "./commands/config.js";
-registerSingle("config", configCmd);
+registerSingle("config", lazy(() => import("./commands/config.js")));
 
 // --- Setup (skills installer wrapper) ---
 
-import setupCmd from "./commands/setup.js";
-registerSingle("setup", setupCmd);
+registerSingle("setup", lazy(() => import("./commands/setup.js")));
 
 // --- Init (one-shot onboarding: install + auth + skills) ---
 
-import initCmd from "./commands/init.js";
-registerSingle("init", initCmd);
+registerSingle("init", lazy(() => import("./commands/init.js")));
 
 // --- Dispatch ---
 
