@@ -1,29 +1,19 @@
 ---
 name: zerion-umbra-privateTxn
 description: >
-  Reference and scaffolder for @umbra-privacy/sdk and
-  @umbra-privacy/web-zk-prover. DEFAULT MODE is reference — navigate to
-  the appropriate inline section (## headings below) for whatever the
-  user is writing, debugging, or asking about. Covers: registration, master-seed derivation,
-  signer / wallet adapters, key rotation, encrypted-balance deposits /
-  withdrawals / conversion, UTXO create / scan / claim flows with Groth16
-  ZK proofs, indexer endpoint catalogue + Merkle proof fetching, relayer
-  submission lifecycle (DUPLICATE_OFFSET, claim status polling),
-  privacy-tier analysis, MPC callback recovery (staged-fund recoverers),
-  error retry patterns. Also includes an OPT-IN scaffolding mode that
-  stamps out a Next.js private-payments MVP — only entered after the user
-  EXPLICITLY confirms scaffold-intent via AskUserQuestion (see the
-  "Scaffolding mode" section below). Auto-trigger keywords (load the skill
-  — do NOT auto-scaffold): umbra, stealth payment, encrypted balance, UTXO
-  claim, mixer, privacy protocol, MPC callback, master seed, Arcium, ZK
-  prover, generationIndex, OptionalData32, claimable UTXO,
-  receiver-claimable, self-claimable. Scaffold-intent verbs (still require
-  confirmation): "scaffold/build/create an Umbra app", "umbra MVP / starter
-  / template / nextjs", "private payments app". Vague / non-developer
-  phrasings that REQUIRE a multi-choice AskUserQuestion before any action
-  ("build this", "scaffold this", "make me something", "set this up",
-  "start the umbra thing", bare "umbra") are treated as reference mode by
-  default — never silently scaffold from these.
+  Reference for @umbra-privacy/sdk and @umbra-privacy/web-zk-prover.
+  DEFAULT MODE is reference — navigate to the appropriate inline section
+  (## headings below) for whatever the user is writing, debugging, or
+  asking about. Covers: registration, master-seed derivation, signer /
+  wallet adapters, key rotation, encrypted-balance deposits / withdrawals /
+  conversion, UTXO create / scan / claim flows with Groth16 ZK proofs,
+  indexer endpoint catalogue + Merkle proof fetching, relayer submission
+  lifecycle (DUPLICATE_OFFSET, claim status polling), privacy-tier
+  analysis, MPC callback recovery (staged-fund recoverers), error retry
+  patterns. Auto-trigger keywords: umbra, stealth payment, encrypted
+  balance, UTXO claim, mixer, privacy protocol, MPC callback, master seed,
+  Arcium, ZK prover, generationIndex, OptionalData32, claimable UTXO,
+  receiver-claimable, self-claimable.
 ---
 
 # Umbra SDK skill
@@ -32,62 +22,7 @@ Authoritative quick-reference + hard rules followed by the full inlined
 reference material. Treat the ten CRITICAL rules as "keep in memory at all
 costs". Use the section headings below the rules to navigate to detailed
 docs (Flows, Pitfalls, Constants, Indexer, Relayer, Errors, Advanced,
-Privacy, Compliance, Mainnet Checklist, Scaffold Recipe).
-
-The skill operates in **two modes**. **Reference mode is the default — never
-scaffold without explicit confirmation.**
-
-- **Reference mode** (default) — the user is writing, debugging, reviewing, or
-  asking how something works. Navigate to the relevant inline section below
-  (## Flows, ## Pitfalls, ## Constants, etc.) — all reference content is in
-  this single file. This is the right mode for almost every prompt that
-  merely mentions Umbra.
-- **Scaffolding mode** — only entered when ALL of the following are true:
-  1. The user's message contains an explicit build verb (`build`, `scaffold`,
-     `create`, `start`, `set up`, `generate`, `stamp out`, `bootstrap`) AND a
-     project noun (`app`, `MVP`, `starter`, `project`, `template`, `Next.js
-     app`, `payments app`).
-  2. The user is clearly asking for a NEW project (not adding Umbra to an
-     existing codebase, not fixing/debugging/reviewing existing code).
-  3. You have **explicitly confirmed scaffold-intent with the user via
-     AskUserQuestion** before reading the recipe. Do not assume — ask, even
-     when the wording looks unambiguous. A single yes/no question:
-     *"Do you want me to scaffold a new Umbra Next.js app from the template,
-     or are you in reference mode (writing/debugging existing code)?"*
-     Only after the user picks "scaffold" do you scroll to the **## Scaffold
-     Recipe** section below and follow it. The recipe then asks 3 more inputs
-     (target dir, network, mint).
-
-  **Vague / underspecified requests — ALWAYS disambiguate first, never
-  guess.** Non-developer or low-context users routinely send messages like
-  *"build this"*, *"scaffold this"*, *"make me something"*, *"can you
-  set this up"*, *"start the umbra thing"*, *"do the umbra app"*, or a
-  bare *"umbra"* with no further detail. These messages have a build verb
-  but no clear project noun, no target directory, and no signal about
-  whether the user wants a new project or help with existing code. In any
-  such case you MUST call `AskUserQuestion` BEFORE doing anything — no
-  reading the Scaffold Recipe section, no creating files.
-  Use a multi-choice question with at least these three options:
-    - *"Scaffold a NEW Umbra Next.js app from the template (creates a
-      fresh project directory)."*
-    - *"Add Umbra to an EXISTING codebase / integrate the SDK into a
-      project I already have."*
-    - *"Just answer questions / explain how something works (reference
-      mode — no files written)."*
-  Default-bias: if the user's reply is still ambiguous after one round
-  (e.g. *"yeah do it"* without picking an option), ask again — do not
-  silently pick scaffolding. Treat the absence of explicit confirmation
-  as reference mode.
-
-  Ambiguous triggers that DEFAULT to reference mode (do not scaffold even if
-  these keywords appear): "load the Umbra skill", "I'm working with Umbra",
-  "explain Umbra", "how does X work", "fix / debug / review", "add Umbra to
-  my app", "show me an example of Y". For these, just load the relevant
-  reference row and answer the question.
-
-The scaffold is described in the **## Scaffold Recipe** section below; it
-generates a working Next.js App Router app that bakes the 10 rules into the
-codebase — but it is opt-in, never automatic.
+Privacy, Compliance, Mainnet Checklist).
 
 ## Semantic flow
 
@@ -390,31 +325,20 @@ section in this file.
 - **Mainnet Checklist** — pre-flight gate before any production deploy:
   pinned versions, paid RPC, master-seed storage, privacy guards, claim-
   retry idempotency, scan-cursor persistence, ZK prover CSP.
-- **Scaffold Recipe** — ONLY read this once the user has explicitly
-  confirmed scaffold intent via AskUserQuestion. The recipe asks 3 more
-  inputs (target dir, network, default mint), generates the file tree,
-  and prints next-steps + checklist.
 
 ## Compaction note (must preserve in any rewrite)
 
 1. The ten CRITICAL rules — verbatim, no shortening. Rules 1–8 must keep
    their cross-ref to `Pitfalls §<N>`. Rules 9–10 are inline-only.
 2. The semantic flow diagram (with recovery branches).
-3. The two-mode framing: "Reference mode" vs "Scaffolding mode" with the
-   build-intent trigger pointing at the **## Scaffold Recipe** section.
-4. The section index (cheap navigation across the inlined reference docs).
-   It MUST list all 11 sections: Flows, Pitfalls, Constants, Indexer API,
-   Relayer API, Errors, Advanced, Privacy tiers, Compliance, Mainnet
-   Checklist, Scaffold Recipe.
-5. The factory list under "Operation map".
-6. The trust-model facts: relayer = semi-trusted, indexer = UNTRUSTED.
-7. Cross-refs to sibling content use the form `Pitfalls §<N>` (section
+3. The section index (cheap navigation across the inlined reference docs).
+   It MUST list all 10 sections: Flows, Pitfalls, Constants, Indexer API,
+   Relayer API, Errors, Advanced, Privacy tiers, Compliance, Mainnet Checklist.
+4. The factory list under "Operation map".
+5. The trust-model facts: relayer = semi-trusted, indexer = UNTRUSTED.
+6. Cross-refs to sibling content use the form `Pitfalls §<N>` (section
    name + § + number) — never file paths, since this skill is a single
    SKILL.md.
-8. The Scaffold Recipe describes the canonical Next.js scaffold. Any rule
-   change that affects the send/receive/scan/claim flow REQUIRES a
-   matching update to the recipe's file-by-file guidance, otherwise the
-   recipe drifts from the rules.
 
 
 ---
@@ -2181,7 +2105,7 @@ key; the recipient only needs an ATA to receive the eventual claim.
   Umbra to receive privately" prompts to the unregistered subset.
 
 This check belongs in the create-flow boundary (e.g. a
-`lib/recipient-registration-check.ts` in your scaffold) — NOT inside the
+`lib/recipient-registration-check.ts` in your app) — NOT inside the
 SDK call. The SDK's hard-fail behaviour is correct; we just want to
 catch it BEFORE building / signing the tx so the user gets a useful
 error.
@@ -3813,7 +3737,7 @@ Missing any one of these has broken integrations in the past.
 
 ## Master-seed storage decision
 
-The scaffold defaults to **re-derive every session** — no persistence,
+The simplest approach is **re-derive every session** — no persistence,
 zero attack surface. The user signs the magic message once per visit.
 
 If you swap in persistent storage to skip the re-sign:
@@ -3860,9 +3784,8 @@ If you swap in persistent storage to skip the re-sign:
 - [ ] `getZkProverSuiteFromAssetUrls` resolves under your production
       CSP. `script-src` and `connect-src` must allow the Umbra CDN host
       OR you have self-hosted the assets (see `the Advanced section` §5).
-- [ ] Prover runs in a **Web Worker** (the scaffold uses comlink). The
-      main thread must NEVER block on Groth16 proof generation — that
-      causes 2–8s frame drops.
+- [ ] Prover runs in a **Web Worker** (use comlink). The main thread must
+      NEVER block on Groth16 proof generation — that causes 2–8s frame drops.
 
 ## Hosting
 
@@ -3884,173 +3807,6 @@ If you swap in persistent storage to skip the re-sign:
       redeploy the previous commit.
 - [ ] Founder has the SDK changelog URL bookmarked and a process for
       reviewing it before bumping the pin.
-- [ ] You have a way to reach the user when their UTXO is stuck. The
-      scaffold's `/receive` page surfaces claim status; consider an
-      email/Discord channel for support.
+- [ ] You have a way to reach the user when their UTXO is stuck. Surface
+      claim status in your UI; consider an email/Discord channel for support.
 
-
----
-
-## Scaffold recipe — private payments (Next.js)
-
-This file is read by Claude Code only AFTER the user has explicitly
-confirmed scaffold-intent (see SKILL.md "Scaffolding mode"). The steps
-below are deterministic — execute them in order without skipping.
-
-## When to enter scaffolding mode
-
-→ See the "Scaffolding mode" rules in the SKILL.md header above. Reach this
-section only after the user has explicitly confirmed scaffold intent via
-`AskUserQuestion`.
-
-## Step 1 — Confirm intent + collect 3 inputs
-
-Use `AskUserQuestion`. One question per concern, defaults pre-selected:
-
-1. **Target directory name** — default `umbra-payments-app`. Free-text.
-2. **Network** — `mainnet-beta` (default) or `devnet`. Single-select.
-3. **Default token mint** — defaults:
-    - `mainnet-beta` → USDC mainnet
-      `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-    - `devnet`       → dUSDC (only dUSDC and dUSDT are pool-deployed on devnet)
-      `4oG4sjmopf5MzvTHLE8rpVJ2uyczxfsw2K84SUTpNDx7`
-      Devnet faucet: https://faucet.umbraprivacy.com/
-
-  Free-text "other" allowed but on devnet picking anything other than
-  dUSDC or dUSDT will fail with Anchor 3012 (Pitfalls §13). The
-  scaffold's `lib/supported-mints.ts` ships both devnet mints; encourage
-  the founder to pick from there.
-
-## Step 2 — Generate the project tree
-
-This skill ships as a single SKILL.md — there is no template directory
-to copy from. Generate the file tree in `<cwd>/<target-dir>/` from
-scratch, using the patterns in the **## Flows**, **## Pitfalls**,
-**## Indexer API**, and **## Relayer API** sections of this skill as
-the source of truth. The canonical tree to produce:
-
-```
-<target-dir>/
-├── package.json                       # pin @umbra-privacy/sdk@4.0.0, web-zk-prover@2.0.1
-├── tsconfig.json
-├── next.config.ts                     # transpilePackages + /proxy/data-indexer rewrite
-├── .env.example                       # see Step 3 placeholders
-├── .eslintrc.json
-├── .gitignore
-├── .npmrc                             # see "peer-dep mismatch" note below
-├── README.md
-├── app/
-│   ├── layout.tsx                     # wraps children in <UmbraClientProvider>
-│   ├── page.tsx                       # home page
-│   ├── providers.tsx                  # UmbraClientProvider keyed by connected wallet
-│   ├── globals.css
-│   ├── account/page.tsx               # wallet connect + Umbra registration
-│   ├── send/page.tsx                  # deposit + create UTXO flow
-│   └── receive/page.tsx               # scan worker + claim queue UI
-├── components/
-│   ├── WalletButton.tsx               # Wallet Standard connect UI
-│   ├── RegistrationGate.tsx           # blocks send/receive until registered
-│   ├── PrivacyTierBadge.tsx           # Tier 1/2/3 indicator
-│   └── ScanWorker.tsx                 # background scan loop
-└── lib/
-    ├── env.ts                         # zod-validated env loader
-    ├── signer.ts                      # createSignerFromWalletAccount adapter
-    ├── umbra-client.ts                # getUmbraClient factory + masterSeedStorage
-    ├── scan-cursor.ts                 # IndexedDB cursor (treeIndex, insertionIndex)
-    ├── claim-queue.ts                 # idempotent claim wrapper (DUPLICATE_OFFSET-aware)
-    ├── claim-service.ts               # getReceiverClaimableUtxoToEncryptedBalanceClaimerFunction wiring
-    ├── claimed-index-store.ts         # local set of already-claimed nullifiers
-    ├── recipient-registration-check.ts # three-flag pre-check (Pitfalls §12, §14)
-    ├── supported-mints.ts             # canonical mint list per network
-    ├── format-error.ts                # UmbraError → user-facing string
-    └── zk-prover.ts                   # 7 per-circuit prover factories + CDN asset provider
-```
-
-Wire each file according to the rules in this skill. Do NOT invent
-import sub-paths beyond the four documented in CRITICAL rule 10.
-Always run the prover via comlink Web Worker (Advanced section §5).
-
-## Step 3 — Token-substitute
-
-Replace these placeholders across all copied files (`package.json`,
-`README.md`, `.env.example`, `app/layout.tsx`, `app/page.tsx`):
-
-- `__APP_NAME__` → target dir name (in `package.json`, `app/layout.tsx`,
-  `app/page.tsx`, `README.md`).
-- `__NETWORK__` → `mainnet-beta` | `devnet`.
-- `__DEFAULT_MINT__` → chosen mint address.
-- `__DEFAULT_RPC__`:
-    - `mainnet-beta` → leave the placeholder
-      `https://CHANGE_ME.solana-mainnet.example.com` so the founder
-      MUST replace it with a paid RPC before running.
-    - `devnet` → `https://api.devnet.solana.com`.
-- `__DEFAULT_INDEXER__` (browser-facing `NEXT_PUBLIC_INDEXER_URL`, called
-  directly — no proxy. Returns **protobuf**, not JSON):
-    - `mainnet-beta` → `https://utxo-indexer.api.umbraprivacy.com`
-    - `devnet`       → `https://utxo-indexer.api-devnet.umbraprivacy.com`
-- `__DEFAULT_RELAYER__` (browser-facing `NEXT_PUBLIC_RELAYER_URL`, called
-  directly — no proxy):
-    - `mainnet-beta` → `https://relayer.api.umbraprivacy.com`
-    - `devnet`       → `https://relayer.api-devnet.umbraprivacy.com`
-- `__DEFAULT_DATA_INDEXER__` (server-only `DATA_INDEXER_UPSTREAM`,
-  proxied via `/proxy/data-indexer`. Returns **JSON**):
-    - `mainnet-beta` → `https://data-indexer.api.umbraprivacy.com`
-    - `devnet`       → `https://data-indexer.api-devnet.umbraprivacy.com`
-
-Browser-facing `NEXT_PUBLIC_DATA_INDEXER_URL` in `.env.example` always
-stays as `/proxy/data-indexer` — do NOT substitute it. The proxy is set
-up in `next.config.ts`. UTXO-indexer and relayer are NOT proxied — the
-browser hits their absolute URLs directly.
-
-## Step 4 — Print next steps + checklist
-
-Print, in the chat, a short message containing:
-
-```
-Scaffolded <target-dir> for the <network> network.
-
-Next steps:
-  cd <target-dir>
-  cp .env.example .env.local
-  # edit .env.local — set NEXT_PUBLIC_RPC_URL to a paid Solana RPC
-  npm install
-  npm run dev
-
-Open http://localhost:3000, connect a Solana wallet, and walk:
-  /account → register on Umbra
-  /send    → deposit + create receiver-claimable UTXO
-  /receive → scan + claim
-
-Devnet smoke test BEFORE mainnet — see the Mainnet pre-flight checklist section of this skill.
-```
-
-Then point the founder at the **## Mainnet pre-flight checklist** section
-of this skill so they read it before deploying.
-
-## Step 5 — STOP
-
-Do NOT run `npm install`, `npm run dev`, or any other command unless
-the user explicitly asks. The scaffold is self-contained; the founder
-should drive the install + first run themselves so they catch env
-issues early.
-
-## Note on the published peer-dep mismatch
-
-`@umbra-privacy/web-zk-prover@2.0.1` declares an outdated peer-dep on
-`@umbra-privacy/sdk@2.0.3`, while the scaffold pins
-`@umbra-privacy/sdk@4.0.0`. The published API is compatible — only the
-peer-dep range is stale. The scaffold's `package.json` ships a small
-`overrides` block that resolves only that mismatch:
-
-```json
-"overrides": {
-  "@umbra-privacy/web-zk-prover": {
-    "@umbra-privacy/sdk": "$@umbra-privacy/sdk"
-  }
-}
-```
-
-This lets npm auto-install other peer-deps normally — including
-`snarkjs`, which web-zk-prover wraps internally. The scaffold does NOT
-declare `snarkjs` directly; it lands transitively. Drop the `overrides`
-once a newer web-zk-prover ships with a matching peer-dep range.
