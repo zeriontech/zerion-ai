@@ -1,6 +1,6 @@
 {
   "name": "zerion-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zerion for AI agents and developers: wallet-analysis skill bundle and a JSON-first CLI.",
   "author": "Zerion",
   "type": "module",
