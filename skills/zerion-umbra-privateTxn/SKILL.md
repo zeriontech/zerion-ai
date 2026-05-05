@@ -1911,77 +1911,6 @@ you need to talk to the indexer endpoints directly.
 **Recovery:** if cursor state is lost, rescan from `0n` once; persist
 `lastInsertionIndex` after the next successful scan.
 
----
-
-## 9. Verify the token mint is supported BEFORE building any tx
-
-❌ Wrong — let the SDK fail mid-pipeline:
-```typescript
-await deposit(recipient, mint, amount);   // throws inside the SDK if mint unsupported
-```
-
-✅ Right — gate at your API boundary against the supported list:
-```typescript
-import { SUPPORTED_MINTS_MAINNET } from "@umbra-privacy/sdk"; // verify the export name in src/constants/supported-mints.ts
-
-if (!SUPPORTED_MINTS_MAINNET.includes(mint)) {
-  throw new Error(
-    `Mint ${mint} is not supported by Umbra. ` +
-      `See https://sdk.umbraprivacy.com/supported-tokens for the current list.`,
-  );
-}
-await deposit(recipient, mint, amount);
-```
-
-**Why:** each shielded pool is deployed per mint. A token not on the
-supported list has no on-chain pool — the SDK fails partway through
-building the tx with an unhelpful error. Mainnet (current): USDC, USDT,
-wSOL, UMBRA. Mints in Constants. Authoritative list:
-`https://sdk.umbraprivacy.com/supported-tokens`.
-
-**Recovery:** none required if you gated correctly. If the user already
-attempted a tx with an unsupported mint, the tx didn't land — no funds
-moved.
-
----
-
-## 10. Import from the main path. Do NOT invent sub-paths
-
-❌ Wrong — deep sub-path imports that the docs don't endorse:
-```typescript
-import { getPoseidonHasher } from "@umbra-privacy/sdk/crypto/poseidon";
-import { defaultAesEncryptor } from "@umbra-privacy/sdk/crypto/aes";
-import { getStagedSplRecovererFunction } from "@umbra-privacy/sdk/account";
-```
-
-✅ Right — main path for everything except the four documented sub-paths:
-```typescript
-import {
-  getPoseidonHasher,
-  defaultAesEncryptor,
-  getStagedSplRecovererFunction,
-} from "@umbra-privacy/sdk";
-
-// Documented sub-paths (use only when bundle-size matters):
-import { U128, Address } from "@umbra-privacy/sdk/types";
-import { UMBRA_MESSAGE_TO_SIGN } from "@umbra-privacy/sdk/constants";
-import { isClaimUtxoError } from "@umbra-privacy/sdk/errors";
-
-// ZK proving is a SEPARATE package:
-import { proveGroth16, getCdnZkAssetProvider } from "@umbra-privacy/web-zk-prover";
-```
-
-**Why:** `package.json` declares 30+ sub-path exports
-(`/account`, `/claim`, `/crypto/poseidon`, `/deposit`, ...) but the docs at
-`https://sdk.umbraprivacy.com/sdk/installation#import-paths` only endorse
-**four**: main, `/types`, `/constants`, `/errors`. The undocumented
-sub-paths work today but are internal layout — they may be reorganised
-without notice. Imports from the main barrel are stable.
-
-**Recovery:** rewrite imports to the main path. Bundle size is rarely a
-concern; the SDK already ships per-export-path exports for the rare cases
-where it matters.
-
 ## 11. Wallet network must match app network — verify at connect time
 
 ❌ Wrong:
@@ -2627,41 +2556,9 @@ Never cache a single-proof response across user sessions. For batched claims,
 prefer `POST /v1/trees/{tree_index}/proofs` so all proofs share one
 consistent root.
 
-## Cursor-cache pattern (the rule from Pitfalls §8)
+## Cursor-cache pattern
 
-For incremental scans without re-reading the full tree on every session.
-Persist `(treeIndex, lastSeenInsertionIndex)` per user.
-
-```typescript
-type CursorStore = {
-  get(treeIndex: number): Promise<number>;     // last-seen insertion index + 1
-  set(treeIndex: number, idx: number): Promise<void>;
-};
-
-const CHUNK = 10_000;
-
-async function incrementalScan(
-  client: UmbraClient,
-  treeIndex: number,
-  store: CursorStore,
-) {
-  const start = await store.get(treeIndex);
-  const end   = start + CHUNK;
-  const scan  = getClaimableUtxoScannerFunction({ client });
-
-  // POSITIONAL args: scan(treeIndex, startInsertionIndex, endInsertionIndex?)
-  const result = await scan(treeIndex, start, end);
-  // result: { selfBurnable, received, publicSelfBurnable, publicReceived }
-  // Each ClaimableUtxoData already includes its Merkle proof — no enrichment.
-
-  await store.set(treeIndex, end);
-  return result;
-}
-```
-
-Storage choices: localStorage / IndexedDB in browser, SQLite / a small KV
-table on backend. Schema is just `treeIndex → highestSeenInsertionIndex`
-(number).
+→ See Pitfalls §8 for the full incremental-scan cursor pattern and code.
 
 ## Verification workflow (when scanning manually)
 
@@ -4002,30 +3899,9 @@ below are deterministic — execute them in order without skipping.
 
 ## When to enter scaffolding mode
 
-Enter scaffolding mode ONLY when both are true:
-
-1. The user's prompt contains an explicit build verb (`build`, `scaffold`,
-   `create`, `start`, `set up`, `generate`, `bootstrap`) paired with a
-   project noun (`app`, `MVP`, `starter`, `project`, `Next.js app`,
-   `payments app`).
-2. You have asked the user via `AskUserQuestion` *"Do you want me to
-   scaffold a new Umbra Next.js app from the template, or are you in
-   reference mode?"* and they picked the scaffold option.
-
-Do NOT enter scaffolding mode for:
-
-- "load the Umbra skill" / "I'm working with Umbra" → reference mode.
-  These trigger the skill but are NOT build-intent.
-- "explain X / how does Y work" → reference mode (load `the Flows section` etc.).
-- "fix / debug / review my Umbra code" → reference mode.
-- "add Umbra to my existing app" → ask the user first whether they want
-  the full scaffold or just snippets; if snippets, stay in reference mode.
-- Bare keyword hits (`umbra`, `payments`, `UTXO`, `master seed`) without
-  a build verb → reference mode.
-
-If you are unsure whether the user wants to scaffold, the answer is
-**don't scaffold** — ask first. A wrong scaffold is much more disruptive
-than a wrong reference load.
+→ See the "Scaffolding mode" rules in the SKILL.md header above. Reach this
+section only after the user has explicitly confirmed scaffold intent via
+`AskUserQuestion`.
 
 ## Step 1 — Confirm intent + collect 3 inputs
 
