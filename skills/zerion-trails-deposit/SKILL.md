@@ -1,13 +1,13 @@
 ---
-name: zerion-polygon-deposit
-description: "Deposit tokens into DeFi vaults on Polygon (chainId 137) using the Trails SDK. Handles cross-chain bridging + vault deposit in a single intent: user sends tokens from any chain and they land directly in the vault. Supports Aave, Morpho, and custom ERC-4626 vaults via composable actions or calldata. Use when the user asks to 'deposit into a vault', 'earn yield on Polygon', 'bridge and stake', or 'put tokens into a DeFi protocol on Polygon'."
+name: zerion-trails-deposit
+description: "Deposit tokens into DeFi vaults on Polygon (chainId 137) using the Trails SDK, with Zerion CLI on top for funding and portfolio checks. Handles cross-chain bridging + vault deposit in a single intent: user sends tokens from any chain and they land directly in the vault. Supports Aave, Morpho, and custom ERC-4626 vaults via composable actions or calldata. Use when the user asks to 'deposit into a vault', 'earn yield on Polygon', 'bridge and stake', or 'put tokens into a DeFi protocol on Polygon'."
 license: MIT
 allowed-tools: Bash, Read, Edit, Write
 ---
 
-# Zerion — Polygon DeFi Vault Deposit (Trails)
+# Zerion — Trails DeFi Vault Deposit
 
-Bridge tokens from any chain and deposit directly into a DeFi vault on Polygon in a single intent, powered by [Trails](https://docs.trails.build). Trails handles routing, cross-chain settlement, and the vault deposit call atomically.
+Bridge tokens from any chain and deposit directly into a DeFi vault on Polygon in a single intent, powered by [Trails](https://docs.trails.build). Trails handles routing, cross-chain settlement, and the vault deposit call atomically. Pair with the Zerion CLI to fund the wallet and verify the resulting vault position.
 
 ## Setup
 
@@ -47,6 +47,30 @@ Common deposit tokens on Polygon:
 | USDT | `0xc2132D05D31c914a87C6611C10748AEb04B58e8F` |
 | WETH | `0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619` |
 | WMATIC / POL | `0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270` |
+
+---
+
+## Zerion CLI integration
+
+Trails handles the bridge + vault deposit; the Zerion CLI handles funding the wallet beforehand and confirming the vault position afterward. Install with `npm i -g zerion-cli`.
+
+### End-to-end flow
+
+```bash
+# 1. Fund the wallet (shows EVM + Solana deposit addresses)
+zerion wallet fund --wallet agent-bot
+
+# 2. Confirm the source-chain balance is in place before quoting
+zerion portfolio --wallet agent-bot
+
+# 3. Run the Trails deposit (Widget / hooks / API — see sections below)
+
+# 4. Verify the vault position appeared on Polygon (DeFi positions)
+zerion portfolio --wallet agent-bot
+zerion analyze agent-bot --chain polygon --positions defi
+```
+
+The Trails SDK runs against the same EVM address that `zerion wallet list` reports — pass that address as `ownerAddress` / `userAddress` and use the vault contract as `destinationToAddress` / `to.recipient` in any of the integration modes below.
 
 ---
 

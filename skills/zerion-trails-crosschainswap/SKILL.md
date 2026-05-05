@@ -1,13 +1,13 @@
 ---
-name: zerion-polygon-crosschainswap
-description: "Cross-chain token swaps to and from Polygon (chainId 137) using the Trails SDK. Use when the user wants to bridge or swap tokens across chains where Polygon is the source or destination — e.g. 'swap ETH on Ethereum to USDC on Polygon', 'bridge USDC from Arbitrum to Polygon', or 'swap to POL from any chain'. Supports Widget (drop-in React UI), Headless hooks (custom UX), and Direct API (server-side) integration modes."
+name: zerion-trails-crosschainswap
+description: "Cross-chain token swaps to and from Polygon (chainId 137) using the Trails SDK, with Zerion CLI on top for funding and portfolio checks. Use when the user wants to bridge or swap tokens across chains where Polygon is the source or destination — e.g. 'swap ETH on Ethereum to USDC on Polygon', 'bridge USDC from Arbitrum to Polygon', or 'swap to POL from any chain'. Supports Widget (drop-in React UI), Headless hooks (custom UX), and Direct API (server-side) integration modes."
 license: MIT
 allowed-tools: Bash, Read, Edit, Write
 ---
 
-# Zerion — Polygon Cross-Chain Swap (Trails)
+# Zerion — Trails Cross-Chain Swap
 
-Cross-chain and same-chain token swaps involving Polygon, powered by [Trails](https://docs.trails.build). Trails handles routing, bridging, and settlement in a single intent flow.
+Cross-chain and same-chain token swaps involving Polygon, powered by [Trails](https://docs.trails.build). Trails handles routing, bridging, and settlement in a single intent flow. Pair with the Zerion CLI to fund the wallet and check the resulting position before/after the swap.
 
 ## Setup
 
@@ -47,6 +47,30 @@ Common Polygon token addresses:
 | USDT | `0xc2132D05D31c914a87C6611C10748AEb04B58e8F` |
 | WETH | `0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619` |
 | WMATIC / POL | `0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270` |
+
+---
+
+## Zerion CLI integration
+
+Trails handles the swap; the Zerion CLI handles everything around it — funding the wallet beforehand and verifying the position afterward. Install with `npm i -g zerion-cli`.
+
+### End-to-end flow
+
+```bash
+# 1. Fund the wallet (shows EVM + Solana deposit addresses)
+zerion wallet fund --wallet agent-bot
+
+# 2. Confirm balance arrived on the source chain before quoting
+zerion portfolio --wallet agent-bot
+
+# 3. Run the Trails swap (Widget / hooks / API — see sections below)
+
+# 4. Verify the destination token landed on Polygon
+zerion portfolio --wallet agent-bot
+zerion analyze agent-bot --chain polygon
+```
+
+The Trails SDK runs against the same EVM address that `zerion wallet list` reports — pass that address as `recipient` / `destinationToAddress` / `ownerAddress` in any of the integration modes below.
 
 ---
 
