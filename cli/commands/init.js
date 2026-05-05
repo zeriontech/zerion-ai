@@ -9,9 +9,9 @@ const DASHBOARD_URL = "https://dashboard.zerion.io";
 const HELP = {
   usage: "zerion init [options]",
   description:
-    "One-shot onboarding: install the CLI globally, configure an API key, and install Zerion agent skills into detected coding agents.",
+    "One-shot onboarding: install the CLI globally, configure an API key, and install Zerion agent skills into detected coding agents. By default the skills step is interactive — pick which skills you want.",
   flags: {
-    "--yes, -y": "Non-interactive — skip prompts, pass --yes to skills installer",
+    "--yes, -y": "Non-interactive — skip prompts and install ALL skills (otherwise user picks)",
     "--browser": "Open dashboard.zerion.io in the default browser during auth",
     "--no-install": "Skip the global `npm install -g zerion-cli` step",
     "--no-auth": "Skip the API key configuration step",
@@ -98,19 +98,26 @@ async function ensureApiKey({ yes, browser }) {
   return { ok: true, skipped: false };
 }
 
-function installSkills({ agent }) {
-  // `init` is a one-shot onboarding command; always install every skill
-  // non-interactively. Users who want to pick can run `zerion setup skills`.
-  const npxArgs = ["-y", "skills", "add", ZERION_AGENT_REPO, "-g", "--yes"];
+function installSkills({ agent, yes }) {
+  // Interactive by default — `npx skills add` shows a multi-select so users
+  // can pick which Zerion skills to install. Only force non-interactive when
+  // the caller explicitly passed --yes or stdin is not a TTY (CI / piped).
+  const nonInteractive = yes || !process.stdin.isTTY;
+  const npxArgs = ["-y", "skills", "add", ZERION_AGENT_REPO, "-g"];
+  if (nonInteractive) npxArgs.push("--yes");
   if (agent) npxArgs.push("-a", agent);
 
-  log("  Installing Zerion skills for AI coding agents...");
+  log(
+    nonInteractive
+      ? "  Installing all Zerion skills for AI coding agents..."
+      : "  Pick which Zerion skills to install (space to toggle, enter to confirm)..."
+  );
   const res = spawnSync("npx", npxArgs, { stdio: "inherit" });
   if (res.status !== 0) {
     return { ok: false, exitCode: res.status };
   }
   log("  ✓ Skills installed");
-  return { ok: true };
+  return { ok: true, interactive: !nonInteractive };
 }
 
 function printSuccessSummary() {
@@ -167,7 +174,7 @@ export default async function init(args, flags) {
   log("[3/3] Install agent skills");
   const skillsRes = skipSkills
     ? { ok: true, skipped: true, reason: "flag" }
-    : installSkills({ agent });
+    : installSkills({ agent, yes });
   steps.push({ step: "skills", ...skillsRes });
   if (!skillsRes.ok) {
     printError("init_skills_failed", "Skills install failed", skillsRes);
