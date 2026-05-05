@@ -87,12 +87,30 @@ export async function fetchAPI(pathname, params = {}, auth) {
     }
 
     if (!response.ok) {
-      const err = new Error(
-        `Zerion API error: ${response.status} ${response.statusText}`
-      );
+      // Surface the server's JSON:API error detail in the thrown message so
+      // CLI users see the actual cause (route not supported, malformed param,
+      // etc.) instead of a bare "400 Bad Request".
+      const apiErr = Array.isArray(payload?.errors) ? payload.errors[0] : null;
+      let detail = apiErr?.detail || apiErr?.title;
+      // 5xx bodies often echo "Internal Server Error" as both title and
+      // detail — that's pure noise, drop it from the user-facing message.
+      if (detail && detail.toLowerCase() === response.statusText.toLowerCase()) {
+        detail = null;
+      }
+      const baseMsg = `Zerion API error: ${response.status} ${response.statusText}` +
+        (detail ? ` — ${detail}` : "");
+      // 5xx is a server-side hiccup — tell the user to retry rather than
+      // blaming their input. (429 already retried above; if we land here it
+      // means the rate limit kept firing past MAX_429_RETRIES.)
+      const finalMsg = response.status >= 500
+        ? `${baseMsg}. This is a Zerion server-side error — usually transient. Retry the command.`
+        : baseMsg;
+      const err = new Error(finalMsg);
       err.code = "api_error";
       err.status = response.status;
       err.response = payload;
+      err.apiTitle = apiErr?.title || null;
+      err.apiDetail = detail || null;
       if (response.status === 429) err.retriesExhausted = attempt;
       throw err;
     }
@@ -163,8 +181,10 @@ export async function getGasPrices(chainId, options = {}) {
 
 // --- Swap endpoints ---
 
-export async function getSwapOffers(params, options = {}) {
-  return fetchAPI("/swap/offers/", params, options.auth);
+// Quotes endpoint — supports EVM and Solana sources, returns ready-to-sign
+// approve+swap tx pairs in one call.
+export async function getSwapQuotes(params, options = {}) {
+  return fetchAPI("/swap/quotes/", params, options.auth);
 }
 
 export async function getSwapFungibles(inputChainId, outputChainId, options = {}) {

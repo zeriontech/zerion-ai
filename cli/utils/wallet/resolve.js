@@ -104,6 +104,82 @@ export function resolveWallet(flags, args = []) {
   }
 }
 
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
+const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+
+/**
+ * Resolve a destination address for cross-chain bridges/swaps. Picks the right
+ * account type for `targetChain` — Solana wallets need a Solana receiver, EVM
+ * chains need a 0x address.
+ *
+ * Inputs (in priority order):
+ *   - `toAddressOrEns` — raw address (validated to match the chain) or ENS for EVM dests.
+ *   - `toWalletName`   — local wallet whose corresponding account is used.
+ *   - falls back to default wallet (when source wallet has the required account on dest chain).
+ *
+ * Returns `{ address, source }` or throws with a helpful message.
+ */
+export async function resolveDestination({ toAddressOrEns, toWalletName, fallbackWallet, targetChain }) {
+  const wantsSolana = isSolana(targetChain);
+
+  if (toAddressOrEns) {
+    if (wantsSolana) {
+      if (!SOL_ADDR_RE.test(toAddressOrEns)) {
+        throw new Error(
+          `--to-address ${toAddressOrEns} is not a Solana address. ` +
+          `Solana destinations need a base58 Solana pubkey.`
+        );
+      }
+      return { address: toAddressOrEns, source: "address" };
+    }
+    if (EVM_ADDR_RE.test(toAddressOrEns) || toAddressOrEns.endsWith(".eth")) {
+      const resolved = await resolveAddress(toAddressOrEns);
+      return { address: resolved, source: "address" };
+    }
+    throw new Error(
+      `--to-address ${toAddressOrEns} is not a valid EVM address or ENS name for chain "${targetChain}".`
+    );
+  }
+
+  const lookupWallet = toWalletName || fallbackWallet;
+  if (!lookupWallet) {
+    throw new Error(
+      `Cross-chain destination required. Pass --to-wallet <name> or --to-address <addr/ens>.`
+    );
+  }
+
+  // Existence check — keep error wording consistent with other commands.
+  try {
+    ows.getWallet(lookupWallet);
+  } catch {
+    throw new Error(
+      `Destination wallet "${lookupWallet}" not found. List wallets with: zerion wallet list`
+    );
+  }
+
+  if (wantsSolana) {
+    const solAddress = ows.getSolAddress(lookupWallet);
+    if (!solAddress) {
+      throw new Error(
+        `Destination wallet "${lookupWallet}" has no Solana account. ` +
+        `Use --to-address <solana-pubkey> or pick a wallet with a Solana account.`
+      );
+    }
+    return { address: solAddress, source: "wallet", walletName: lookupWallet };
+  }
+
+  let evmAddress;
+  try {
+    evmAddress = ows.getEvmAddress(lookupWallet);
+  } catch {
+    throw new Error(
+      `Destination wallet "${lookupWallet}" has no EVM account for chain "${targetChain}". ` +
+      `Use --to-address <0x…> or pick an EVM wallet.`
+    );
+  }
+  return { address: evmAddress, source: "wallet", walletName: lookupWallet };
+}
+
 /**
  * Resolve address from positional arg or --wallet/--address/--watch flags.
  * Supports both `wallet portfolio <addr>` and `portfolio --wallet <name>`.

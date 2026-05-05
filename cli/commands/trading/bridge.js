@@ -1,32 +1,46 @@
 import { getSwapQuote, executeSwap } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, handleTradingError } from "../../utils/trading/guards.js";
-import { resolveWallet } from "../../utils/wallet/resolve.js";
+import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { print, printError } from "../../utils/common/output.js";
-import { getConfigValue } from "../../utils/config.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
 
+/**
+ * Cross-chain bridge (with optional dest-token swap).
+ * Usage: zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>
+ *
+ * For Solana ↔ EVM, pass --to-wallet or --to-address so the destination
+ * receiver matches the dest chain's address format. Otherwise we use the
+ * source wallet's account on the target chain (mnemonic-derived wallets
+ * have both EVM and Solana accounts).
+ */
 export default async function bridge(args, flags) {
-  const [token, targetChain, amount] = args;
+  const [fromChain, fromToken, amount, toChain, toToken] = args;
 
-  if (!token || !targetChain) {
-    printError("missing_args", "Usage: zerion bridge <token> <target-chain> <amount> --from-chain <chain> [--to-token <token>]", {
-      example: "zerion bridge ETH arbitrum 0.1 --from-chain base --to-token USDC",
+  if (!fromChain || !fromToken || !amount || !toChain || !toToken) {
+    printError("missing_args", "Usage: zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>", {
+      example: "zerion bridge base USDC 5 arbitrum USDC",
     });
     process.exit(1);
   }
 
-  if (!amount) {
-    printError("missing_amount", "Specify an amount to bridge", {
-      example: `zerion bridge ${token} ${targetChain} 100`,
+  if (Number.isNaN(parseFloat(amount))) {
+    printError("invalid_amount", `Amount must be a number, got "${amount}".`, {
+      example: "zerion bridge base USDC 5 arbitrum USDC",
     });
     process.exit(1);
   }
 
-  const { walletName, address } = resolveWallet(flags);
-  const fromChain = flags["from-chain"] || getConfigValue("defaultChain") || "ethereum";
-  const toToken = flags["to-token"] || token;
+  if (fromChain === toChain) {
+    printError("same_chain_bridge", `Source and destination chain are the same ("${fromChain}"). For same-chain swaps use: zerion swap ${fromChain} ${amount} ${fromToken} ${toToken}`, {
+      example: `zerion swap ${fromChain} ${amount} ${fromToken} ${toToken}`,
+    });
+    process.exit(1);
+  }
 
-  for (const c of [fromChain, targetChain]) {
+  // Source wallet resolves against fromChain — Solana sources get base58, EVM sources get 0x.
+  const { walletName, address } = resolveWallet({ ...flags, chain: fromChain });
+
+  for (const c of [fromChain, toChain]) {
     const check = await validateTradingChainAsync(c, "bridge");
     if (check.error) {
       printError(check.error.code, check.error.message, { supportedChains: check.error.supportedChains });
@@ -34,15 +48,31 @@ export default async function bridge(args, flags) {
     }
   }
 
+  let receiver;
   try {
-    // Same API endpoint — just different fromChain and toChain
+    const dest = await resolveDestination({
+      toAddressOrEns: flags["to-address"],
+      toWalletName: flags["to-wallet"],
+      fallbackWallet: walletName,
+      targetChain: toChain,
+    });
+    receiver = dest.address;
+  } catch (err) {
+    printError("invalid_destination", err.message, {
+      suggestion: "Pass --to-wallet <name> or --to-address <addr>",
+    });
+    process.exit(1);
+  }
+
+  try {
     const quote = await getSwapQuote({
-      fromToken: token,
+      fromToken,
       toToken,
       amount,
       fromChain,
-      toChain: targetChain,
+      toChain,
       walletAddress: address,
+      outputReceiver: receiver,
       slippage: flags.slippage ? parseFloat(flags.slippage) : undefined,
     });
 
@@ -53,22 +83,23 @@ export default async function bridge(args, flags) {
       process.exit(1);
     }
 
-    const isCrossToken = token.toUpperCase() !== toToken.toUpperCase();
+    const isCrossToken = fromToken.toUpperCase() !== toToken.toUpperCase();
     const quoteSummary = {
       bridge: {
+        fromChain,
+        toChain,
         token: quote.from.symbol,
         toToken: isCrossToken ? quote.to.symbol : undefined,
         amount,
-        from: fromChain,
-        to: targetChain,
+        sender: address,
+        receiver,
         estimatedOutput: quote.estimatedOutput,
         fee: quote.fee,
         source: quote.liquiditySource,
-        estimatedTime: `${quote.estimatedSeconds}s`,
+        estimatedTime: `${quote.estimatedSeconds || "?"}s`,
       },
     };
 
-    // Agent token required — no interactive passphrase for trading
     const passphrase = await requireAgentToken("for trading", walletName);
     const timeout = parseTimeout(flags.timeout);
     const result = await executeSwap(quote, walletName, passphrase, { timeout });

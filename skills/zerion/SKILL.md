@@ -89,6 +89,14 @@ Flags: `--json` (default), `--pretty` (auto-enabled for TTY), `--quiet`.
 
 `ethereum`, `base`, `arbitrum`, `optimism`, `polygon`, `binance-smart-chain`, `avalanche`, `gnosis`, `scroll`, `linea`, `zksync-era`, `zora`, `blast`, `solana`.
 
+Solana supports same-chain swaps and bidirectional bridging to/from EVM chains. Cross-format bridges (Solana ↔ EVM) require an explicit destination via `--to-wallet <name>` or `--to-address <addr>` matching the target chain's format.
+
+Command shapes:
+- Same-chain swap: `zerion swap <chain> <amount> <from-token> <to-token>`
+- Cross-chain bridge: `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>`
+
+See `zerion-trading` for the full flag reference.
+
 Use `zerion chains` for the live catalog with metadata.
 
 ## Common error codes

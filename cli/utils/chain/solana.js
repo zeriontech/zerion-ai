@@ -20,31 +20,54 @@ function getConnection() {
 /**
  * Sign and broadcast a Solana transaction from the Zerion swap API.
  *
- * The Zerion API returns transaction data as a hex-encoded serialized
- * Solana transaction. We deserialize it, sign with OWS, and broadcast.
+ * The /swap/quotes/ endpoint returns the unsigned tx as base64 in
+ * `transaction_swap.solana.raw`. The wire layout is:
+ *
+ *   [num_signatures: compact-u16][signature_1: 64 bytes]…[signature_N][message]
+ *
+ * For a single-signer tx the API ships `[0x01][64 zero bytes][message]`. OWS
+ * signs over the message bytes and returns just the 64-byte ed25519
+ * signature — we splice it into the placeholder slot to assemble the signed
+ * transaction.
  */
-export async function signAndBroadcastSolana(swapTxData, walletName, passphrase) {
+export async function signAndBroadcastSolana(solanaTx, walletName, passphrase) {
   const connection = getConnection();
 
-  // The Zerion swap API returns Solana tx as hex in the transaction.data field
-  const txData = swapTxData.data;
-  if (!txData) {
+  const rawBase64 = solanaTx?.raw;
+  if (!rawBase64) {
     throw new Error("No transaction data from swap API for Solana");
   }
 
-  let signedTxBytes;
+  const rawBytes = Buffer.from(rawBase64, "base64");
+  const sigCount = rawBytes[0];
+  if (sigCount !== 1) {
+    throw new Error(
+      `Unsupported Solana tx with ${sigCount} signatures — only single-signer txs are supported`
+    );
+  }
+  // OWS expects the full raw tx (with placeholder zero signature) so it can
+  // parse the message and sign the right bytes — it then returns just the
+  // 64-byte ed25519 signature.
+  const rawHex = rawBytes.toString("hex");
 
+  let signatureBytes;
   try {
-    // Sign with OWS — pass the raw tx bytes as hex for OWS to sign
-    const signResult = ows.signSolanaTransaction(walletName, txData, passphrase);
-
-    // OWS returns the fully signed transaction
-    signedTxBytes = Buffer.from(signResult.signature, "hex");
+    const signResult = ows.signSolanaTransaction(walletName, rawHex, passphrase);
+    signatureBytes = Buffer.from(signResult.signature, "hex");
   } catch (err) {
     throw new Error(`Failed to sign Solana transaction: ${err.message}`);
   }
+  if (signatureBytes.length !== 64) {
+    throw new Error(`Unexpected Solana signature length: ${signatureBytes.length}`);
+  }
 
-  // Broadcast
+  const messageBytes = rawBytes.subarray(1 + 64);
+  const signedTxBytes = Buffer.concat([
+    Buffer.from([1]),     // 1 signature
+    signatureBytes,       // 64-byte ed25519 sig
+    messageBytes,         // unchanged message
+  ]);
+
   const txHash = await sendAndConfirmRawTransaction(connection, signedTxBytes, {
     skipPreflight: false,
     commitment: "confirmed",

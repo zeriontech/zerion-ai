@@ -54,9 +54,19 @@ export async function getPublicClient(zerionChainId) {
 
 /**
  * Build and sign an EVM transaction from Zerion swap API response.
- * @returns {{ signedTxHex: string, txHash: string }}
+ *
+ * @param {object} swapTx - tx body from /swap/quotes/ (transaction_swap.evm or transaction_approve.evm)
+ * @param {string} zerionChainId
+ * @param {string} walletName
+ * @param {string} passphrase
+ * @param {object} [opts]
+ * @param {number} [opts.nonceOverride] - explicit nonce to use instead of querying the RPC.
+ *   Required when broadcasting a swap right after an approval — public RPCs often
+ *   still report the pre-approval nonce as "latest" even after waitForTransactionReceipt
+ *   resolves, so we track it locally instead of trusting the node.
+ * @returns {{ signedTxHex: string, client: object, tx: object }}
  */
-export async function signSwapTransaction(swapTx, zerionChainId, walletName, passphrase) {
+export async function signSwapTransaction(swapTx, zerionChainId, walletName, passphrase, { nonceOverride } = {}) {
   if (!swapTx) {
     throw new Error("No transaction data from swap API — the quote may require more balance or the pair is unsupported");
   }
@@ -68,15 +78,9 @@ export async function signSwapTransaction(swapTx, zerionChainId, walletName, pas
   });
   const walletAddress = ows.getEvmAddress(walletName);
 
-  // Get nonce and gas prices from chain.
-  // Use "latest" blockTag for nonce — "pending" can lag on some RPCs after a recent approval tx,
-  // causing the swap to reuse the approval's nonce.
-  const [nonce, feeData] = await Promise.all([
-    client.getTransactionCount({ address: walletAddress, blockTag: "latest" }),
-    client.estimateFeesPerGas(),
-  ]);
+  const feeData = await client.estimateFeesPerGas();
+  const nonce = nonceOverride ?? (await client.getTransactionCount({ address: walletAddress, blockTag: "latest" }));
 
-  // Always prefer the catalog's chain ID over whatever the swap API echoed back.
   const chainId = config.chainIdNum;
 
   const tx = {

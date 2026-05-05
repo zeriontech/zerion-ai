@@ -10,17 +10,22 @@ import { getEvmAddress } from "../../utils/wallet/keystore.js";
 import { NATIVE_ASSET_ADDRESS } from "../../utils/common/constants.js";
 import { formatSwapQuote } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
+import { isSolana } from "../../utils/chain/registry.js";
+import { sendSolanaNative } from "../../utils/chain/solana-send.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
 ]);
+
+const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 
 export default async function send(args, flags) {
   const [token, amount] = args;
   const to = flags.to;
 
   if (!token || !amount) {
-    printError("missing_args", "Usage: zerion send <token> <amount> --to <address> --chain <chain>", {
+    printError("missing_args", "Usage: zerion send <token> <amount> --to <address> [--chain <chain>]", {
       example: "zerion send ETH 0.01 --to 0x... --chain base",
     });
     process.exit(1);
@@ -33,15 +38,42 @@ export default async function send(args, flags) {
     process.exit(1);
   }
 
-  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) {
+  // Detect address type → infer chain when not passed explicitly.
+  const recipientIsEvm = EVM_ADDR_RE.test(to);
+  const recipientIsSolana = !recipientIsEvm && SOL_ADDR_RE.test(to);
+
+  if (!recipientIsEvm && !recipientIsSolana && !to.endsWith(".eth")) {
     printError("invalid_address", `Invalid recipient address: ${to}`, {
-      suggestion: "Provide a valid 0x-prefixed EVM address (42 hex characters)",
+      suggestion: "Provide a 0x EVM address (42 hex chars), an ENS name, or a Solana base58 pubkey.",
     });
     process.exit(1);
   }
 
-  const { walletName, address } = resolveWallet(flags);
-  const chain = flags.chain || getConfigValue("defaultChain") || "ethereum";
+  const chain = flags.chain
+    || (recipientIsSolana ? "solana" : null)
+    || getConfigValue("defaultChain")
+    || "ethereum";
+
+  // Reject obvious mismatches between recipient and chain.
+  if (recipientIsSolana && !isSolana(chain)) {
+    printError("chain_mismatch", `Recipient ${to} is a Solana address but --chain is "${chain}".`, {
+      suggestion: `Use --chain solana, or provide a recipient on ${chain}.`,
+    });
+    process.exit(1);
+  }
+  if (recipientIsEvm && isSolana(chain)) {
+    printError("chain_mismatch", `Recipient ${to} is an EVM address but --chain is solana.`, {
+      suggestion: "Use --chain <evm-chain> or provide a Solana recipient.",
+    });
+    process.exit(1);
+  }
+
+  // Solana send routes here — separate flow, not the EVM pipeline below.
+  if (isSolana(chain)) {
+    return sendOnSolana({ token, amount, to, flags });
+  }
+
+  const { walletName, address } = resolveWallet({ ...flags, chain });
 
   const chainCheck = await validateTradingChainAsync(chain, "send");
   if (chainCheck.error) {
@@ -170,6 +202,56 @@ export default async function send(args, flags) {
       },
       executed: true,
     }, formatSwapQuote);
+  } catch (err) {
+    handleTradingError(err, "send_error");
+  }
+}
+
+async function sendOnSolana({ token, amount, to, flags }) {
+  const upperToken = token.toUpperCase();
+  if (upperToken !== "SOL") {
+    printError("solana_spl_not_supported",
+      `Solana send currently supports native SOL only (got token "${token}").`,
+      {
+        suggestion: "For SPL tokens, use a same-chain swap into SOL first or open an issue tracking SPL send support.",
+      }
+    );
+    process.exit(1);
+  }
+
+  const { walletName, address } = resolveWallet({ ...flags, chain: "solana" });
+  if (!address) {
+    printError("no_solana_account", `Wallet "${walletName}" has no Solana account.`, {
+      suggestion: "Pick a mnemonic-derived wallet or one imported with --sol-key.",
+    });
+    process.exit(1);
+  }
+
+  try {
+    const passphrase = await requireAgentToken("for trading", walletName);
+    const result = await sendSolanaNative({
+      from: address,
+      to,
+      amountSol: amount,
+      walletName,
+      passphrase,
+    });
+
+    print({
+      send: {
+        token: "SOL",
+        amount,
+        from: address,
+        to,
+        chain: "solana",
+        type: "native",
+      },
+      tx: {
+        hash: result.hash,
+        status: result.status,
+      },
+      executed: true,
+    });
   } catch (err) {
     handleTradingError(err, "send_error");
   }
