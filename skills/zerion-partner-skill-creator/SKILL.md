@@ -25,26 +25,26 @@ For example:
 **Out of scope:**
 - Application templates or boilerplate code
 - Reference documentation for your product without Zerion CLI integration
-- Multiple supplementary `.md` files (error references, advanced guides, etc.)
+
 - Changes to core CLI code (`cli/`, `cli/zerion.js`, `cli/router.js`)
 - Changes to plugin manifests (`.claude-plugin/`, `.codex-plugin/`)
 
 If you have supplementary docs, link to your own repo from the skill.
-
+Good examples: `zerion-moonpay-onr
 ---
 
 ## File location and naming
 
 ```
 skills/zerion-{partner}-{usecase}/SKILL.md
-```
+Good examples: `zerion-moonpay-onramp`, `zerion-moonpay-predict`
 
 **Naming rules:**
 - kebab-case only — no camelCase, no underscores
 - Always prefix with `zerion-`
 - Be specific about the use case
 
-Good examples: `zerion-somnia-blockchain`, `zerion-trails-crosschainswap`, `zerion-partner-onramp`
+Good examples: `zerion-moonpay-predict`, 'zerion-moonpay-onramp`
 
 ---
 
@@ -55,7 +55,7 @@ Good examples: `zerion-somnia-blockchain`, `zerion-trails-crosschainswap`, `zeri
 
 **Purpose:** One sentence. What does this skill enable? Mention both your product and Zerion CLI.
 
-## Key Commands
+## Key Command
 - `your-cli command` — what it does
 - `zerion command` — what it does
 
@@ -92,7 +92,7 @@ Each workflow should be copy-pasteable end-to-end. The flow should move naturall
 
 **Zerion CLI commands to compose with:**
 
-| Command | What it does |
+| Command | What it does 
 |---|---|
 | `zerion analyze <address>` | Full portfolio, positions, transactions, PnL |
 | `zerion portfolio <address>` | Portfolio value and top positions |
