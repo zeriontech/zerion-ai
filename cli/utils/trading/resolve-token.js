@@ -4,6 +4,8 @@
 
 import * as api from "../api/client.js";
 import { NATIVE_ASSET_ADDRESS } from "../common/constants.js";
+import { rerankByRelevance } from "./rank-fungibles.js";
+import { getNativeFungible } from "../chain/catalog.js";
 
 // Hardcoded aliases for the most common tokens — avoids API call for basic swaps
 const NATIVE_ALIASES = new Map([
@@ -25,7 +27,29 @@ const NATIVE_ALIASES = new Map([
 export async function resolveToken(query, chainId) {
   const upper = query.toUpperCase();
 
-  // 1. Check native aliases
+  // 1a. Match the chain's native currency before checking the static alias
+  // table — chains like Monad/BNB/Avalanche have native symbols not in
+  // NATIVE_ALIASES, and their native fungible is what users mean when they
+  // type the symbol with --chain set.
+  if (chainId) {
+    try {
+      const native = await getNativeFungible(chainId);
+      if (native && native.symbol && native.symbol.toUpperCase() === upper) {
+        return {
+          fungibleId: native.fungibleId,
+          symbol: native.symbol,
+          name: native.name || native.symbol,
+          decimals: native.decimals ?? 18,
+          address: NATIVE_ASSET_ADDRESS,
+        };
+      }
+    } catch {
+      // fall through — native lookup is best-effort, the search path can
+      // still resolve the query if the catalog call is rate-limited
+    }
+  }
+
+  // 1b. Check native aliases (ETH, USDC, …)
   if (NATIVE_ALIASES.has(upper)) {
     return { ...NATIVE_ALIASES.get(upper), name: upper };
   }
@@ -59,8 +83,11 @@ export async function resolveToken(query, chainId) {
     };
   }
 
-  // 3. Search via Zerion Fungibles API
-  const response = await api.searchFungibles(query, { chainId, limit: 5 });
+  // 3. Search via Zerion Fungibles API. Pull a larger pool than we need so
+  // the local relevance rerank has something to work with — the API sorts by
+  // market cap, which buries exact-symbol matches under unrelated big-cap
+  // tokens that happen to share a substring.
+  const response = await api.searchFungibles(query, { chainId, limit: 50 });
   const results = response.data || [];
 
   if (results.length === 0) {
@@ -70,11 +97,19 @@ export async function resolveToken(query, chainId) {
     throw err;
   }
 
-  // Prefer verified tokens
-  const verified = results.find((r) => r.attributes?.flags?.verified);
-  const best = verified || results[0];
+  // Prefer the chain-specific match when a chainId was provided.
+  const ranked = rerankByRelevance(results, query);
+  const onChain = chainId
+    ? ranked.find((r) =>
+        (r.attributes?.implementations || []).some((i) => i.chain_id === chainId)
+      )
+    : null;
+  const best = onChain || ranked[0];
 
-  const impl = best.attributes?.implementations?.[0];
+  const impl =
+    (chainId &&
+      (best.attributes?.implementations || []).find((i) => i.chain_id === chainId)) ||
+    best.attributes?.implementations?.[0];
 
   return {
     fungibleId: best.id,

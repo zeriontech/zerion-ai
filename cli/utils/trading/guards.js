@@ -172,9 +172,16 @@ export function handleTradingError(err, fallbackCode) {
       suggestion: "Create a new one: zerion agent create-token --name <name> --wallet <wallet>",
     });
   } else {
-    printError(err.code || fallbackCode, err.message, {
-      suggestion: err.suggestion,
-    });
+    let suggestion = err.suggestion;
+    if (err.code === "api_error" && /cannot be performed/i.test(err.apiDetail || "")) {
+      suggestion = suggestion || (
+        "Zerion couldn't quote this pair. Things to verify: " +
+        "the token has an implementation on both chains (zerion search <symbol>), " +
+        "the amount is within typical limits (try a different size), " +
+        "and both chains support the action (zerion chains)."
+      );
+    }
+    printError(err.code || fallbackCode, err.message, { suggestion });
   }
   process.exit(1);
 }

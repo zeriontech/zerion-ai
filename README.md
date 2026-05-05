@@ -202,12 +202,15 @@ Requires an API key (or agent token for unattended use).
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion swap <from> <to> <amount>` | Swap tokens on a single chain | `zerion swap usdc eth 100 --chain ethereum` |
-| `zerion swap <from> <to> <amount> --to-chain <chain>` | Cross-chain swap | `zerion swap usdc eth 100 --chain base --to-chain ethereum` |
-| `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens base` |
-| `zerion bridge <token> <chain> <amount>` | Bridge tokens cross-chain | `zerion bridge usdc base 100` |
-| `zerion bridge <token> <chain> <amount> --to-token <tok>` | Bridge + swap on destination | `zerion bridge usdc base 100 --to-token eth` |
-| `zerion send <token> <amount> --to <address> --chain <chain>` | Send tokens | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
+| `zerion swap <chain> <amount> <from-token> <to-token>` | Same-chain swap | `zerion swap base 1 USDC ETH` |
+| `zerion swap solana <amount> <from-token> <to-token>` | Solana same-chain swap | `zerion swap solana 0.1 SOL USDC` |
+| `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens solana` |
+| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>` | Cross-chain bridge / bridge + swap | `zerion bridge base USDC 5 arbitrum USDC` |
+| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-token <tok>` | Bridge + token swap on destination | `zerion bridge base USDC 5 arbitrum ETH` |
+| `zerion bridge … --to-wallet <name>` | Bridge with explicit destination wallet (Solana ↔ EVM) | `zerion bridge ethereum USDC 5 solana USDC --to-wallet sol-bot` |
+| `zerion bridge … --to-address <addr>` | Bridge to a raw destination address | `zerion bridge ethereum USDC 5 solana USDC --to-address 8xLdox…` |
+| `zerion send <token> <amount> --to <address> [--chain <chain>]` | Send tokens (chain auto-detected from address format) | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
+| `zerion send SOL <amount> --to <solana-pubkey>` | Send native SOL on Solana | `zerion send SOL 0.1 --to 2Nsnn…` |
 
 ### Wallet Management
 
@@ -300,11 +303,12 @@ Track wallets by name without exposing addresses in commands.
 
 | Flag | Description |
 |------|-------------|
-| `--wallet <name>` | Specify wallet (default: from config) |
+| `--wallet <name>` | Source wallet (default: from config) |
 | `--address <addr\|ens>` | Use raw address or ENS name |
 | `--watch <name>` | Use watched wallet by name |
-| `--chain <chain>` | Specify chain (default: `ethereum`) |
-| `--to-chain <chain>` | Destination chain for cross-chain swaps |
+| `--chain <chain>` | Chain for analysis commands (default: `ethereum`) |
+| `--to-wallet <name>` | Destination wallet for `bridge` (Solana ↔ EVM) |
+| `--to-address <addr>` | Destination address for `bridge` (must match destination-chain format) |
 | `--positions all\|simple\|defi` | Filter positions type |
 | `--limit <n>` | Limit results (default: 20 for list ops) |
 | `--offset <n>` | Skip first N results (pagination) |

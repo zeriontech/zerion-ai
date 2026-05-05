@@ -30,6 +30,20 @@ Requires Node.js ≥ 20. For auth see the `zerion` umbrella skill.
 
 For on-chain actions with a wallet → `zerion-trading`. For agent-token setup on a wallet → `zerion-agent-management`.
 
+### Wallets and chains
+
+A mnemonic-derived wallet (created via `wallet create` or `wallet import --mnemonic`) holds **both** an EVM and a Solana account, so the same wallet can sign on either chain and act as a destination for cross-chain bridges in either direction.
+
+A wallet imported from a single private key holds only one chain's account:
+
+| Import flag | Account type | Can swap on | Can be cross-chain destination for |
+|-------------|--------------|-------------|-------------------------------------|
+| `--mnemonic` | EVM + Solana | both | both |
+| `--evm-key` | EVM only | EVM chains | EVM chains |
+| `--sol-key` | Solana only | Solana | Solana |
+
+`wallet list` shows which accounts each wallet has. Use this when picking `--to-wallet` for a cross-chain bridge — the destination wallet must have an account on the target chain.
+
 ## Agent vs manual operations
 
 | Operation | Type | Notes |

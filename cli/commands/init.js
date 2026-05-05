@@ -118,7 +118,7 @@ function printSuccessSummary() {
   log("  Try it out:");
   log("    → Analyze a wallet  zerion analyze vitalik.eth");
   log("    → Portfolio         zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-  log("    → Trade             zerion swap usdc eth 100 --chain ethereum");
+  log("    → Trade             zerion swap ethereum 100 USDC ETH");
   log("");
   log("  → All commands: zerion --help");
   log("");
