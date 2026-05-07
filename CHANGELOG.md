@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/zeriontech/zerion-ai/compare/v1.0.1...v1.1.0) (2026-05-07)
+
+
+### Features
+
+* add zerion-partner-skill-creator skill ([#51](https://github.com/zeriontech/zerion-ai/issues/51)) ([9c4b38c](https://github.com/zeriontech/zerion-ai/commit/9c4b38c409d141214d38f264e2d8e1123d9bebdf))
+
+
+### Bug Fixes
+
+* **cli:** make `zerion init` skills step interactive by default ([#49](https://github.com/zeriontech/zerion-ai/issues/49)) ([e3634bd](https://github.com/zeriontech/zerion-ai/commit/e3634bd7b27fa29532857afc8d58a6edc128243a))
+
 ## [1.0.1](https://github.com/zeriontech/zerion-ai/compare/v1.0.0...v1.0.1) (2026-05-05)
 
 
