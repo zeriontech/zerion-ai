@@ -75,6 +75,7 @@ A policy is a set of rules a token must pass before signing. **At least one rule
 ```bash
 # Chain lock — restrict to specific chains
 zerion agent create-policy --name safe-base --chains base,arbitrum
+zerion agent create-policy --name monad-only --chains monad
 
 # Expiry — token deactivates after duration (e.g. 24h, 7d)
 zerion agent create-policy --name short-lived --expires 7d

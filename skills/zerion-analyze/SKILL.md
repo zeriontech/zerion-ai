@@ -95,7 +95,7 @@ zerion analyze --watch vit
 1. Run `zerion analyze <address>` for the broad picture.
 2. Drill into specifics if needed:
    - DeFi-only: `zerion positions <address> --positions defi`
-   - Single chain: `zerion positions <address> --chain ethereum`
+   - Single chain: `zerion positions <address> --chain ethereum` (or `--chain monad`)
    - More transactions: `zerion history <address> --limit 25`
 3. For repeat monitoring, add to watchlist: `zerion watch <addr> --name <label>`.
 

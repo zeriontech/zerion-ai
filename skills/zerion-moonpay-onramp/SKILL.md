@@ -46,6 +46,7 @@ MoonPay returns a checkout URL — complete payment in browser. Funds arrive in 
 | Ethereum | `eth_ethereum` | Ethereum |
 | Solana | `sol_solana` | Solana |
 | Polygon | `pol_polygon` | Polygon |
+| Monad | `mon_mon` | Monad |
 | USDC (Ethereum) | `usdc_ethereum` | Ethereum |
 | USDC (Solana) | `usdc_solana` | Solana |
 

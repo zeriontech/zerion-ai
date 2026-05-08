@@ -36,6 +36,7 @@ For on-chain transactions (swap/bridge/send) → `zerion-trading`.
 # EIP-191 personal_sign (EVM)
 zerion sign-message "hello" --chain ethereum
 zerion sign-message "hello" --chain base --wallet <name>
+zerion sign-message "gmonad" --chain monad
 
 # Raw hex bytes (no prefix, used by some wallets)
 zerion sign-message 0xdeadbeef --encoding hex --chain ethereum
