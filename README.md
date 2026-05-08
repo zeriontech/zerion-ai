@@ -27,19 +27,34 @@ Requires Node.js 20 or later.
 
 ## Agent skills
 
-Seven skills ship in this repo (under [`./skills/`](./skills/)):
+All skills live under [`./skills/`](./skills/) and follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
 
-| Skill | What it does | Source |
-|-------|--------------|--------|
-| [`zerion`](./skills/zerion/SKILL.md) | Umbrella: install, authentication, routing to specific skills, chains reference | Zerion |
-| [`zerion-analyze`](./skills/zerion-analyze/SKILL.md) | Portfolio, positions, history, PnL, analyze, token search, watchlist (read-only; supports x402 / MPP) | Zerion |
-| [`zerion-trading`](./skills/zerion-trading/SKILL.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) | Zerion |
-| [`zerion-sign`](./skills/zerion-sign/SKILL.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) | Zerion |
-| [`zerion-wallet`](./skills/zerion-wallet/SKILL.md) | Wallet management — create, import, list, fund, backup, delete, sync | Zerion |
-| [`zerion-agent-management`](./skills/zerion-agent-management/SKILL.md) | Agent tokens + policies (the autonomous-trading primitives) | Zerion |
-| [`zerion-sendai-ideas`](./skills/zerion-sendai-ideas/SKILL.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | Adapted from [sendaifun/solana-new](https://github.com/sendaifun/solana-new/tree/main/skills/idea) (MIT) |
+### Core skills (Zerion)
 
-Skills follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
+| Skill | What it does |
+|-------|--------------|
+| [`zerion`](./skills/zerion/SKILL.md) | Umbrella: install, authentication, routing to specific skills, chains reference |
+| [`zerion-analyze`](./skills/zerion-analyze/SKILL.md) | Portfolio, positions, history, PnL, analyze, token search, watchlist (read-only; supports x402 / MPP) |
+| [`zerion-trading`](./skills/zerion-trading/SKILL.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
+| [`zerion-sign`](./skills/zerion-sign/SKILL.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
+| [`zerion-wallet`](./skills/zerion-wallet/SKILL.md) | Wallet management — create, import, list, fund, backup, delete, sync |
+| [`zerion-agent-management`](./skills/zerion-agent-management/SKILL.md) | Agent tokens + policies (the autonomous-trading primitives) |
+
+### Partner skills
+
+Skills contributed by ecosystem partners that combine their product with the Zerion CLI. See [`zerion-partner-skill-creator`](./skills/zerion-partner-skill-creator/SKILL.md) to contribute one.
+
+| Skill | What it does | Partner |
+|-------|--------------|---------|
+| [`zerion-monad-addresses`](./skills/zerion-monad-addresses/SKILL.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
+| [`zerion-moonpay-onramp`](./skills/zerion-moonpay-onramp/SKILL.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
+| [`zerion-moonpay-iron`](./skills/zerion-moonpay-iron/SKILL.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
+| [`zerion-moonpay-predict`](./skills/zerion-moonpay-predict/SKILL.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
+| [`zerion-sendai-ideas`](./skills/zerion-sendai-ideas/SKILL.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | [SendAI](https://github.com/sendaifun/solana-new) (MIT) |
+| [`zerion-somnia-blockchain`](./skills/zerion-somnia-blockchain/SKILL.md) | Somnia L1 reference — network info, gas model, deployment guidance | [Somnia](https://somnia.network) |
+| [`zerion-somnia-reactivity`](./skills/zerion-somnia-reactivity/SKILL.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
+| [`zerion-trails-crosschainswap`](./skills/zerion-trails-crosschainswap/SKILL.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
+| [`zerion-trails-deposit`](./skills/zerion-trails-deposit/SKILL.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
 
 ### Install via zerion CLI (recommended)
 
