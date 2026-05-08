@@ -98,13 +98,13 @@ async function buildQuoteRequest({
     "slippage_percent": slippage ?? getConfigValue("slippage") ?? DEFAULT_SLIPPAGE,
   };
 
-  // Cross-chain destinations are passed as the top-level `to` param, NOT
-  // `output[to]`. /swap/quotes/ defaults `to` to `from` when omitted, which
-  // breaks Solana ↔ EVM bridges (chain types don't match). Always send `to`
-  // when we have one different from `from`.
-  if (outputReceiver && outputReceiver !== walletAddress) {
-    params.to = outputReceiver;
-  }
+  // The /swap/quotes/ endpoint requires `to` on every request — it used to
+  // default to `from` when omitted, but the API now rejects with
+  // "'to' is required". Always send it. For same-wallet bridges this is
+  // the source signer's address on the destination chain (resolved by
+  // resolveDestination upstream); for Solana ↔ EVM it's the user-provided
+  // receiver. Receivers must be passed at the top level, NOT `output[to]`.
+  params.to = outputReceiver || walletAddress;
 
   return { params, fromResolved, toResolved };
 }

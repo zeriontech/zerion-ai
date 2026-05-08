@@ -90,8 +90,9 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
     assert.equal(req.searchParams.get("input[chain_id]"), "ethereum");
     assert.equal(req.searchParams.get("input[amount]"), "0.1");
     assert.equal(req.searchParams.get("output[chain_id]"), "ethereum");
-    // Same-chain swap — no `to` (defaults to `from`)
-    assert.equal(req.searchParams.has("to"), false);
+    // /swap/quotes/ requires `to` on every request — same-wallet bridges
+    // send the signer's address as the receiver, not omit the param.
+    assert.equal(req.searchParams.get("to"), sender);
     assert.equal(req.searchParams.has("output[to]"), false);
     // Old endpoint params must NOT be present
     assert.equal(req.searchParams.has("input[from]"), false);
