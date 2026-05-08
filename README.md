@@ -7,11 +7,7 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bri
 
 ## Installation
 
-```bash
-npm install -g zerion-cli
-```
-
-Or set up everything in one command (install CLI globally, configure your API key, and add skills across all detected coding agents):
+Set up everything in one command (install CLI globally, configure your API key, and add skills across all detected coding agents):
 
 ```bash
 npx -y zerion-cli init -y --browser
@@ -20,6 +16,12 @@ npx -y zerion-cli init -y --browser
 - `-y` runs setup non-interactively
 - `--browser` opens [dashboard.zerion.io](https://dashboard.zerion.io) so you can grab an API key and paste it back
 - skills install globally to every detected AI coding agent by default
+
+Or just install the CLI without setup:
+
+```bash
+npm install -g zerion-cli
+```
 
 Requires Node.js 20 or later.
 
