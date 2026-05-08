@@ -1,4 +1,4 @@
-import { getSwapOffers, pickOffer, executeSwap } from "../../utils/trading/swap.js";
+import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { print, printError } from "../../utils/common/output.js";
@@ -44,24 +44,27 @@ export default async function bridge(args, flags) {
   }
 
   // parseFlags treats any next non-`--` token as the flag value (so
-  // `--fast arbitrum` consumes "arbitrum" as the value), and the explicit
-  // `--no-fast` form yields `false`. Treat both `undefined` and `false` as
-  // "flag not set"; only reject string/number values that suggest the user
-  // meant to pass a value.
-  const isUnset = (v) => v === undefined || v === false;
-  const isStrictTrue = (v) => v === true;
-
-  if (!isUnset(flags.fast) && !isStrictTrue(flags.fast)) {
-    printError("invalid_flag_value", `--fast does not take a value (got "${flags.fast}"). Pass --fast on its own at the end of the command.`);
+  // `--fast arbitrum` consumes "arbitrum" as the value), the `--key=value`
+  // form preserves the value as a string, and `--no-fast` yields `false`.
+  // We want all of these to behave naturally:
+  //   --fast            (true)        → enabled
+  //   --fast=true       ("true")      → enabled
+  //   --fast=false      ("false")     → disabled (unset)
+  //   --no-fast         (false)       → disabled (unset)
+  //   --fast arbitrum   ("arbitrum")  → REJECT (positional consumed)
+  function coerceBoolFlag(value, name) {
+    if (value === undefined) return false;
+    if (value === true || value === "true") return true;
+    if (value === false || value === "false") return false;
+    printError(
+      "invalid_flag_value",
+      `--${name} does not take a value (got "${value}"). Pass --${name} on its own at the end of the command, or use --${name}=true / --no-${name}.`,
+    );
     process.exit(1);
   }
-  if (!isUnset(flags.cheapest) && !isStrictTrue(flags.cheapest)) {
-    printError("invalid_flag_value", `--cheapest does not take a value (got "${flags.cheapest}"). Pass --cheapest on its own at the end of the command.`);
-    process.exit(1);
-  }
 
-  const fastFlag = isStrictTrue(flags.fast);
-  const cheapestFlag = isStrictTrue(flags.cheapest);
+  const fastFlag = coerceBoolFlag(flags.fast, "fast");
+  const cheapestFlag = coerceBoolFlag(flags.cheapest, "cheapest");
   if (fastFlag && cheapestFlag) {
     printError("conflicting_flags", "Pass either --fast or --cheapest, not both.", {
       suggestion: "Pick one strategy.",
@@ -131,7 +134,10 @@ export default async function bridge(args, flags) {
         estimatedOutput: q.estimatedOutput,
         estimatedSeconds: q.estimatedSeconds,
         fee: q.fee,
-        executable: q.blocking == null,
+        // Match pickOffer's selection logic — an offer with no blocking
+        // error but missing transaction data would otherwise show as
+        // `ready` here and get silently skipped at execution.
+        executable: isQuoteExecutable(q),
         blocking: q.blocking,
       }));
       print({

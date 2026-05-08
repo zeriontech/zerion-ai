@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { getSwapQuote, getSwapOffers, selectOffer, pickOffer } from "#zerion/utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, selectOffer, pickOffer, isQuoteExecutable } from "#zerion/utils/trading/swap.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.ZERION_API_KEY;
@@ -285,6 +285,22 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
       { id: "b", estimatedOutput: "120", blocking: null, transactionSwap: {} },
     ];
     assert.equal(pickOffer(quotes, "fast").id, "b", "should fall through to cheapest when no time data");
+  });
+
+  it("isQuoteExecutable agrees with pickOffer's selection (no drift between display and execution)", () => {
+    const blockedQuote = { blocking: { code: "x" }, transactionSwap: {} };
+    const noTxQuote = { blocking: null, transactionSwap: null, transactionSwapSolana: null };
+    const evmQuote = { blocking: null, transactionSwap: { to: "0x" } };
+    const solanaQuote = { blocking: null, transactionSwapSolana: { raw: "abc" } };
+
+    assert.equal(isQuoteExecutable(blockedQuote), false, "blocked offer must not be marked executable");
+    assert.equal(isQuoteExecutable(noTxQuote), false, "no-error/no-tx offer must not be marked executable");
+    assert.equal(isQuoteExecutable(evmQuote), true);
+    assert.equal(isQuoteExecutable(solanaQuote), true);
+
+    // Cross-check with pickOffer: the same predicate drives selection.
+    const picked = pickOffer([noTxQuote, evmQuote], "cheapest");
+    assert.notEqual(picked, noTxQuote, "pickOffer must skip no-tx quote even when blocking is null");
   });
 
   it("getSwapOffers throws no_route when API returns empty data", async () => {

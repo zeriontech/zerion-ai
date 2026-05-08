@@ -83,9 +83,8 @@ Move (and optionally swap) tokens **between chains**. Bridge with the same token
 
 Rules:
 - `--fast` and `--cheapest` together is rejected.
-- Strategy flags MUST appear last on the command line (or with `=` form, e.g. `--fast=true`). `parseFlags` will otherwise consume the next positional token as the flag value — the CLI errors with `invalid_flag_value` rather than silently picking up a chain name as the flag value.
-- `--no-fast` / `--no-cheapest` are accepted (treated as unset).
-- `--slippage` is now validated: must be a number between 0 and 100. `--slippage abc`, `--slippage -5`, `--slippage 200` all reject with `invalid_slippage`.
+- Supported flag forms: bare `--fast` (must be last on the command line so `parseFlags` doesn't consume the next positional as the value), `--fast=true` / `--fast=false`, and `--no-fast` (equivalent to `--fast=false`). Same shape applies to `--cheapest`. Anything else (e.g. `--fast=cheapest`, `--fast arbitrum`) errors with `invalid_flag_value`.
+- `--slippage` is validated: must be a number between 0 and 100. `--slippage=abc`, `--slippage=2abc`, `--slippage=-5`, `--slippage=200` all reject with `invalid_slippage`. Strict numeric parse — no partial-string matches.
 
 ```bash
 # zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token> [--fast | --cheapest]

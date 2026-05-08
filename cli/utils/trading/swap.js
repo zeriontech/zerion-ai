@@ -182,13 +182,23 @@ export function selectOffer(offers, strategy = "cheapest") {
   return pool.reduce((best, o) => (numericOut(o) > numericOut(best) ? o : best));
 }
 
+// True iff the quote can be signed and broadcast: no API-side blocking
+// error AND a transaction payload is present. `bridge` reuses this so the
+// "executable" flag in list-mode output matches what `pickOffer` would
+// actually select — otherwise a no-error/no-tx offer would render as
+// `ready` and silently get skipped at execution time.
+export function isQuoteExecutable(quote) {
+  if (!quote || quote.blocking != null) return false;
+  return Boolean(quote.transactionSwap || quote.transactionSwapSolana);
+}
+
 // Mapped-quote selection — same strategy semantics as selectOffer, but works
 // on the post-`offerToQuote` shape so callers (`bridge`) don't have to refetch
 // the API to get a single quote after listing offers.
 export function pickOffer(quotes, strategy = "cheapest") {
   if (!quotes.length) return null;
 
-  const executable = quotes.filter((q) => q.blocking == null && (q.transactionSwap || q.transactionSwapSolana));
+  const executable = quotes.filter(isQuoteExecutable);
   const pool = executable.length ? executable : quotes;
 
   if (strategy === "fast") {

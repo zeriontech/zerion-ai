@@ -62,10 +62,10 @@ describe("bridge — early-exit validation", () => {
     assert.match(err.example, /^zerion swap base/);
   });
 
-  it("rejects --fast with a string value (parseFlags consumed a positional)", () => {
-    // `bridge base USDC 5 arbitrum USDC --fast=false` → flags.fast = "false"
+  it("rejects --fast with a non-boolean string value", () => {
+    // `--fast=anything` is a real value; only "true"/"false" are accepted.
     const { exitCode, stderr } = runBridge([
-      "base", "USDC", "5", "arbitrum", "USDC", "--fast=false",
+      "base", "USDC", "5", "arbitrum", "USDC", "--fast=cheapest",
     ]);
     assert.equal(exitCode, 1);
     const err = parseError(stderr);
@@ -73,7 +73,25 @@ describe("bridge — early-exit validation", () => {
     assert.match(err.message, /--fast does not take a value/);
   });
 
-  it("rejects --cheapest with a string value", () => {
+  it("accepts --fast=true and --fast=false", () => {
+    // Both forms are valid bool-flag conventions. `--fast=false` should
+    // behave like the flag is unset, not like an error.
+    for (const form of ["--fast=true", "--fast=false"]) {
+      const { stderr } = runBridge([
+        "base", "USDC", "5", "arbitrum", "USDC", form,
+      ]);
+      const err = parseError(stderr);
+      if (err) {
+        assert.notEqual(
+          err.code,
+          "invalid_flag_value",
+          `${form} should be accepted as a boolean form`,
+        );
+      }
+    }
+  });
+
+  it("rejects --cheapest with a non-boolean string value", () => {
     const { exitCode, stderr } = runBridge([
       "base", "USDC", "5", "arbitrum", "USDC", "--cheapest=anything",
     ]);
@@ -108,7 +126,7 @@ describe("bridge — early-exit validation", () => {
   });
 
   it("rejects invalid slippage values", () => {
-    for (const bad of ["abc", "-5", "200"]) {
+    for (const bad of ["abc", "-5", "200", "2abc", "2.5xyz", " "]) {
       const { exitCode, stderr } = runBridge([
         "base", "USDC", "5", "arbitrum", "USDC", `--slippage=${bad}`, "--cheapest",
       ]);

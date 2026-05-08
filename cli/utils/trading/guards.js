@@ -178,7 +178,18 @@ export function parseSlippage(value) {
     });
     process.exit(1);
   }
-  const n = parseFloat(value);
+  // `parseFloat` would accept "2abc" as 2 — silently passing a malformed
+  // value through to the swap API. `Number()` rejects partial-numeric
+  // strings (returns NaN), which is what we want for a strict CLI flag.
+  // Trim whitespace first so " 2 " is still accepted, and reject the
+  // post-trim empty case (Number("") returns 0, which would slip through).
+  let n;
+  if (typeof value === "number") {
+    n = value;
+  } else {
+    const trimmed = String(value).trim();
+    n = trimmed === "" ? NaN : Number(trimmed);
+  }
   if (!Number.isFinite(n) || n < 0 || n > 100) {
     printError("invalid_slippage", `Invalid slippage: ${value}`, {
       suggestion: "Slippage must be a number between 0 and 100 (percent), e.g. --slippage 2",
