@@ -300,7 +300,26 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
 
     // Cross-check with pickOffer: the same predicate drives selection.
     const picked = pickOffer([noTxQuote, evmQuote], "cheapest");
-    assert.notEqual(picked, noTxQuote, "pickOffer must skip no-tx quote even when blocking is null");
+    assert.equal(picked, evmQuote, "pickOffer must skip no-tx quote even when blocking is null");
+  });
+
+  it("pickOffer returns null when no quotes are executable AND none carry blocking errors", () => {
+    // No-tx + no-error means there is nothing signable AND nothing
+    // actionable. Treat as routing failure (caller surfaces no_route).
+    const quotes = [
+      { blocking: null, transactionSwap: null, estimatedOutput: "100" },
+      { blocking: null, transactionSwap: null, estimatedOutput: "120" },
+    ];
+    assert.equal(pickOffer(quotes, "cheapest"), null);
+  });
+
+  it("pickOffer returns the best blocked-with-error quote when nothing is executable (so executeSwap can surface the API error)", () => {
+    const quotes = [
+      { id: "small", blocking: { code: "minimum_input_amount" }, transactionSwap: null, estimatedOutput: "10" },
+      { id: "big",   blocking: { code: "minimum_input_amount" }, transactionSwap: null, estimatedOutput: "999" },
+    ];
+    const picked = pickOffer(quotes, "cheapest");
+    assert.equal(picked.id, "big");
   });
 
   it("getSwapOffers throws no_route when API returns empty data", async () => {

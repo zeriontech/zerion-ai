@@ -195,24 +195,40 @@ export function isQuoteExecutable(quote) {
 // Mapped-quote selection — same strategy semantics as selectOffer, but works
 // on the post-`offerToQuote` shape so callers (`bridge`) don't have to refetch
 // the API to get a single quote after listing offers.
+//
+// Selection order:
+//   1. If any executable quote exists → pick from those by strategy.
+//   2. Else if any blocked quote has a real API error → return the
+//      highest-output one so executeSwap can surface that error message.
+//   3. Else (only no-tx / no-error quotes) → return null. The caller
+//      treats this as no_route, which is correct: nothing in the response
+//      is signable AND nothing in the response carries actionable info.
 export function pickOffer(quotes, strategy = "cheapest") {
   if (!quotes.length) return null;
-
-  const executable = quotes.filter(isQuoteExecutable);
-  const pool = executable.length ? executable : quotes;
-
-  if (strategy === "fast") {
-    const timed = pool.filter((q) => Number.isFinite(q.estimatedSeconds));
-    if (timed.length) {
-      return timed.reduce((best, q) => (q.estimatedSeconds < best.estimatedSeconds ? q : best));
-    }
-  }
 
   const out = (q) => {
     const n = parseFloat(q.estimatedOutput);
     return Number.isFinite(n) ? n : -Infinity;
   };
-  return pool.reduce((best, q) => (out(q) > out(best) ? q : best));
+
+  const executable = quotes.filter(isQuoteExecutable);
+  if (executable.length) {
+    if (strategy === "fast") {
+      const timed = executable.filter((q) => Number.isFinite(q.estimatedSeconds));
+      if (timed.length) {
+        return timed.reduce((best, q) => (q.estimatedSeconds < best.estimatedSeconds ? q : best));
+      }
+    }
+    return executable.reduce((best, q) => (out(q) > out(best) ? q : best));
+  }
+
+  // No executable quotes — surface the best blocked-with-error candidate so
+  // executeSwap throws a meaningful message. If even that's missing (no
+  // executable AND no blocking error), there is nothing signable here and
+  // the caller should treat it as a routing failure.
+  const informative = quotes.filter((q) => q.blocking != null);
+  if (!informative.length) return null;
+  return informative.reduce((best, q) => (out(q) > out(best) ? q : best));
 }
 
 function noRouteError(amount, fromResolved, toResolved, fromChain) {
