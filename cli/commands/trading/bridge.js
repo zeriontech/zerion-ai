@@ -128,6 +128,34 @@ export default async function bridge(args, flags) {
   try {
     const offers = await getSwapOffers(quoteInput);
 
+    // If every offer is blocked (insufficient balance, output too small,
+    // etc.), there is nothing the user can pick — bail out with the most
+    // common blocking reason rather than printing a list of unactionable
+    // routes. Agents can still re-fetch with --raw or inspect via the JSON
+    // path; this handles the human-typed-it case cleanly.
+    const executableOffers = offers.filter(isQuoteExecutable);
+    if (executableOffers.length === 0) {
+      const blockingCodes = new Set(offers.map((o) => o.blocking?.code).filter(Boolean));
+      const allInsufficientBalance =
+        blockingCodes.size === 1 && blockingCodes.has("not_enough_input_asset_balance");
+      if (allInsufficientBalance) {
+        const sym = offers[0].from?.symbol || fromToken;
+        printError(
+          "insufficient_funds",
+          `Insufficient ${sym} balance on ${fromChain} to bridge ${amount} ${fromToken}.`,
+          {
+            wallet: walletName,
+            address,
+            suggestion: `Fund the wallet (\`zerion wallet fund --wallet ${walletName}\`) or try a smaller amount.`,
+          },
+        );
+        process.exit(1);
+      }
+      // Mixed blocking reasons or no blocking codes at all — list the
+      // offers anyway so the user can read why each route failed; the
+      // table's status column shows the reason per row.
+    }
+
     if (!strategy && offers.length > 1) {
       const offerList = offers.map((q) => ({
         provider: q.liquiditySource,

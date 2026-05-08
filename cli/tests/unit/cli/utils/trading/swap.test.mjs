@@ -323,6 +323,22 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
     assert.equal(picked.id, "big");
   });
 
+  it("isQuoteExecutable distinguishes 'no executable in pool' from 'all blocked for the same reason' (drives bridge's early-exit on insufficient balance)", () => {
+    // Three offers all blocked by `not_enough_input_asset_balance`. None are
+    // executable, but all share the same blocking code — the bridge command
+    // collapses this into a single insufficient_funds error rather than
+    // printing a table of unactionable routes.
+    const offers = [
+      { blocking: { code: "not_enough_input_asset_balance" }, transactionSwap: null, estimatedOutput: "1.0" },
+      { blocking: { code: "not_enough_input_asset_balance" }, transactionSwap: null, estimatedOutput: "0.99" },
+      { blocking: { code: "not_enough_input_asset_balance" }, transactionSwap: null, estimatedOutput: "0.98" },
+    ];
+    assert.equal(offers.filter(isQuoteExecutable).length, 0);
+    const blockingCodes = new Set(offers.map((o) => o.blocking?.code).filter(Boolean));
+    assert.equal(blockingCodes.size, 1);
+    assert.ok(blockingCodes.has("not_enough_input_asset_balance"));
+  });
+
   it("getSwapOffers throws no_route when API returns empty data", async () => {
     globalThis.fetch = async () =>
       new Response(JSON.stringify({ data: [] }), {
