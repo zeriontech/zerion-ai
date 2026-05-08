@@ -33,7 +33,9 @@ describe("fetchAPI — User-Agent header", () => {
 
     const ua = capturedHeaders["User-Agent"];
     assert.ok(ua, "User-Agent header was not sent");
-    assert.match(ua, /^zerion-cli(\/\d+\.\d+\.\d+(-\S+)?)?$/, `unexpected UA: ${ua}`);
+    // Strict version check — bare `zerion-cli` is the package.json-missing
+    // fallback and would mean fee attribution by version is broken.
+    assert.match(ua, /^zerion-cli\/\d+\.\d+\.\d+(-\S+)?$/, `unexpected UA: ${ua}`);
   });
 
   it("sends Accept and Authorization alongside User-Agent", async () => {
@@ -48,5 +50,24 @@ describe("fetchAPI — User-Agent header", () => {
     assert.equal(capturedHeaders.Accept, "application/json");
     assert.ok(capturedHeaders.Authorization?.startsWith("Basic "));
     assert.ok(capturedHeaders["User-Agent"]);
+  });
+
+  // x402 and MPP wrap `fetch` and forward `(url, options)` unchanged. The
+  // headers we set in fetchAPI must reach the underlying fetch the wrapper
+  // calls. Here we mock the wrapper at its lowest layer (globalThis.fetch
+  // — both wrappers ultimately call it) and assert the UA propagates.
+  it("propagates User-Agent through fetch wrapper layers", async () => {
+    let capturedHeaders;
+    globalThis.fetch = async (_url, opts) => {
+      capturedHeaders = opts?.headers || {};
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    await fetchAPI("/chains/");
+
+    assert.ok(
+      capturedHeaders["User-Agent"]?.startsWith("zerion-cli"),
+      "User-Agent must reach the underlying fetch even when wrappers are in play"
+    );
   });
 });

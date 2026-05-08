@@ -148,7 +148,7 @@ function isExecutable(offer) {
   return Boolean(a.transaction_swap?.evm || a.transaction_swap?.solana);
 }
 
-// Offer selection strategies.
+// Offer selection strategies — operate on RAW API offers (`offer.attributes…`).
 //   "cheapest": highest net `output_amount` (matches API's default sort).
 //   "fast":     lowest `estimated_time_seconds`. Offers with no time data
 //               fall back to "cheapest" ordering.
@@ -171,12 +171,38 @@ export function selectOffer(offers, strategy = "cheapest") {
     // No time data on any offer — fall through to cheapest.
   }
 
-  // "cheapest" — pick max output_amount.quantity (numeric compare).
-  return pool.reduce((best, o) => {
-    const bestOut = parseFloat(best.attributes?.output_amount?.quantity || "0");
-    const oOut = parseFloat(o.attributes?.output_amount?.quantity || "0");
-    return oOut > bestOut ? o : best;
-  });
+  // "cheapest" — pick max output_amount.quantity. parseFloat returns NaN for
+  // non-numeric strings; treat any non-finite (NaN, Infinity, missing) as
+  // ineligible so a malformed first offer can't anchor the reducer and beat
+  // every later candidate.
+  const numericOut = (o) => {
+    const n = parseFloat(o.attributes?.output_amount?.quantity);
+    return Number.isFinite(n) ? n : -Infinity;
+  };
+  return pool.reduce((best, o) => (numericOut(o) > numericOut(best) ? o : best));
+}
+
+// Mapped-quote selection — same strategy semantics as selectOffer, but works
+// on the post-`offerToQuote` shape so callers (`bridge`) don't have to refetch
+// the API to get a single quote after listing offers.
+export function pickOffer(quotes, strategy = "cheapest") {
+  if (!quotes.length) return null;
+
+  const executable = quotes.filter((q) => q.blocking == null && (q.transactionSwap || q.transactionSwapSolana));
+  const pool = executable.length ? executable : quotes;
+
+  if (strategy === "fast") {
+    const timed = pool.filter((q) => Number.isFinite(q.estimatedSeconds));
+    if (timed.length) {
+      return timed.reduce((best, q) => (q.estimatedSeconds < best.estimatedSeconds ? q : best));
+    }
+  }
+
+  const out = (q) => {
+    const n = parseFloat(q.estimatedOutput);
+    return Number.isFinite(n) ? n : -Infinity;
+  };
+  return pool.reduce((best, q) => (out(q) > out(best) ? q : best));
 }
 
 function noRouteError(amount, fromResolved, toResolved, fromChain) {

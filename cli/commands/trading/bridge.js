@@ -1,5 +1,5 @@
-import { getSwapQuote, getSwapOffers, executeSwap } from "../../utils/trading/swap.js";
-import { requireAgentToken, parseTimeout, handleTradingError } from "../../utils/trading/guards.js";
+import { getSwapOffers, pickOffer, executeSwap } from "../../utils/trading/swap.js";
+import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { print, printError } from "../../utils/common/output.js";
 import { formatBridgeOffers } from "../../utils/common/format.js";
@@ -43,13 +43,37 @@ export default async function bridge(args, flags) {
     process.exit(1);
   }
 
-  if (flags.fast && flags.cheapest) {
+  // parseFlags treats any next non-`--` token as the flag value (so
+  // `--fast arbitrum` consumes "arbitrum" as the value), and the explicit
+  // `--no-fast` form yields `false`. Treat both `undefined` and `false` as
+  // "flag not set"; only reject string/number values that suggest the user
+  // meant to pass a value.
+  const isUnset = (v) => v === undefined || v === false;
+  const isStrictTrue = (v) => v === true;
+
+  if (!isUnset(flags.fast) && !isStrictTrue(flags.fast)) {
+    printError("invalid_flag_value", `--fast does not take a value (got "${flags.fast}"). Pass --fast on its own at the end of the command.`);
+    process.exit(1);
+  }
+  if (!isUnset(flags.cheapest) && !isStrictTrue(flags.cheapest)) {
+    printError("invalid_flag_value", `--cheapest does not take a value (got "${flags.cheapest}"). Pass --cheapest on its own at the end of the command.`);
+    process.exit(1);
+  }
+
+  const fastFlag = isStrictTrue(flags.fast);
+  const cheapestFlag = isStrictTrue(flags.cheapest);
+  if (fastFlag && cheapestFlag) {
     printError("conflicting_flags", "Pass either --fast or --cheapest, not both.", {
       suggestion: "Pick one strategy.",
     });
     process.exit(1);
   }
-  const strategy = flags.fast ? "fast" : flags.cheapest ? "cheapest" : null;
+  const strategy = fastFlag ? "fast" : cheapestFlag ? "cheapest" : null;
+
+  // Parse slippage up-front so a malformed value fails fast — before we hit
+  // the chain catalog API or resolve a wallet. Otherwise an invalid slippage
+  // surfaces only after a network round-trip.
+  const slippage = parseSlippage(flags.slippage);
 
   // Source wallet resolves against fromChain — Solana sources get base58, EVM sources get 0x.
   const { walletName, address } = resolveWallet({ ...flags, chain: fromChain });
@@ -78,7 +102,6 @@ export default async function bridge(args, flags) {
     process.exit(1);
   }
 
-  const slippage = flags.slippage ? parseFloat(flags.slippage) : undefined;
   const quoteInput = {
     fromToken,
     toToken,
@@ -90,46 +113,54 @@ export default async function bridge(args, flags) {
     slippage,
   };
 
-  // No strategy flag — list mode. Multi-offer responses surface every
-  // provider so the agent can pick. Single-offer responses fall through
-  // to execution since there is no choice to make.
-  if (!strategy) {
-    try {
-      const offers = await getSwapOffers(quoteInput);
-      if (offers.length > 1) {
-        const offerList = offers.map((q) => ({
-          provider: q.liquiditySource,
-          estimatedOutput: q.estimatedOutput,
-          estimatedSeconds: q.estimatedSeconds,
-          fee: q.fee,
-          executable: q.blocking == null,
-          blocking: q.blocking,
-        }));
-        print({
-          fromChain,
-          toChain,
-          fromToken,
-          toToken,
-          amount,
-          sender: address,
-          receiver,
-          offers: offerList,
-          count: offerList.length,
-          hint: "Re-run with --fast or --cheapest to execute. Use --cheapest for highest output, --fast for lowest time.",
-          executed: false,
-        }, formatBridgeOffers);
-        return;
-      }
-      // Single offer — fall through to execute below.
-    } catch (err) {
-      handleTradingError(err, "bridge_error");
+  // List and execute paths share the same `/swap/quotes/` fetch — picking
+  // from the offers array we just listed avoids a second round-trip that
+  // could return different routing, which closes the inspect-vs-execute
+  // race WITHIN a single invocation. Note: when the user runs `zerion
+  // bridge` (no flag) to list, then re-runs with `--cheapest`, that's two
+  // invocations, two API calls, and the second offer set may differ —
+  // downstream slippage tolerance / quote expiry / on-chain reverts bound
+  // execution risk in that flow, not this code.
+  let quote;
+  try {
+    const offers = await getSwapOffers(quoteInput);
+
+    if (!strategy && offers.length > 1) {
+      const offerList = offers.map((q) => ({
+        provider: q.liquiditySource,
+        estimatedOutput: q.estimatedOutput,
+        estimatedSeconds: q.estimatedSeconds,
+        fee: q.fee,
+        executable: q.blocking == null,
+        blocking: q.blocking,
+      }));
+      print({
+        fromChain,
+        toChain,
+        fromToken,
+        toToken,
+        amount,
+        sender: address,
+        receiver,
+        offers: offerList,
+        count: offerList.length,
+        hint: "Re-run with --fast or --cheapest to execute. Use --cheapest for highest output, --fast for lowest time.",
+        executed: false,
+      }, formatBridgeOffers);
       return;
     }
+
+    quote = pickOffer(offers, strategy || "cheapest");
+    if (!quote) {
+      printError("no_route", "No executable offer returned for this bridge.");
+      process.exit(1);
+    }
+  } catch (err) {
+    handleTradingError(err, "bridge_error");
+    return;
   }
 
   try {
-    const quote = await getSwapQuote({ ...quoteInput, strategy: strategy || "cheapest" });
-
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance`, {
         suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,

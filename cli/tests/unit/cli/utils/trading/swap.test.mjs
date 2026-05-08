@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { getSwapQuote, getSwapOffers, selectOffer } from "#zerion/utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, selectOffer, pickOffer } from "#zerion/utils/trading/swap.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.ZERION_API_KEY;
@@ -230,6 +230,86 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
 
   it("selectOffer returns null for empty offers", () => {
     assert.equal(selectOffer([], "cheapest"), null);
+  });
+
+  it("selectOffer ignores non-finite output_amount when picking cheapest (NaN/missing don't anchor reducer)", () => {
+    const offers = [
+      // Malformed first offer must NOT win.
+      { id: "broken", attributes: { output_amount: { quantity: "NaN" }, transaction_swap: { evm: {} } } },
+      { id: "missing", attributes: { transaction_swap: { evm: {} } } },
+      { id: "real", attributes: { output_amount: { quantity: "100" }, transaction_swap: { evm: {} } } },
+    ];
+    const picked = selectOffer(offers, "cheapest");
+    assert.equal(picked.id, "real");
+  });
+
+  it("pickOffer (mapped-quote selector) picks max estimatedOutput for 'cheapest'", () => {
+    const quotes = [
+      { id: "a", estimatedOutput: "100", estimatedSeconds: 30, blocking: null, transactionSwap: {} },
+      { id: "b", estimatedOutput: "120", estimatedSeconds: 60, blocking: null, transactionSwap: {} },
+    ];
+    assert.equal(pickOffer(quotes, "cheapest").id, "b");
+  });
+
+  it("pickOffer picks min estimatedSeconds for 'fast'", () => {
+    const quotes = [
+      { id: "slow", estimatedOutput: "120", estimatedSeconds: 90, blocking: null, transactionSwap: {} },
+      { id: "fast", estimatedOutput: "100", estimatedSeconds: 10, blocking: null, transactionSwap: {} },
+    ];
+    assert.equal(pickOffer(quotes, "fast").id, "fast");
+  });
+
+  it("pickOffer prefers executable quotes over blocked ones (mirrors selectOffer)", () => {
+    const quotes = [
+      { id: "blocked", estimatedOutput: "999", blocking: { code: "not_enough_input_asset_balance" }, transactionSwap: null },
+      { id: "ok", estimatedOutput: "100", estimatedSeconds: 30, blocking: null, transactionSwap: {} },
+    ];
+    assert.equal(pickOffer(quotes, "cheapest").id, "ok");
+  });
+
+  it("pickOffer ignores non-finite estimatedOutput when picking cheapest", () => {
+    const quotes = [
+      { id: "broken", estimatedOutput: "NaN", blocking: null, transactionSwap: {} },
+      { id: "real", estimatedOutput: "100", blocking: null, transactionSwap: {} },
+    ];
+    assert.equal(pickOffer(quotes, "cheapest").id, "real");
+  });
+
+  it("pickOffer returns null on empty input", () => {
+    assert.equal(pickOffer([], "cheapest"), null);
+  });
+
+  it("pickOffer 'fast' falls back to cheapest when no quote has estimatedSeconds", () => {
+    const quotes = [
+      { id: "a", estimatedOutput: "100", blocking: null, transactionSwap: {} },
+      { id: "b", estimatedOutput: "120", blocking: null, transactionSwap: {} },
+    ];
+    assert.equal(pickOffer(quotes, "fast").id, "b", "should fall through to cheapest when no time data");
+  });
+
+  it("getSwapOffers throws no_route when API returns empty data", async () => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+
+    await assert.rejects(
+      () => getSwapOffers({
+        fromToken: "ETH",
+        toToken: "USDC",
+        amount: "0.1",
+        fromChain: "ethereum",
+        toChain: "ethereum",
+        walletAddress: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B",
+      }),
+      (err) => {
+        assert.equal(err.code, "no_route");
+        assert.match(err.message, /No swap route found/);
+        assert.ok(err.suggestion, "no_route error should carry a suggestion");
+        return true;
+      },
+    );
   });
 
   it("getSwapOffers returns every API offer mapped to the quote shape", async () => {

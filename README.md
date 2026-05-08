@@ -206,10 +206,11 @@ Requires an API key (or agent token for unattended use).
 | `zerion swap <chain> <amount> <from-token> <to-token>` | Same-chain swap | `zerion swap base 1 USDC ETH` |
 | `zerion swap solana <amount> <from-token> <to-token>` | Solana same-chain swap | `zerion swap solana 0.1 SOL USDC` |
 | `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens solana` |
-| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>` | Cross-chain bridge / bridge + swap | `zerion bridge base USDC 5 arbitrum USDC` |
-| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-token <tok>` | Bridge + token swap on destination | `zerion bridge base USDC 5 arbitrum ETH` |
-| `zerion bridge … --to-wallet <name>` | Bridge with explicit destination wallet (Solana ↔ EVM) | `zerion bridge ethereum USDC 5 solana USDC --to-wallet sol-bot` |
-| `zerion bridge … --to-address <addr>` | Bridge to a raw destination address | `zerion bridge ethereum USDC 5 solana USDC --to-address 8xLdox…` |
+| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>` | List all bridge providers (no execute, multi-offer case) | `zerion bridge base USDC 5 arbitrum USDC` |
+| `zerion bridge … --cheapest` | Execute highest-output bridge route | `zerion bridge base USDC 5 arbitrum USDC --cheapest` |
+| `zerion bridge … --fast` | Execute lowest-time bridge route | `zerion bridge base USDC 5 arbitrum USDC --fast` |
+| `zerion bridge … --to-wallet <name>` | Bridge with explicit destination wallet (Solana ↔ EVM) | `zerion bridge ethereum USDC 5 solana USDC --to-wallet sol-bot --cheapest` |
+| `zerion bridge … --to-address <addr>` | Bridge to a raw destination address | `zerion bridge ethereum USDC 5 solana USDC --to-address 8xLdox… --cheapest` |
 | `zerion send <token> <amount> --to <address> [--chain <chain>]` | Send tokens (chain auto-detected from address format) | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
 | `zerion send SOL <amount> --to <solana-pubkey>` | Send native SOL on Solana | `zerion send SOL 0.1 --to 2Nsnn…` |
 

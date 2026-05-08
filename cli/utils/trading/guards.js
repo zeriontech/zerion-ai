@@ -161,6 +161,34 @@ export function parseTimeout(value) {
 }
 
 /**
+ * Parse and validate a --slippage flag value (percent, 0-100). Returns
+ * undefined when the flag is absent so callers can fall back to defaults
+ * (config or DEFAULT_SLIPPAGE). Rejects negative, NaN, and >100 values that
+ * would otherwise sail through `parseFloat` and reach the swap API.
+ * @param {string|boolean|undefined} value - raw flag value
+ * @returns {number|undefined}
+ */
+export function parseSlippage(value) {
+  if (value === undefined || value === false) return undefined;
+  // `--slippage` with no following value parses as `true`. Treat it the same
+  // as a malformed value — reject rather than silently coerce to NaN.
+  if (typeof value !== "string" && typeof value !== "number") {
+    printError("invalid_slippage", `Invalid slippage: ${value}`, {
+      suggestion: "Slippage must be a number 0–100, e.g. --slippage 2",
+    });
+    process.exit(1);
+  }
+  const n = parseFloat(value);
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    printError("invalid_slippage", `Invalid slippage: ${value}`, {
+      suggestion: "Slippage must be a number between 0 and 100 (percent), e.g. --slippage 2",
+    });
+    process.exit(1);
+  }
+  return n;
+}
+
+/**
  * Shared catch-block handler for trading commands.
  * Detects revoked agent tokens and falls back to a generic error.
  * @param {Error} err
