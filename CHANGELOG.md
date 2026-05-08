@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0](https://github.com/zeriontech/zerion-ai/compare/v1.0.1...v1.1.0) (2026-05-08)
+
+
+### Features
+
+* add Monad skills and examples ([#56](https://github.com/zeriontech/zerion-ai/issues/56)) ([562a8ab](https://github.com/zeriontech/zerion-ai/commit/562a8aba59bab4781bbb6114cbe2875b92e17634))
+* add zerion-partner-skill-creator skill ([#51](https://github.com/zeriontech/zerion-ai/issues/51)) ([9c4b38c](https://github.com/zeriontech/zerion-ai/commit/9c4b38c409d141214d38f264e2d8e1123d9bebdf))
+* **cli:** bridge provider selection, fee attribution, expanded chains list ([#58](https://github.com/zeriontech/zerion-ai/issues/58)) ([50da002](https://github.com/zeriontech/zerion-ai/commit/50da002ae8b4c3e64e91bd6c1347406c961209f3))
+* sendai ideas skills ([#39](https://github.com/zeriontech/zerion-ai/issues/39)) ([b2f5dea](https://github.com/zeriontech/zerion-ai/commit/b2f5dea3ba3833f70646c9ed65e5d07451aca35e))
+
+
+### Bug Fixes
+
+* **cli:** make `zerion init` skills step interactive by default ([#49](https://github.com/zeriontech/zerion-ai/issues/49)) ([e3634bd](https://github.com/zeriontech/zerion-ai/commit/e3634bd7b27fa29532857afc8d58a6edc128243a))
+
 ## [1.0.1](https://github.com/zeriontech/zerion-ai/compare/v1.0.0...v1.0.1) (2026-05-05)
 
 
