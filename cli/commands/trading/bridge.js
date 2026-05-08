@@ -1,12 +1,18 @@
-import { getSwapQuote, executeSwap } from "../../utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, executeSwap } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { print, printError } from "../../utils/common/output.js";
+import { formatBridgeOffers } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
 
 /**
  * Cross-chain bridge (with optional dest-token swap).
- * Usage: zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>
+ * Usage: zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token> [--fast | --cheapest]
+ *
+ * Provider selection:
+ *   no flag  → list all offers and exit (multi-offer case); auto-execute single offer
+ *   --fast   → execute lowest `estimated_time_seconds`
+ *   --cheapest → execute highest net `output_amount` (matches API's default sort)
  *
  * For Solana ↔ EVM, pass --to-wallet or --to-address so the destination
  * receiver matches the dest chain's address format. Otherwise we use the
@@ -37,6 +43,14 @@ export default async function bridge(args, flags) {
     process.exit(1);
   }
 
+  if (flags.fast && flags.cheapest) {
+    printError("conflicting_flags", "Pass either --fast or --cheapest, not both.", {
+      suggestion: "Pick one strategy.",
+    });
+    process.exit(1);
+  }
+  const strategy = flags.fast ? "fast" : flags.cheapest ? "cheapest" : null;
+
   // Source wallet resolves against fromChain — Solana sources get base58, EVM sources get 0x.
   const { walletName, address } = resolveWallet({ ...flags, chain: fromChain });
 
@@ -64,17 +78,57 @@ export default async function bridge(args, flags) {
     process.exit(1);
   }
 
+  const slippage = flags.slippage ? parseFloat(flags.slippage) : undefined;
+  const quoteInput = {
+    fromToken,
+    toToken,
+    amount,
+    fromChain,
+    toChain,
+    walletAddress: address,
+    outputReceiver: receiver,
+    slippage,
+  };
+
+  // No strategy flag — list mode. Multi-offer responses surface every
+  // provider so the agent can pick. Single-offer responses fall through
+  // to execution since there is no choice to make.
+  if (!strategy) {
+    try {
+      const offers = await getSwapOffers(quoteInput);
+      if (offers.length > 1) {
+        const offerList = offers.map((q) => ({
+          provider: q.liquiditySource,
+          estimatedOutput: q.estimatedOutput,
+          estimatedSeconds: q.estimatedSeconds,
+          fee: q.fee,
+          executable: q.blocking == null,
+          blocking: q.blocking,
+        }));
+        print({
+          fromChain,
+          toChain,
+          fromToken,
+          toToken,
+          amount,
+          sender: address,
+          receiver,
+          offers: offerList,
+          count: offerList.length,
+          hint: "Re-run with --fast or --cheapest to execute. Use --cheapest for highest output, --fast for lowest time.",
+          executed: false,
+        }, formatBridgeOffers);
+        return;
+      }
+      // Single offer — fall through to execute below.
+    } catch (err) {
+      handleTradingError(err, "bridge_error");
+      return;
+    }
+  }
+
   try {
-    const quote = await getSwapQuote({
-      fromToken,
-      toToken,
-      amount,
-      fromChain,
-      toChain,
-      walletAddress: address,
-      outputReceiver: receiver,
-      slippage: flags.slippage ? parseFloat(flags.slippage) : undefined,
-    });
+    const quote = await getSwapQuote({ ...quoteInput, strategy: strategy || "cheapest" });
 
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance`, {
@@ -97,6 +151,7 @@ export default async function bridge(args, flags) {
         fee: quote.fee,
         source: quote.liquiditySource,
         estimatedTime: `${quote.estimatedSeconds || "?"}s`,
+        strategy: strategy || "cheapest",
       },
     };
 

@@ -174,6 +174,24 @@ export function formatSwapQuote(data) {
   return lines.join("\n");
 }
 
+export function formatBridgeOffers(data) {
+  const lines = [
+    `${BOLD}Bridge Quotes${RESET} — ${data.fromChain} → ${data.toChain}  ${DIM}(${data.amount} ${data.fromToken} → ${data.toToken})${RESET}\n`,
+  ];
+  lines.push(`  ${DIM}${pad("#", 3)} ${pad("Provider", 18)} ${padStart("Output", 14)} ${padStart("Time", 8)} ${padStart("Fee %", 8)}${RESET}`);
+  lines.push(`  ${DIM}${"─".repeat(54)}${RESET}`);
+  for (const [i, o] of data.offers.entries()) {
+    const time = o.estimatedSeconds != null ? `${o.estimatedSeconds}s` : "-";
+    const fee = o.fee?.protocolPercent != null ? `${Number(o.fee.protocolPercent).toFixed(2)}%` : "-";
+    const out = o.estimatedOutput ?? "-";
+    const provider = o.liquiditySource || "(unknown)";
+    lines.push(`  ${pad(i + 1, 3)} ${pad(provider, 18)} ${padStart(out, 14)} ${padStart(time, 8)} ${padStart(fee, 8)}`);
+  }
+  lines.push("");
+  lines.push(`  ${YELLOW}Pick one:${RESET} re-run with ${BOLD}--cheapest${RESET} (highest output) or ${BOLD}--fast${RESET} (lowest time).`);
+  return lines.join("\n");
+}
+
 export function formatHistory(data) {
   const lines = [`${BOLD}Transactions${RESET} — ${data.wallet.name} (${data.count})\n`];
   for (const tx of data.transactions) {

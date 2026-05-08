@@ -5,6 +5,10 @@
 // only analytics commands call. Trading commands hit this fallback and
 // always use the API key regardless of ZERION_X402 / ZERION_MPP env vars.
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
 import { API_BASE } from "../common/constants.js";
 import { basicAuthHeader, resolveApiKeyAuth } from "./auth.js";
 import { getX402Fetch } from "./x402.js";
@@ -12,6 +16,20 @@ import { getMppFetch } from "./mpp.js";
 
 const MAX_429_RETRIES = 5;
 const DEFAULT_429_BACKOFF_MS = 1000;
+
+// User-Agent identifies the CLI to Zerion's backend so swap/bridge calls are
+// attributable to agent traffic vs dashboard traffic. Resolved once at module
+// init from the package manifest; falls back to bare `zerion-cli` if the file
+// can't be read (e.g. tests with mocked fs).
+const USER_AGENT = (() => {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkg = JSON.parse(readFileSync(join(here, "..", "..", "..", "package.json"), "utf-8"));
+    return `zerion-cli/${pkg.version}`;
+  } catch {
+    return "zerion-cli";
+  }
+})();
 
 function parseRetryDelayMs(response) {
   // Prefer standard `Retry-After` (seconds or HTTP-date), then fall back to
@@ -45,7 +63,7 @@ export async function fetchAPI(pathname, params = {}, auth) {
     url.searchParams.set(key, String(value));
   }
 
-  const headers = { Accept: "application/json" };
+  const headers = { Accept: "application/json", "User-Agent": USER_AGENT };
   let fetchFn;
   switch (resolved.kind) {
     case "apiKey":

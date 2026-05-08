@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { getSwapQuote } from "#zerion/utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, selectOffer } from "#zerion/utils/trading/swap.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.ZERION_API_KEY;
@@ -180,6 +180,124 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
     assert.ok(quote.transactionSwap);
     assert.equal(quote.transactionSwap.to, "0xRouter");
     assert.equal(quote.transactionApprove, null);
+  });
+
+  it("selectOffer 'cheapest' picks the offer with the highest output amount", () => {
+    const offers = [
+      { id: "a", attributes: { output_amount: { quantity: "100" }, estimated_time_seconds: 30, transaction_swap: { evm: {} } } },
+      { id: "b", attributes: { output_amount: { quantity: "120" }, estimated_time_seconds: 60, transaction_swap: { evm: {} } } },
+      { id: "c", attributes: { output_amount: { quantity: "110" }, estimated_time_seconds: 15, transaction_swap: { evm: {} } } },
+    ];
+    const picked = selectOffer(offers, "cheapest");
+    assert.equal(picked.id, "b");
+  });
+
+  it("selectOffer 'fast' picks the offer with the lowest estimated_time_seconds", () => {
+    const offers = [
+      { id: "a", attributes: { output_amount: { quantity: "100" }, estimated_time_seconds: 30, transaction_swap: { evm: {} } } },
+      { id: "b", attributes: { output_amount: { quantity: "120" }, estimated_time_seconds: 60, transaction_swap: { evm: {} } } },
+      { id: "c", attributes: { output_amount: { quantity: "110" }, estimated_time_seconds: 15, transaction_swap: { evm: {} } } },
+    ];
+    const picked = selectOffer(offers, "fast");
+    assert.equal(picked.id, "c");
+  });
+
+  it("selectOffer 'fast' falls back to cheapest when no offer carries time data", () => {
+    const offers = [
+      { id: "a", attributes: { output_amount: { quantity: "100" }, transaction_swap: { evm: {} } } },
+      { id: "b", attributes: { output_amount: { quantity: "120" }, transaction_swap: { evm: {} } } },
+    ];
+    const picked = selectOffer(offers, "fast");
+    assert.equal(picked.id, "b");
+  });
+
+  it("selectOffer prefers executable offers over blocked ones", () => {
+    const offers = [
+      { id: "blocked", attributes: { output_amount: { quantity: "999" }, error: { code: "not_enough_input_asset_balance" } } },
+      { id: "ok", attributes: { output_amount: { quantity: "100" }, estimated_time_seconds: 30, transaction_swap: { evm: {} } } },
+    ];
+    const picked = selectOffer(offers, "cheapest");
+    assert.equal(picked.id, "ok");
+  });
+
+  it("selectOffer returns the only blocked offer when no executable one exists (so caller can surface error)", () => {
+    const offers = [
+      { id: "blocked", attributes: { output_amount: { quantity: "100" }, error: { code: "not_enough_input_asset_balance" } } },
+    ];
+    const picked = selectOffer(offers, "cheapest");
+    assert.equal(picked.id, "blocked");
+  });
+
+  it("selectOffer returns null for empty offers", () => {
+    assert.equal(selectOffer([], "cheapest"), null);
+  });
+
+  it("getSwapOffers returns every API offer mapped to the quote shape", async () => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({
+        data: [
+          { id: "fast-route", type: "swap_quotes", attributes: {
+            liquidity_source: { name: "fast-router" },
+            output_amount: { quantity: "98" },
+            estimated_time_seconds: 10,
+            transaction_swap: { evm: { to: "0xRouter1" } },
+          }},
+          { id: "cheap-route", type: "swap_quotes", attributes: {
+            liquidity_source: { name: "cheap-router" },
+            output_amount: { quantity: "100" },
+            estimated_time_seconds: 90,
+            transaction_swap: { evm: { to: "0xRouter2" } },
+          }},
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+
+    const offers = await getSwapOffers({
+      fromToken: "ETH",
+      toToken: "USDC",
+      amount: "0.1",
+      fromChain: "ethereum",
+      toChain: "ethereum",
+      walletAddress: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B",
+    });
+
+    assert.equal(offers.length, 2);
+    assert.equal(offers[0].liquiditySource, "fast-router");
+    assert.equal(offers[0].estimatedSeconds, 10);
+    assert.equal(offers[1].liquiditySource, "cheap-router");
+    assert.equal(offers[1].estimatedOutput, "100");
+  });
+
+  it("getSwapQuote with strategy='fast' picks the lowest-time offer", async () => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({
+        data: [
+          { id: "slow", type: "swap_quotes", attributes: {
+            liquidity_source: { name: "slow-but-cheap" },
+            output_amount: { quantity: "120" },
+            estimated_time_seconds: 120,
+            transaction_swap: { evm: { to: "0xSlow" } },
+          }},
+          { id: "fast", type: "swap_quotes", attributes: {
+            liquidity_source: { name: "fast-but-pricey" },
+            output_amount: { quantity: "100" },
+            estimated_time_seconds: 8,
+            transaction_swap: { evm: { to: "0xFast" } },
+          }},
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+
+    const quote = await getSwapQuote({
+      fromToken: "ETH",
+      toToken: "USDC",
+      amount: "0.1",
+      fromChain: "ethereum",
+      toChain: "ethereum",
+      walletAddress: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B",
+      strategy: "fast",
+    });
+
+    assert.equal(quote.liquiditySource, "fast-but-pricey");
+    assert.equal(quote.estimatedSeconds, 8);
   });
 
   it("surfaces blocking errors and marks balance insufficient", async () => {

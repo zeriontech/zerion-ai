@@ -72,10 +72,8 @@ async function hasSufficientAllowance({ zerionChainId, approveTx, owner }) {
   }
 }
 
-/**
- * Get a swap/bridge quote from Zerion API.
- */
-export async function getSwapQuote({
+// Build the /swap/quotes/ params and resolve the from/to tokens once.
+async function buildQuoteRequest({
   fromToken,
   toToken,
   amount,
@@ -108,36 +106,16 @@ export async function getSwapQuote({
     params.to = outputReceiver;
   }
 
-  const response = await api.getSwapQuotes(params);
-  const offers = response.data || [];
+  return { params, fromResolved, toResolved };
+}
 
-  if (offers.length === 0) {
-    const err = new Error(
-      `No swap route found for ${amount} ${fromResolved.symbol} → ${toResolved.symbol} on ${fromChain}. ` +
-      `Minimum swap is ~$1. ` +
-      `Check your balance and chain with: zerion portfolio`
-    );
-    err.code = "no_route";
-    err.suggestion = `Try a smaller amount or different pair: zerion swap ${fromChain} 0.001 ETH USDC`;
-    throw err;
-  }
-
-  // Pick the first offer that has executable transaction data. The API may
-  // return offers with `error` set (e.g. not_enough_input_asset_balance) —
-  // those carry no transaction_swap and aren't actionable.
-  const executable = offers.find((o) => {
-    const a = o.attributes || {};
-    if (a.error) return false;
-    return Boolean(a.transaction_swap?.evm || a.transaction_swap?.solana);
-  });
-  const best = executable || offers[0];
-  const attrs = best.attributes || {};
-
-  // Surface the API's blocking error before downstream code tries to sign.
+// Shape an API offer into our internal quote object. Heavy enough to share
+// between single-quote selection and the offers-list view.
+function offerToQuote(offer, { fromResolved, toResolved, fromChain, toChain, amount, walletAddress, outputReceiver }) {
+  const attrs = offer.attributes || {};
   const blocking = attrs.error;
-
   return {
-    id: best.id,
+    id: offer.id,
     from: fromResolved,
     to: toResolved,
     inputAmount: amount,
@@ -150,8 +128,6 @@ export async function getSwapQuote({
       networkAmount: attrs.network_fee?.amount?.quantity,
     },
     liquiditySource: attrs.liquidity_source?.name,
-    // Translate the new error shape into the boolean preconditions our
-    // commands check before signing.
     preconditions: {
       enough_balance: blocking?.code !== "not_enough_input_asset_balance",
     },
@@ -164,6 +140,105 @@ export async function getSwapQuote({
     outputReceiver: outputReceiver || walletAddress,
     slippageType: attrs.slippage?.final ? "absolute" : undefined,
   };
+}
+
+function isExecutable(offer) {
+  const a = offer.attributes || {};
+  if (a.error) return false;
+  return Boolean(a.transaction_swap?.evm || a.transaction_swap?.solana);
+}
+
+// Offer selection strategies.
+//   "cheapest": highest net `output_amount` (matches API's default sort).
+//   "fast":     lowest `estimated_time_seconds`. Offers with no time data
+//               fall back to "cheapest" ordering.
+// Both strategies prefer executable offers; non-executable offers (e.g.
+// `error: not_enough_input_asset_balance`) only win when nothing else is
+// available so the caller can surface the blocking error.
+export function selectOffer(offers, strategy = "cheapest") {
+  if (!offers.length) return null;
+
+  const executable = offers.filter(isExecutable);
+  const pool = executable.length ? executable : offers;
+
+  if (strategy === "fast") {
+    const timed = pool.filter((o) => Number.isFinite(o.attributes?.estimated_time_seconds));
+    if (timed.length) {
+      return timed.reduce((best, o) =>
+        o.attributes.estimated_time_seconds < best.attributes.estimated_time_seconds ? o : best
+      );
+    }
+    // No time data on any offer — fall through to cheapest.
+  }
+
+  // "cheapest" — pick max output_amount.quantity (numeric compare).
+  return pool.reduce((best, o) => {
+    const bestOut = parseFloat(best.attributes?.output_amount?.quantity || "0");
+    const oOut = parseFloat(o.attributes?.output_amount?.quantity || "0");
+    return oOut > bestOut ? o : best;
+  });
+}
+
+function noRouteError(amount, fromResolved, toResolved, fromChain) {
+  const err = new Error(
+    `No swap route found for ${amount} ${fromResolved.symbol} → ${toResolved.symbol} on ${fromChain}. ` +
+    `Minimum swap is ~$1. ` +
+    `Check your balance and chain with: zerion portfolio`
+  );
+  err.code = "no_route";
+  err.suggestion = `Try a smaller amount or different pair: zerion swap ${fromChain} 0.001 ETH USDC`;
+  return err;
+}
+
+/**
+ * Get a single swap/bridge quote, picked by strategy ("cheapest" | "fast").
+ * "cheapest" is the legacy default — matches the API's first-offer ordering
+ * and never changes behavior for existing callers.
+ */
+export async function getSwapQuote(input) {
+  const strategy = input.strategy || "cheapest";
+  const { params, fromResolved, toResolved } = await buildQuoteRequest(input);
+  const response = await api.getSwapQuotes(params);
+  const offers = response.data || [];
+
+  if (offers.length === 0) {
+    throw noRouteError(input.amount, fromResolved, toResolved, input.fromChain);
+  }
+
+  const picked = selectOffer(offers, strategy);
+  return offerToQuote(picked, {
+    fromResolved,
+    toResolved,
+    fromChain: input.fromChain,
+    toChain: input.toChain,
+    amount: input.amount,
+    walletAddress: input.walletAddress,
+    outputReceiver: input.outputReceiver,
+  });
+}
+
+/**
+ * List ALL swap/bridge offers without picking one. Used by `zerion bridge`
+ * (no flag) so the agent can compare providers before committing.
+ */
+export async function getSwapOffers(input) {
+  const { params, fromResolved, toResolved } = await buildQuoteRequest(input);
+  const response = await api.getSwapQuotes(params);
+  const offers = response.data || [];
+
+  if (offers.length === 0) {
+    throw noRouteError(input.amount, fromResolved, toResolved, input.fromChain);
+  }
+
+  return offers.map((o) => offerToQuote(o, {
+    fromResolved,
+    toResolved,
+    fromChain: input.fromChain,
+    toChain: input.toChain,
+    amount: input.amount,
+    walletAddress: input.walletAddress,
+    outputReceiver: input.outputReceiver,
+  }));
 }
 
 /**
