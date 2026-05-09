@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/zeriontech/zerion-ai/compare/v1.1.0...v1.2.0) (2026-05-09)
+
+
+### Features
+
+* add zerion-umbra-privateTxn skill for Umbra private payments ([#40](https://github.com/zeriontech/zerion-ai/issues/40)) ([a0518ca](https://github.com/zeriontech/zerion-ai/commit/a0518ca5f92d7da50beb7fb9801efd82d8ac30e4))
+
 ## [1.1.0](https://github.com/zeriontech/zerion-ai/compare/v1.0.1...v1.1.0) (2026-05-08)
 
 
