@@ -1,56 +1,100 @@
-// `zerion chains` reads the supported-chains list from a local viem
-// registry — no network, no API key, no auth of any kind. These tests
-// spawn the CLI but stay fully offline.
+// `zerion chains` calls the Zerion API for the live chain catalog. Stub fetch
+// here so the unit suite covers normalization without touching the network.
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { execFile } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import chains from "#zerion/commands/trading/chains.js";
 
-const BIN = fileURLToPath(import.meta.resolve("#zerion/zerion.js"));
+const originalFetch = globalThis.fetch;
+const originalApiKey = process.env.ZERION_API_KEY;
+const originalStdoutWrite = process.stdout.write;
 
-function run(args) {
-  return new Promise((resolve) => {
-    execFile(
-      "node",
-      [BIN, ...args],
-      { env: { ...process.env, ZERION_API_KEY: "" }, timeout: 5000 },
-      (error, stdout) => {
-        resolve({ code: error?.code ?? 0, stdout });
-      }
-    );
-  });
+let requests;
+
+const chainsFixture = {
+  data: [
+    {
+      id: "ethereum",
+      attributes: {
+        name: "Ethereum",
+        flags: {
+          supports_trading: true,
+          supports_bridge: true,
+          supports_sending: true,
+        },
+      },
+    },
+    {
+      id: "base",
+      attributes: {
+        name: "Base",
+        flags: {
+          supports_trading: true,
+          supports_bridge: false,
+          supports_sending: true,
+        },
+      },
+    },
+    {
+      id: "arbitrum",
+      attributes: {
+        name: "Arbitrum",
+      },
+    },
+  ],
+};
+
+beforeEach(() => {
+  requests = [];
+  process.env.ZERION_API_KEY = "zk_unit_test";
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: new URL(String(url)), options });
+    return new Response(JSON.stringify(chainsFixture), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+});
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  process.stdout.write = originalStdoutWrite;
+  if (originalApiKey === undefined) delete process.env.ZERION_API_KEY;
+  else process.env.ZERION_API_KEY = originalApiKey;
+});
+
+async function captureJSON(fn) {
+  let stdout = "";
+  process.stdout.write = (chunk) => {
+    stdout += chunk;
+    return true;
+  };
+
+  await fn();
+  return JSON.parse(stdout);
 }
 
-function parseJSON(str) {
-  try { return JSON.parse(str); } catch { return null; }
-}
+describe("chains — API-backed catalog", () => {
+  it("returns normalized chains sorted by name", async () => {
+    const json = await captureJSON(() => chains([], {}));
 
-describe("chains — local list (no network, no API key)", () => {
-  it("`zerion chains --json` returns chains array", async () => {
-    const { code, stdout } = await run(["chains", "--json"]);
-    assert.equal(code, 0);
-    const json = parseJSON(stdout);
-    assert.ok(json);
-    assert.ok(json.chains);
-    assert.ok(json.count > 0);
+    assert.deepEqual(json.chains.map((chain) => chain.id), ["arbitrum", "base", "ethereum"]);
+    assert.equal(json.count, 3);
+    assert.deepEqual(json.chains[0], {
+      id: "arbitrum",
+      name: "Arbitrum",
+      supportsTrading: false,
+      supportsBridge: false,
+      supportsSending: false,
+    });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url.pathname, "/v1/chains/");
   });
 
-  it("`zerion chains` defaults to JSON output", async () => {
-    const { code, stdout } = await run(["chains"]);
-    assert.equal(code, 0);
-    const json = parseJSON(stdout);
-    assert.ok(json);
-    assert.ok(json.chains);
-    assert.ok(json.count > 0);
-  });
+  it("ignores optional extra args from single-word routing fallback", async () => {
+    const json = await captureJSON(() => chains(["list"], { json: true }));
 
-  it("`zerion chains list --json` works via single-word fallback", async () => {
-    const { code, stdout } = await run(["chains", "list", "--json"]);
-    assert.equal(code, 0);
-    const json = parseJSON(stdout);
-    assert.ok(json);
-    assert.ok(json.chains);
-    assert.ok(json.count > 0);
+    assert.ok(Array.isArray(json.chains));
+    assert.equal(json.count, 3);
   });
 });

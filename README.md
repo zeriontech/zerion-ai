@@ -7,11 +7,7 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bri
 
 ## Installation
 
-```bash
-npm install -g zerion-cli
-```
-
-Or set up everything in one command (install CLI globally, authenticate via browser, and add skills across all detected coding agents):
+Set up everything in one command (install CLI globally, authenticate via browser, and add skills across all detected coding agents):
 
 ```bash
 npx -y zerion-cli init
@@ -21,11 +17,19 @@ npx -y zerion-cli init
 - skills install globally to every detected AI coding agent by default
 - pass `-y` to run non-interactively in CI; auth is skipped and you can finish later with `zerion login`
 
+Or just install the CLI without setup:
+
+```bash
+npm install -g zerion-cli
+```
+
 Requires Node.js 20 or later.
 
 ## Agent skills
 
-Six skills ship in this repo (under [`./skills/`](./skills/)):
+All skills live under [`./skills/`](./skills/) and follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
+
+### Core skills (Zerion)
 
 | Skill | What it does |
 |-------|--------------|
@@ -36,7 +40,21 @@ Six skills ship in this repo (under [`./skills/`](./skills/)):
 | [`zerion-wallet`](./skills/zerion-wallet/SKILL.md) | Wallet management — create, import, list, fund, backup, delete, sync |
 | [`zerion-agent-management`](./skills/zerion-agent-management/SKILL.md) | Agent tokens + policies (the autonomous-trading primitives) |
 
-Skills follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
+### Partner skills
+
+Skills contributed by ecosystem partners that combine their product with the Zerion CLI. See [`zerion-partner-skill-creator`](./skills/zerion-partner-skill-creator/SKILL.md) to contribute one.
+
+| Skill | What it does | Partner |
+|-------|--------------|---------|
+| [`zerion-monad-addresses`](./skills/zerion-monad-addresses/SKILL.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
+| [`zerion-moonpay-onramp`](./skills/zerion-moonpay-onramp/SKILL.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
+| [`zerion-moonpay-iron`](./skills/zerion-moonpay-iron/SKILL.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
+| [`zerion-moonpay-predict`](./skills/zerion-moonpay-predict/SKILL.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
+| [`zerion-sendai-ideas`](./skills/zerion-sendai-ideas/SKILL.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | [SendAI](https://github.com/sendaifun/solana-new) (MIT) |
+| [`zerion-somnia-blockchain`](./skills/zerion-somnia-blockchain/SKILL.md) | Somnia L1 reference — network info, gas model, deployment guidance | [Somnia](https://somnia.network) |
+| [`zerion-somnia-reactivity`](./skills/zerion-somnia-reactivity/SKILL.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
+| [`zerion-trails-crosschainswap`](./skills/zerion-trails-crosschainswap/SKILL.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
+| [`zerion-trails-deposit`](./skills/zerion-trails-deposit/SKILL.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
 
 ### Install via zerion CLI (recommended)
 
@@ -205,12 +223,16 @@ Requires an API key (or agent token for unattended use).
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion swap <from> <to> <amount>` | Swap tokens on a single chain | `zerion swap usdc eth 100 --chain ethereum` |
-| `zerion swap <from> <to> <amount> --to-chain <chain>` | Cross-chain swap | `zerion swap usdc eth 100 --chain base --to-chain ethereum` |
-| `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens base` |
-| `zerion bridge <token> <chain> <amount>` | Bridge tokens cross-chain | `zerion bridge usdc base 100` |
-| `zerion bridge <token> <chain> <amount> --to-token <tok>` | Bridge + swap on destination | `zerion bridge usdc base 100 --to-token eth` |
-| `zerion send <token> <amount> --to <address> --chain <chain>` | Send tokens | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
+| `zerion swap <chain> <amount> <from-token> <to-token>` | Same-chain swap | `zerion swap base 1 USDC ETH` |
+| `zerion swap solana <amount> <from-token> <to-token>` | Solana same-chain swap | `zerion swap solana 0.1 SOL USDC` |
+| `zerion swap tokens [chain]` | List tokens available for swap | `zerion swap tokens solana` |
+| `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>` | List all bridge providers (no execute, multi-offer case) | `zerion bridge base USDC 5 arbitrum USDC` |
+| `zerion bridge … --cheapest` | Execute highest-output bridge route | `zerion bridge base USDC 5 arbitrum USDC --cheapest` |
+| `zerion bridge … --fast` | Execute lowest-time bridge route | `zerion bridge base USDC 5 arbitrum USDC --fast` |
+| `zerion bridge … --to-wallet <name>` | Bridge with explicit destination wallet (Solana ↔ EVM) | `zerion bridge ethereum USDC 5 solana USDC --to-wallet sol-bot --cheapest` |
+| `zerion bridge … --to-address <addr>` | Bridge to a raw destination address | `zerion bridge ethereum USDC 5 solana USDC --to-address 8xLdox… --cheapest` |
+| `zerion send <token> <amount> --to <address> [--chain <chain>]` | Send tokens (chain auto-detected from address format) | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
+| `zerion send SOL <amount> --to <solana-pubkey>` | Send native SOL on Solana | `zerion send SOL 0.1 --to 2Nsnn…` |
 
 ### Wallet Management
 
@@ -306,11 +328,12 @@ Track wallets by name without exposing addresses in commands.
 
 | Flag | Description |
 |------|-------------|
-| `--wallet <name>` | Specify wallet (default: from config) |
+| `--wallet <name>` | Source wallet (default: from config) |
 | `--address <addr\|ens>` | Use raw address or ENS name |
 | `--watch <name>` | Use watched wallet by name |
-| `--chain <chain>` | Specify chain (default: `ethereum`) |
-| `--to-chain <chain>` | Destination chain for cross-chain swaps |
+| `--chain <chain>` | Chain for analysis commands (default: `ethereum`) |
+| `--to-wallet <name>` | Destination wallet for `bridge` (Solana ↔ EVM) |
+| `--to-address <addr>` | Destination address for `bridge` (must match destination-chain format) |
 | `--positions all\|simple\|defi` | Filter positions type |
 | `--limit <n>` | Limit results (default: 20 for list ops) |
 | `--offset <n>` | Skip first N results (pagination) |

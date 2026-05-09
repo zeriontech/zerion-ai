@@ -161,6 +161,45 @@ export function parseTimeout(value) {
 }
 
 /**
+ * Parse and validate a --slippage flag value (percent, 0-100). Returns
+ * undefined when the flag is absent so callers can fall back to defaults
+ * (config or DEFAULT_SLIPPAGE). Rejects negative, NaN, and >100 values that
+ * would otherwise sail through `parseFloat` and reach the swap API.
+ * @param {string|boolean|undefined} value - raw flag value
+ * @returns {number|undefined}
+ */
+export function parseSlippage(value) {
+  if (value === undefined || value === false) return undefined;
+  // `--slippage` with no following value parses as `true`. Treat it the same
+  // as a malformed value — reject rather than silently coerce to NaN.
+  if (typeof value !== "string" && typeof value !== "number") {
+    printError("invalid_slippage", `Invalid slippage: ${value}`, {
+      suggestion: "Slippage must be a number 0–100, e.g. --slippage 2",
+    });
+    process.exit(1);
+  }
+  // `parseFloat` would accept "2abc" as 2 — silently passing a malformed
+  // value through to the swap API. `Number()` rejects partial-numeric
+  // strings (returns NaN), which is what we want for a strict CLI flag.
+  // Trim whitespace first so " 2 " is still accepted, and reject the
+  // post-trim empty case (Number("") returns 0, which would slip through).
+  let n;
+  if (typeof value === "number") {
+    n = value;
+  } else {
+    const trimmed = String(value).trim();
+    n = trimmed === "" ? NaN : Number(trimmed);
+  }
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    printError("invalid_slippage", `Invalid slippage: ${value}`, {
+      suggestion: "Slippage must be a number between 0 and 100 (percent), e.g. --slippage 2",
+    });
+    process.exit(1);
+  }
+  return n;
+}
+
+/**
  * Shared catch-block handler for trading commands.
  * Detects revoked agent tokens and falls back to a generic error.
  * @param {Error} err
@@ -172,9 +211,16 @@ export function handleTradingError(err, fallbackCode) {
       suggestion: "Create a new one: zerion agent create-token --name <name> --wallet <wallet>",
     });
   } else {
-    printError(err.code || fallbackCode, err.message, {
-      suggestion: err.suggestion,
-    });
+    let suggestion = err.suggestion;
+    if (err.code === "api_error" && /cannot be performed/i.test(err.apiDetail || "")) {
+      suggestion = suggestion || (
+        "Zerion couldn't quote this pair. Things to verify: " +
+        "the token has an implementation on both chains (zerion search <symbol>), " +
+        "the amount is within typical limits (try a different size), " +
+        "and both chains support the action (zerion chains)."
+      );
+    }
+    printError(err.code || fallbackCode, err.message, { suggestion });
   }
   process.exit(1);
 }

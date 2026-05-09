@@ -47,11 +47,13 @@ function printUsage() {
       "pnl <address|name>": "Profit & loss (realized, unrealized, fees)",
     },
     trading: {
-      "swap <from> <to> <amount>": "Swap tokens",
-      "swap <from> <to> <amount> --to-chain <chain>": "Cross-chain swap",
+      "swap <chain> <amount> <from-token> <to-token>": "Same-chain token swap (e.g. zerion swap base 1 USDC ETH)",
+      "swap solana <amount> <from-token> <to-token>": "Solana same-chain swap (e.g. zerion swap solana 0.1 SOL USDC)",
       "swap tokens [chain]": "List tokens available for swap",
-      "bridge <token> <chain> <amount>": "Bridge tokens cross-chain",
-      "bridge <token> <chain> <amount> --to-token <tok>": "Bridge + swap on destination",
+      "bridge <from-chain> <from-token> <amount> <to-chain> <to-token>": "Cross-chain bridge / bridge+swap (e.g. zerion bridge base USDC 5 arbitrum USDC)",
+      "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-wallet <name>": "Bridge with explicit destination wallet (Solana ↔ EVM)",
+      "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <addr>": "Bridge to a raw destination address (chain-format must match)",
+      "send <token> <amount> --to <addr> [--chain <chain>]": "Send native ETH/SOL or ERC-20 to an address (chain auto-detected from address format)",
       "search <query>": "Search for tokens by name or symbol",
     },
     agent_tokens: {
@@ -87,11 +89,12 @@ function printUsage() {
       "config list": "Show current configuration",
     },
     flags: {
-      "--wallet <name>": "Specify wallet (default: from config)",
+      "--wallet <name>": "Source wallet (default: from config)",
       "--address <addr/ens>": "Use raw address or ENS name",
       "--watch <name>": "Use watched wallet by name",
-      "--chain <chain>": "Specify chain (default: ethereum)",
-      "--to-chain <chain>": "Destination chain for cross-chain swaps",
+      "--chain <chain>": "Specify chain for analysis commands (default: ethereum)",
+      "--to-wallet <name>": "Destination wallet for bridge (Solana ↔ EVM)",
+      "--to-address <addr>": "Destination address for bridge (must match destination-chain format)",
       "--positions all|simple|defi": "Filter positions type",
       "--limit <n>": "Limit results (transactions, wallet list; default: 20 for list)",
       "--offset <n>": "Skip first N results (pagination for wallet list)",
@@ -133,10 +136,17 @@ function printUsage() {
       "init -y --browser": "Non-interactive init that opens dashboard.zerion.io for the API key",
       "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-ai` (45+ hosts)",
     },
+    // Trading-supported chains (swap/bridge/send). Mirrors Zerion API
+    // /chains/ flags.supports_trading=true at time of release. For the live
+    // list, run `zerion chains` — that hits the API and is always current.
     chains: [
-      "ethereum", "base", "arbitrum", "optimism", "polygon",
-      "binance-smart-chain", "avalanche", "gnosis", "scroll",
-      "linea", "zksync-era", "zora", "blast", "solana"
+      "abstract", "ape", "arbitrum", "avalanche", "base", "berachain",
+      "binance-smart-chain", "blast", "bob", "celo", "cyber", "ethereum",
+      "fraxtal", "hyperevm", "ink", "katana", "lens", "linea", "lisk",
+      "manta-pacific", "mantle", "megaeth", "metis-andromeda", "mode",
+      "monad", "opbnb", "optimism", "plasma", "polygon", "rari", "ronin",
+      "scroll", "sei", "solana", "soneium", "sonic", "swellchain", "taiko",
+      "tomochain", "unichain", "world", "xdai", "zero", "zksync-era", "zora",
     ],
   };
   process.stdout.write(JSON.stringify(usage, null, 2) + "\n");

@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.1.0](https://github.com/zeriontech/zerion-ai/compare/v1.0.1...v1.1.0) (2026-05-08)
+
+
+### Features
+
+* add Monad skills and examples ([#56](https://github.com/zeriontech/zerion-ai/issues/56)) ([562a8ab](https://github.com/zeriontech/zerion-ai/commit/562a8aba59bab4781bbb6114cbe2875b92e17634))
+* add zerion-partner-skill-creator skill ([#51](https://github.com/zeriontech/zerion-ai/issues/51)) ([9c4b38c](https://github.com/zeriontech/zerion-ai/commit/9c4b38c409d141214d38f264e2d8e1123d9bebdf))
+* **cli:** bridge provider selection, fee attribution, expanded chains list ([#58](https://github.com/zeriontech/zerion-ai/issues/58)) ([50da002](https://github.com/zeriontech/zerion-ai/commit/50da002ae8b4c3e64e91bd6c1347406c961209f3))
+* sendai ideas skills ([#39](https://github.com/zeriontech/zerion-ai/issues/39)) ([b2f5dea](https://github.com/zeriontech/zerion-ai/commit/b2f5dea3ba3833f70646c9ed65e5d07451aca35e))
+
+
+### Bug Fixes
+
+* **cli:** make `zerion init` skills step interactive by default ([#49](https://github.com/zeriontech/zerion-ai/issues/49)) ([e3634bd](https://github.com/zeriontech/zerion-ai/commit/e3634bd7b27fa29532857afc8d58a6edc128243a))
+
+## [1.0.1](https://github.com/zeriontech/zerion-ai/compare/v1.0.0...v1.0.1) (2026-05-05)
+
+
+### Features
+
+* add MoonPay partner skills (onramp, iron DCA, prediction markets) ([#32](https://github.com/zeriontech/zerion-ai/issues/32)) ([2775753](https://github.com/zeriontech/zerion-ai/commit/2775753efae5d2304fb297aac5cee0ec78e625ce))
+* **cli:** migrate to /swap/quotes/, add Solana swap+bridge+send ([#47](https://github.com/zeriontech/zerion-ai/issues/47)) ([0fac91e](https://github.com/zeriontech/zerion-ai/commit/0fac91ec23f3ce807ac58dae6a860ab179caecf7))
+* handle retries on 429 error ([#44](https://github.com/zeriontech/zerion-ai/issues/44)) ([7d481f2](https://github.com/zeriontech/zerion-ai/commit/7d481f229d89edd3796903c79eec560fbd655119))
+* unify CLI + agent skills, un-flatten to cli/ ([#28](https://github.com/zeriontech/zerion-ai/issues/28)) ([d21f5b7](https://github.com/zeriontech/zerion-ai/commit/d21f5b7f148d5d8cae62b5c759209d3d1b2b767d))
+
+
+### Bug Fixes
+
+* **cli:** rerank search results and fetch chains live from API ([#38](https://github.com/zeriontech/zerion-ai/issues/38)) ([0d668a0](https://github.com/zeriontech/zerion-ai/commit/0d668a04f24ad9e81eda73f8663e776c2d23dcd9))
+
+
+### Miscellaneous Chores
+
+* release 1.0.1 ([#29](https://github.com/zeriontech/zerion-ai/issues/29)) ([4efcbeb](https://github.com/zeriontech/zerion-ai/commit/4efcbebf326b81e20350160fe924dc74a8df194c))
+
 ## [1.0.0](https://github.com/zeriontech/zerion-ai/compare/v0.4.2...v1.0.0) (2026-04-27)
 
 

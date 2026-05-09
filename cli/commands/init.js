@@ -9,10 +9,10 @@ const DASHBOARD_URL = "https://dashboard.zerion.io";
 const HELP = {
   usage: "zerion init [options]",
   description:
-    "One-shot onboarding: install the CLI globally, authenticate via browser (PKCE), and install Zerion agent skills into detected coding agents.",
+    "One-shot onboarding: install the CLI globally, authenticate via browser (PKCE), and install Zerion agent skills into detected coding agents. The skills step is interactive by default — pick which skills you want.",
   flags: {
     "--yes, -y":
-      "Non-interactive — skip browser auth (run `zerion login` later), pass --yes to skills installer",
+      "Non-interactive — skip browser auth (run `zerion login` later) and install ALL skills",
     "--no-install": "Skip the global `npm install -g zerion-cli` step",
     "--no-auth": "Skip the authentication step",
     "--no-skills": "Skip the agent skills install step",
@@ -82,19 +82,26 @@ async function ensureApiKey({ yes }) {
   }
 }
 
-function installSkills({ agent }) {
-  // `init` is a one-shot onboarding command; always install every skill
-  // non-interactively. Users who want to pick can run `zerion setup skills`.
-  const npxArgs = ["-y", "skills", "add", ZERION_AGENT_REPO, "-g", "--yes"];
+function installSkills({ agent, yes }) {
+  // Interactive by default — `npx skills add` shows a multi-select so users
+  // can pick which Zerion skills to install. Only force non-interactive when
+  // the caller explicitly passed --yes or stdin is not a TTY (CI / piped).
+  const nonInteractive = yes || !process.stdin.isTTY;
+  const npxArgs = ["-y", "skills", "add", ZERION_AGENT_REPO, "-g"];
+  if (nonInteractive) npxArgs.push("--yes");
   if (agent) npxArgs.push("-a", agent);
 
-  log("  Installing Zerion skills for AI coding agents...");
+  log(
+    nonInteractive
+      ? "  Installing all Zerion skills for AI coding agents..."
+      : "  Pick which Zerion skills to install (space to toggle, enter to confirm)..."
+  );
   const res = spawnSync("npx", npxArgs, { stdio: "inherit" });
   if (res.status !== 0) {
     return { ok: false, exitCode: res.status };
   }
   log("  ✓ Skills installed");
-  return { ok: true };
+  return { ok: true, interactive: !nonInteractive };
 }
 
 function printSuccessSummary() {
@@ -102,7 +109,7 @@ function printSuccessSummary() {
   log("  Try it out:");
   log("    → Analyze a wallet  zerion analyze vitalik.eth");
   log("    → Portfolio         zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
-  log("    → Trade             zerion swap usdc eth 100 --chain ethereum");
+  log("    → Trade             zerion swap ethereum 100 USDC ETH");
   log("");
   log("  → All commands: zerion --help");
   log("");
@@ -150,7 +157,7 @@ export default async function init(args, flags) {
   log("[3/3] Install agent skills");
   const skillsRes = skipSkills
     ? { ok: true, skipped: true, reason: "flag" }
-    : installSkills({ agent });
+    : installSkills({ agent, yes });
   steps.push({ step: "skills", ...skillsRes });
   if (!skillsRes.ok) {
     printError("init_skills_failed", "Skills install failed", skillsRes);

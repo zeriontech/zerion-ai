@@ -19,6 +19,16 @@ function padStart(str, len) {
   return String(str).padStart(len);
 }
 
+// Truncate-then-pad. Use for table cells where overflow would push
+// neighboring columns out of alignment (e.g. liquidity-source provider names
+// like "stargate-v2-relayer" that exceed the column width).
+function padTrunc(str, len) {
+  const s = String(str);
+  if (s.length <= len) return s.padEnd(len);
+  // Reserve one char for the ellipsis so truncation is visible.
+  return s.slice(0, len - 1).padEnd(len, "…");
+}
+
 function usd(value) {
   if (value == null) return "-";
   return `$${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -174,6 +184,42 @@ export function formatSwapQuote(data) {
   return lines.join("\n");
 }
 
+export function formatBridgeOffers(data) {
+  // Column widths chosen to fit comfortably in 80-col terminals. Provider
+  // gets truncated (longest known: ~20 chars); numeric columns padStart so
+  // alignment holds even when values vary in length.
+  const W = { idx: 3, provider: 18, output: 14, time: 8, fee: 8, status: 10 };
+  const totalWidth = Object.values(W).reduce((a, b) => a + b, 0) + Object.keys(W).length - 1;
+
+  const lines = [
+    `${BOLD}Bridge Quotes${RESET} — ${data.fromChain} → ${data.toChain}  ${DIM}(${data.amount} ${data.fromToken} → ${data.toToken})${RESET}\n`,
+  ];
+  lines.push(`  ${DIM}${pad("#", W.idx)} ${pad("Provider", W.provider)} ${padStart("Output", W.output)} ${padStart("Time", W.time)} ${padStart("Fee %", W.fee)} ${pad("Status", W.status)}${RESET}`);
+  lines.push(`  ${DIM}${"─".repeat(totalWidth)}${RESET}`);
+  if (data.offers.length === 0) {
+    lines.push(`  ${DIM}(no offers)${RESET}`);
+  }
+  for (const [i, o] of data.offers.entries()) {
+    const time = o.estimatedSeconds != null ? `${o.estimatedSeconds}s` : "-";
+    const fee = o.fee?.protocolPercent != null ? `${Number(o.fee.protocolPercent).toFixed(2)}%` : "-";
+    const out = o.estimatedOutput ?? "-";
+    const provider = o.provider || o.liquiditySource || "(unknown)";
+    // Blocked offers stay in the table so users see the full route set, but
+    // we mark them clearly — pickOffer will skip these in favor of any
+    // executable offer, so the visual ordering ("biggest output wins") would
+    // otherwise mislead about what `--cheapest` actually selects.
+    const blocked = o.executable === false || o.blocking != null;
+    const status = blocked
+      ? `${RED}blocked${RESET}`
+      : `${GREEN}ready${RESET}`;
+    const row = `  ${pad(i + 1, W.idx)} ${padTrunc(provider, W.provider)} ${padStart(out, W.output)} ${padStart(time, W.time)} ${padStart(fee, W.fee)} ${status}`;
+    lines.push(blocked ? `${DIM}${row}${RESET}` : row);
+  }
+  lines.push("");
+  lines.push(`  ${YELLOW}Pick one:${RESET} re-run with ${BOLD}--cheapest${RESET} (highest output) or ${BOLD}--fast${RESET} (lowest time). Blocked offers are skipped automatically.`);
+  return lines.join("\n");
+}
+
 export function formatHistory(data) {
   const lines = [`${BOLD}Transactions${RESET} — ${data.wallet.name} (${data.count})\n`];
   for (const tx of data.transactions) {
@@ -189,8 +235,13 @@ export function formatHistory(data) {
 
 export function formatChains(data) {
   const lines = [`${BOLD}Supported Chains${RESET} (${data.count})\n`];
+  lines.push(`  ${DIM}${pad("ID", 22)} ${pad("Name", 20)} ${pad("Trade", 6)} ${pad("Bridge", 7)} ${"Send"}${RESET}`);
+  lines.push(`  ${DIM}${"─".repeat(64)}${RESET}`);
   for (const c of data.chains) {
-    lines.push(`  ${pad(c.id, 22)} ${pad(c.name, 14)} ${DIM}(${c.nativeCurrency})${RESET}`);
+    const t = c.supportsTrading ? "✓" : " ";
+    const b = c.supportsBridge ? "✓" : " ";
+    const s = c.supportsSending ? "✓" : " ";
+    lines.push(`  ${pad(c.id, 22)} ${pad(c.name, 20)} ${pad(t, 6)} ${pad(b, 7)} ${s}`);
   }
   return lines.join("\n");
 }
