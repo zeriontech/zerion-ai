@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "chatId": 7970761935,
+      "username": "web3fran",
+      "firstName": "BOB",
+      "thresholds": {
+        "conviction": 45,
+        "timing": 45
+      },
+      "notifications": false,
+      "joinedAt": "2026-05-10T15:36:21.755Z",
+      "whaleWallets": []
+    }
+  ]
+}

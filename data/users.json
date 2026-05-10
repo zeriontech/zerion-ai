@@ -1,0 +1,1 @@
+[{"id":"usr_1778425225414","name":"Operator","address":"0x4eD79BD1282f942523B3ce73Dc39c30CDAD2B469","active":true,"createdAt":"2026-05-10T15:00:25.414Z","policy":{"dailyLimit":100,"weeklyLimit":50,"maxTradesPerDay":5,"cooldownMs":0,"tradeSize":1}}]

@@ -2,11 +2,11 @@
 import type { Token } from '../types'
 import { logger } from '../utils/logger'
 
-const STABLECOINS = new Set(['USDC', 'USDT', 'DAI', 'BUSD', 'FRAX', 'LUSD', 'USDD', 'TUSD'])
-const MIN_MARKET_CAP   = 100_000_000   // $100M
-const MIN_LIQUIDITY    = 500_000       // $500K
-const MAX_24H_PUMP     = 0.30          // >30% gain in 24h = suspicious
-const MIN_VOLUME_24H   = 100_000       // $100K minimum volume
+const STABLECOINS = new Set(['USDT', 'DAI', 'BUSD', 'FRAX', 'LUSD', 'USDD', 'TUSD'])
+const MIN_MARKET_CAP   = 5_000_000      // $5M (was $100M)
+const MIN_LIQUIDITY    = 50_000         // $50K (was $500K)
+const MAX_24H_PUMP     = 0.50           // 50% (was 30%)
+const MIN_VOLUME_24H   = 20_000         // $20K (was $100K)
 
 export function hardFilter(tokens: Token[]): Token[] {
   return tokens.filter(token => {

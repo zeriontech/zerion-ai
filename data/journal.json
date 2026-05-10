@@ -1,0 +1,67 @@
+[
+  {
+    "id": "trade_1778438389649_d56u2",
+    "userId": "usr_1778425225414",
+    "timestamp": "2026-05-10T18:39:49.649Z",
+    "token": "AIXBT",
+    "tokenAddress": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825",
+    "convictionScore": 78,
+    "timingScore": 73,
+    "amount": 1,
+    "executed": false,
+    "dryRun": false,
+    "error": "Direct: OpenOcean swap error: {\"reason\":\"could not detect network\",\"code\":\"NETWORK_ERROR\",\"event\":\"noNetwork\"}"
+  },
+  {
+    "id": "trade_1778438599824_o4j6g",
+    "userId": "usr_1778425225414",
+    "timestamp": "2026-05-10T18:43:19.824Z",
+    "token": "USDC",
+    "tokenAddress": "usd-coin",
+    "convictionScore": 55,
+    "timingScore": 79,
+    "amount": 1,
+    "executed": false,
+    "dryRun": false,
+    "error": "Direct: Unexpected token 'I', \"Invalid API key\" is not valid JSON"
+  },
+  {
+    "id": "trade_1778438693426_8keyb",
+    "userId": "usr_1778425225414",
+    "timestamp": "2026-05-10T18:44:53.426Z",
+    "token": "USDC",
+    "tokenAddress": "usd-coin",
+    "convictionScore": 55,
+    "timingScore": 79,
+    "amount": 1,
+    "executed": false,
+    "dryRun": false,
+    "error": "Direct: Unexpected token 'I', \"Invalid API key\" is not valid JSON"
+  },
+  {
+    "id": "trade_1778438858135_xwxrw",
+    "userId": "usr_1778425225414",
+    "timestamp": "2026-05-10T18:47:38.135Z",
+    "token": "USDC",
+    "tokenAddress": "usd-coin",
+    "convictionScore": 55,
+    "timingScore": 79,
+    "amount": 1,
+    "executed": false,
+    "dryRun": false,
+    "error": "Direct: 0x swap error: {\"message\":\"Unauthorized\",\"request_id\":\"1440517f8df85b75b7f22a3075141415\"}"
+  },
+  {
+    "id": "trade_1778438959427_40xuh",
+    "userId": "usr_1778425225414",
+    "timestamp": "2026-05-10T18:49:19.428Z",
+    "token": "USDC",
+    "tokenAddress": "usd-coin",
+    "convictionScore": 55,
+    "timingScore": 79,
+    "amount": 1,
+    "executed": false,
+    "dryRun": false,
+    "error": "Direct: 0x swap error: {\"message\":\"Unauthorized\",\"request_id\":\"d9e7d80d7b9da523b696310e157b2b7f\"}"
+  }
+]

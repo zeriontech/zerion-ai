@@ -26,6 +26,19 @@ export interface Token {
 export interface ScoredToken extends Token {
   convictionScore: number  // Gate A: 0-100, threshold 60
   timingScore:     number  // Gate B: 0-100, threshold 55
+  convictionBreakdown: {
+    volumeConsistency: number
+    priceTrend: number
+    walletAlloc: number
+    volatilityPenalty: number
+    whaleBonus: number
+    narrativeBonus: number
+  }
+  timingBreakdown: {
+    rsi: number
+    retracement: number
+    momentum: number
+  }
 }
 
 export interface User {

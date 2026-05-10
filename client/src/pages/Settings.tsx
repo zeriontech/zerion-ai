@@ -47,50 +47,44 @@ export default function Settings() {
   }
 
   return (
-    <div>
-      <h3 style={{ marginBottom: 16 }}>Agent Settings</h3>
+    <div className="p-6 text-[#e0e0e8]">
+      <h3 className="text-lg font-bold mb-6 tracking-wide">AGENT SETTINGS</h3>
 
-      <div style={{ background: '#f8f9fa', padding: 20, borderRadius: 8, marginBottom: 32, border: '1px solid #dee2e6' }}>
-        <h4 style={{ marginTop: 0 }}>Add Target Wallet</h4>
-        <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+      <div className="bg-[#14141a] border border-[#23232b] rounded-xl p-5 mb-8">
+        <h4 className="text-sm font-bold mb-2 text-white">Add Target Wallet</h4>
+        <p className="text-xs text-[#6e6e7a] mb-4">
           Add a wallet address you want the agent to monitor and potentially trade for.
-          The operator wallet will execute trades using its own funds.
         </p>
-        <form onSubmit={addUser} style={{ display: 'flex', gap: 12 }}>
-          <input name="name" placeholder="User Name (e.g. My Main Wallet)" required style={{ padding: '10px', borderRadius: 4, border: '1px solid #ccc', flex: 1 }} />
-          <input name="address" placeholder="0x..." required pattern="^0x[0-9a-fA-F]{40}$" style={{ padding: '10px', borderRadius: 4, border: '1px solid #ccc', flex: 2 }} />
-          <button type="submit" disabled={loading} style={{ padding: '10px 24px', background: '#2461ED', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' }}>
+        <form onSubmit={addUser} className="flex gap-3">
+          <input name="name" placeholder="User Name" required className="px-3 py-2 rounded-lg bg-[#0d0d12] border border-[#23232b] text-white text-xs flex-1 focus:border-[#aa3bff] focus:outline-none" />
+          <input name="address" placeholder="0x..." required pattern="^0x[0-9a-fA-F]{40}$" className="px-3 py-2 rounded-lg bg-[#0d0d12] border border-[#23232b] text-white text-xs font-mono flex-[2] focus:border-[#aa3bff] focus:outline-none" />
+          <button type="submit" disabled={loading} className="px-5 py-2 bg-[#aa3bff] hover:bg-[#7b2cbf] text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50">
             {loading ? 'Adding...' : 'Add Wallet'}
           </button>
         </form>
       </div>
 
-      <h4>Active Monitor List</h4>
+      <h4 className="text-sm font-bold mb-4">Active Monitor List</h4>
       {users.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
           {users.map(u => (
-            <div key={u.id} style={{ padding: 16, border: '1px solid #eee', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={u.id} className="bg-[#14141a] border border-[#23232b] rounded-xl p-4 flex justify-between items-center">
               <div>
-                <div style={{ fontWeight: 'bold' }}>{u.name}</div>
-                <div style={{ fontSize: 12, color: '#999', fontFamily: 'monospace' }}>{u.address.slice(0, 6)}...{u.address.slice(-4)}</div>
-                <div style={{ marginTop: 8 }}>
-                   <span style={{ fontSize: 11, padding: '2px 6px', background: '#eee', borderRadius: 4 }}>
-                     Limit: ${u.policy.dailyLimit}/day
-                   </span>
+                <div className="font-bold text-sm text-white">{u.name}</div>
+                <div className="text-[11px] text-[#6e6e7a] font-mono">{u.address.slice(0, 6)}...{u.address.slice(-4)}</div>
+                <div className="mt-2">
+                  <span className="text-[10px] px-2 py-0.5 bg-[#0d0d12] rounded text-[#8e8e99]">
+                    Limit: ${u.policy.dailyLimit}/day
+                  </span>
                 </div>
               </div>
               <button
                 onClick={() => toggleUser(u)}
-                style={{
-                  padding: '6px 12px',
-                  background: u.active ? '#e8f5e9' : '#ffebee',
-                  color: u.active ? '#2e7d32' : '#d32f2f',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 'bold'
-                }}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border cursor-pointer transition-colors ${
+                  u.active
+                    ? 'bg-[#00c853]/10 border-[#00c853]/30 text-[#00c853]'
+                    : 'bg-[#ff5d8f]/10 border-[#ff5d8f]/30 text-[#ff5d8f]'
+                }`}
               >
                 {u.active ? 'ACTIVE' : 'PAUSED'}
               </button>
@@ -98,7 +92,7 @@ export default function Settings() {
           ))}
         </div>
       ) : (
-        <div style={{ color: '#999', fontStyle: 'italic' }}>No wallets configured.</div>
+        <div className="text-[#6e6e7a] text-sm italic">No wallets configured.</div>
       )}
     </div>
   )

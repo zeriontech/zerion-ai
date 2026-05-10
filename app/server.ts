@@ -10,6 +10,7 @@ import {
   loadJournal, loadJournalForUser,
   loadAgentState,
 } from './utils/storage'
+import { startBot } from './bot'
 
 const app = express()
 app.use(express.json())
@@ -80,8 +81,13 @@ app.get('/api/journal/:userId', (req, res) => res.json(loadJournalForUser(req.pa
 app.get('/api/state', (_req, res) => res.json(loadAgentState()))
 
 // ── Manual Cycle Trigger ───────────────────────────────────
+app.get('/api/run', (_req, res) => {
+  res.json({ message: 'Cycle triggered via GET' })
+  runAgentCycle().catch(console.error)
+})
+
 app.post('/api/run', (_req, res) => {
-  res.json({ message: 'Cycle triggered' })
+  res.json({ message: 'Cycle triggered via POST' })
   runAgentCycle().catch(console.error)
 })
 
@@ -109,6 +115,9 @@ app.listen(PORT, () => {
   console.log(`📊 Dashboard:    http://localhost:${PORT}`)
   console.log(`🔧 Setup Check:  http://localhost:${PORT}/api/setupcheck`)
   console.log(`▶️  Manual Run:   POST http://localhost:${PORT}/api/run\n`)
+
+  // Start Telegram bot
+  startBot()
 
   // Run once on startup (dry run only)
   if (process.env.RUN_ON_STARTUP === 'true') {

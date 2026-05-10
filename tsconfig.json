@@ -4,11 +4,14 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "outDir": "dist",
-    "rootDir": "app",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": false
   },
   "include": ["app/**/*"],
-  "exclude": ["node_modules", "cli", "client"]
+  "exclude": ["node_modules", "client"]
 }

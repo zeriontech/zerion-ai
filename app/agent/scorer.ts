@@ -32,17 +32,23 @@ function calcRSI(closes: number[], period = 14): number {
 }
 
 // ── Gate A: Conviction (0-100) ──────────────────────────────
-// Is this token fundamentally worth buying?
 
 export function scoreConviction(token: Token, technicals: {
   ma7d: number
   ma14d: number
   stdDev: number
   volumeHistory: number[]
-}): number {
-  let score = 0
+}) {
+  const breakdown = {
+    volumeConsistency: 0,
+    priceTrend: 0,
+    walletAlloc: 25,
+    volatilityPenalty: 25,
+    whaleBonus: 0,
+    narrativeBonus: 0,
+  }
 
-  // 1. Volume Consistency (25 pts) — consecutive days of growth
+  // 1. Volume Consistency (25 pts)
   const vols = technicals.volumeHistory
   let streak = 0
   if (vols.length > 1) {
@@ -51,58 +57,67 @@ export function scoreConviction(token: Token, technicals: {
       else break
     }
   }
-  const volScore = Math.min(25, streak * 5)
-  score += volScore
+  breakdown.volumeConsistency = Math.min(25, streak * 5)
 
-  // 2. Price Trend (25 pts) — above 7d and 14d MAs
-  if (token.price > technicals.ma7d && technicals.ma7d > 0) score += 12
-  if (token.price > technicals.ma14d && technicals.ma14d > 0) score += 13
+  // 2. Price Trend (25 pts)
+  if (token.price > technicals.ma7d && technicals.ma7d > 0) breakdown.priceTrend += 12
+  if (token.price > technicals.ma14d && technicals.ma14d > 0) breakdown.priceTrend += 13
 
-  // 3. Wallet Allocation (25 pts) — rewarded for not already owning
-  // (In managed-wallet mode, we always score this as 25 since we control the wallet)
-  score += 25
-
-  // 4. Volatility Penalty (25 pts) — penalise erratic swings
+  // 4. Volatility Penalty (25 pts)
   const stdDevNorm = Math.min(1, technicals.stdDev / token.price)
   const volPenalty = Math.floor(stdDevNorm * 100)
-  score += Math.max(0, 25 - volPenalty)
+  breakdown.volatilityPenalty = Math.max(0, 25 - volPenalty)
 
-  // 5. Whale Bonus (15 pts) — at least 2 whales accumulating
-  if ((token.whaleAccumulationCount || 0) >= 2) score += 15
+  // 5. Whale Bonus (15 pts)
+  if ((token.whaleAccumulationCount || 0) >= 2) breakdown.whaleBonus = 15
 
   // 6. Narrative Bonus (10 pts)
-  if (token.hasNarrativeMomentum) score += 10
+  if (token.hasNarrativeMomentum) breakdown.narrativeBonus = 10
 
-  return Math.min(100, score)
+  const score = Object.values(breakdown).reduce((a, b) => a + b, 0)
+  return { score: Math.min(100, score), breakdown }
 }
 
 // ── Gate B: Timing (0-100) ──────────────────────────────────
-// Is NOW the right time to buy?
 
-export function scoreTiming(token: Token, rsi: number): number {
-  let score = 0
+export function scoreTiming(token: Token, rsi: number) {
+  const breakdown = {
+    rsi: 0,
+    retracement: 0,
+    momentum: 0,
+  }
 
-  // 1. RSI (40 pts) — reward oversold
-  if (rsi < 25)      score += 40
-  else if (rsi < 35) score += 30
-  else if (rsi < 45) score += 15
-  else if (rsi < 55) score += 5
+  // 1. RSI — sweet spot is 40-60 (neutral/bullish continuation)
+  // Overbought (>70) = bad timing, Oversold (<30) = bad timing
+  // 40-60 range = best timing for continuation
+  const rsiNorm = Math.abs(rsi - 50) // distance from 50
+  breakdown.rsi = Math.max(0, 40 - Math.floor(rsiNorm * 1.5))
 
-  // 2. Price vs 24h High (30 pts) — reward retracement from peak
-  const retracement = token.high24h > 0
-    ? 1 - (token.price / token.high24h)
-    : 0
-  score += Math.min(30, Math.floor(retracement * 150))
+  // 2. Retracement from 24h High (30 pts)
+  // Closer to low = better entry (more room to run)
+  // At high = 0 pts (risky to buy the top)
+  if (token.high24h > token.low24h && token.low24h > 0) {
+    const range = token.high24h - token.low24h
+    const distanceFromHigh = token.high24h - token.price
+    const normalized = distanceFromHigh / range // 0 = at high, 1 = at low
+    breakdown.retracement = Math.min(30, Math.floor(normalized * 40))
+  } else if (token.high24h > 0) {
+    // Fallback: simple % below high
+    breakdown.retracement = Math.min(30, Math.floor((1 - token.price / token.high24h) * 300))
+  }
 
-  // 3. Volume-Price Divergence (30 pts) — volume spike without price spike
-  const volumeChange = token.volumeChange24h || 0
-  const priceChange  = token.priceChange24h || 0
-  const divergence   = volumeChange - priceChange
-  if (divergence > 0.5)      score += 30
-  else if (divergence > 0.2) score += 15
-  else if (divergence > 0)   score += 5
+  // 3. Momentum Direction (30 pts)
+  // Price moving up but not too fast = good momentum
+  // Price down = accumulation opportunity
+  const change24h = token.priceChange24h || 0
+  if (change24h > 0.20)      breakdown.momentum = 5   // too hot, chase risk
+  else if (change24h > 0.05) breakdown.momentum = 30  // steady uptrend
+  else if (change24h > -0.05) breakdown.momentum = 20  // flat / slight dip
+  else if (change24h > -0.15) breakdown.momentum = 15  // dip buy opportunity
+  else                        breakdown.momentum = 5   // falling knife
 
-  return Math.min(100, score)
+  const score = Object.values(breakdown).reduce((a, b) => a + b, 0)
+  return { score: Math.min(100, score), breakdown }
 }
 
 // ── Full Token Scoring Pipeline ─────────────────────────────
@@ -132,8 +147,14 @@ export async function scoreToken(token: Token): Promise<ScoredToken> {
 
   const enriched = { ...token, ma7d, ma14d, stdDev7d: stdDev, rsi14: rsi, whaleAccumulationCount: whaleCount, volumeHistory }
 
-  const convictionScore = scoreConviction(enriched, { ma7d, ma14d, stdDev, volumeHistory })
-  const timingScore     = scoreTiming(enriched, rsi)
+  const conviction = scoreConviction(enriched, { ma7d, ma14d, stdDev, volumeHistory })
+  const timing     = scoreTiming(enriched, rsi)
 
-  return { ...enriched, convictionScore, timingScore }
+  return { 
+    ...enriched, 
+    convictionScore: conviction.score, 
+    timingScore: timing.score,
+    convictionBreakdown: conviction.breakdown,
+    timingBreakdown: timing.breakdown
+  }
 }

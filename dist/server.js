@@ -68,8 +68,12 @@ app.get('/api/journal/:userId', (req, res) => res.json(loadJournalForUser(req.pa
 // ── Agent State ────────────────────────────────────────────
 app.get('/api/state', (_req, res) => res.json(loadAgentState()));
 // ── Manual Cycle Trigger ───────────────────────────────────
+app.get('/api/run', (_req, res) => {
+    res.json({ message: 'Cycle triggered via GET' });
+    runAgentCycle().catch(console.error);
+});
 app.post('/api/run', (_req, res) => {
-    res.json({ message: 'Cycle triggered' });
+    res.json({ message: 'Cycle triggered via POST' });
     runAgentCycle().catch(console.error);
 });
 // ── Watchlist ──────────────────────────────────────────────

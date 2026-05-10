@@ -10,55 +10,55 @@ export default function Journal() {
   }, [])
 
   return (
-    <div>
-      <h3 style={{ marginBottom: 16 }}>Trading Journal</h3>
+    <div className="p-6 text-[#e0e0e8]">
+      <h3 className="text-lg font-bold mb-6 tracking-wide">TRADING JOURNAL</h3>
       {entries.length > 0 ? (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
-              {['Date', 'Token', 'Amount', 'Scores', 'Status', 'Hash/Error'].map(h => (
-                <th key={h} style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e: any, i: number) => (
-              <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>
-                  {new Date(e.timestamp).toLocaleString()}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <div style={{ fontWeight: 'bold' }}>{e.token}</div>
-                </td>
-                <td style={{ padding: '12px' }}>${e.amount}</td>
-                <td style={{ padding: '12px' }}>
-                  <div style={{ fontSize: 12 }}>C: {e.convictionScore} | T: {e.timingScore}</div>
-                </td>
-                <td style={{ padding: '12px' }}>
-                  {e.dryRun ? (
-                    <span style={{ padding: '2px 8px', background: '#e3f2fd', color: '#1976d2', borderRadius: 4, fontSize: 11 }}>DRY RUN</span>
-                  ) : e.executed ? (
-                    <span style={{ padding: '2px 8px', background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, fontSize: 11 }}>SUCCESS</span>
-                  ) : (
-                    <span style={{ padding: '2px 8px', background: '#ffebee', color: '#d32f2f', borderRadius: 4, fontSize: 11 }}>FAILED</span>
-                  )}
-                </td>
-                <td style={{ padding: '12px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {e.txHash ? (
-                    <a href={`https://basescan.org/tx/${e.txHash}`} target="_blank" rel="noreferrer" style={{ color: '#2461ED', textDecoration: 'none' }}>
-                      {e.txHash.slice(0, 10)}...
-                    </a>
-                  ) : (
-                    <span style={{ color: '#d32f2f' }}>{e.error || '—'}</span>
-                  )}
-                </td>
+        <div className="bg-[#14141a] border border-[#23232b] rounded-xl overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-[#0d0d12] text-[#8e8e99] uppercase tracking-wider font-bold text-[10px]">
+                {['Date', 'Token', 'Amount', 'Scores', 'Status', 'Hash/Error'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left">{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {entries.map((e: any, i: number) => (
+                <tr key={i} className="border-t border-[#23232b] hover:bg-[#1a1a24] transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-[#a0a0ac]">
+                    {new Date(e.timestamp).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 font-bold text-white">{e.token}</td>
+                  <td className="px-4 py-3 font-mono text-[#a0a0ac]">${e.amount}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-[10px]">C:{e.convictionScore} T:{e.timingScore}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {e.dryRun ? (
+                      <span className="px-2 py-0.5 bg-[#ffb703]/10 text-[#ffb703] rounded text-[10px] font-bold">DRY RUN</span>
+                    ) : e.executed ? (
+                      <span className="px-2 py-0.5 bg-[#00c853]/10 text-[#00c853] rounded text-[10px] font-bold">SUCCESS</span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-[#ff5d8f]/10 text-[#ff5d8f] rounded text-[10px] font-bold">FAILED</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
+                    {e.txHash ? (
+                      <a href={`https://basescan.org/tx/${e.txHash}`} target="_blank" rel="noreferrer" className="text-[#aa3bff] hover:underline text-[10px]">
+                        {e.txHash.slice(0, 10)}...
+                      </a>
+                    ) : (
+                      <span className="text-[#ff5d8f] text-[10px]">{e.error || '—'}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: 40, color: '#999', border: '1px dashed #ccc', borderRadius: 8 }}>
-          No journal entries yet.
+        <div className="text-center py-10 text-[#6e6e7a] border border-dashed border-[#23232b] rounded-xl">
+          No journal entries yet. Agent is monitoring markets.
         </div>
       )}
     </div>

@@ -34,11 +34,11 @@ export function createUser(data: Pick<User, 'name' | 'address'>): User {
     active: true,
     createdAt: new Date().toISOString(),
     policy: {
-      dailyLimit: 50,
-      weeklyLimit: 200,
-      maxTradesPerDay: 3,
+      dailyLimit: 10,
+      weeklyLimit: 50,
+      maxTradesPerDay: 5,
       cooldownMs: 60 * 60 * 1000,
-      tradeSize: 10,
+      tradeSize: 1,
     },
   }
   users.push(user)
