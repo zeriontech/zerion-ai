@@ -1,5 +1,5 @@
 ---
-name: somnia-blockchain
+name: zerion-somnia-blockchain
 description: Comprehensive Somnia blockchain knowledge — network info, unique features, gas model, and deployment guidance for building on Somnia
 ---
 

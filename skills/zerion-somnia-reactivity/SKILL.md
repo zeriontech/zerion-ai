@@ -1,5 +1,5 @@
 ---
-name: somnia-reactivity
+name: zerion-somnia-reactivity
 description: Deep-dive reference for Somnia Reactivity — the native event-driven pub/sub system. Covers off-chain WebSocket subscriptions, on-chain Solidity handlers, subscription creation from both TypeScript and Solidity, gas configuration, system events (BlockTick/Schedule), and troubleshooting. Use when the user is building reactive dApps, creating subscriptions, writing handler contracts, or debugging reactivity issues.
 ---
 
