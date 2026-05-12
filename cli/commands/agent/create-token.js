@@ -22,6 +22,42 @@ export default async function agentCreateToken(args, flags) {
     process.exit(1);
   }
 
+  // Validate passphrase-related flags up front (fail fast before any state lookup).
+  // Reject --passphrase <value> — argv-passed secrets leak to ps/history/logs.
+  if (Object.prototype.hasOwnProperty.call(flags, "passphrase")) {
+    printError(
+      "unsupported_flag",
+      "--passphrase is not supported (argv-passed secrets leak to `ps`, shell history, and CI logs).",
+      {
+        suggestion:
+          "Use --passphrase-file <path> instead. Write the passphrase to a file with mode 0600 (chmod 600 <path>) and pass the path.",
+      }
+    );
+    process.exit(1);
+  }
+
+  const passphraseFile = flags["passphrase-file"];
+  if (passphraseFile === true) {
+    printError("missing_args", "--passphrase-file requires a path argument", {
+      example:
+        'zerion agent create-token --name <bot> --wallet <wallet> --policy <id> --passphrase-file ~/.zerion-pass',
+    });
+    process.exit(1);
+  }
+  if (passphraseFile != null && typeof passphraseFile !== "string") {
+    printError("invalid_flag", "--passphrase-file must be a string path", {
+      suggestion: "Example: --passphrase-file /run/zerion/pass",
+    });
+    process.exit(1);
+  }
+  if (typeof passphraseFile === "string" && passphraseFile.trim() === "") {
+    printError("missing_args", "--passphrase-file path cannot be empty", {
+      example:
+        'zerion agent create-token --name <bot> --wallet <wallet> --policy <id> --passphrase-file ~/.zerion-pass',
+    });
+    process.exit(1);
+  }
+
   // Resolve policy — from flag or interactive picker
   let policyIds;
 
@@ -46,9 +82,8 @@ export default async function agentCreateToken(args, flags) {
 
   // Passphrase to prove wallet ownership.
   // Default: interactive TTY prompt (after policy is resolved).
-  // Non-interactive: --passphrase-file <path> (must be mode 0600).
+  // Non-interactive: --passphrase-file <path> (validated above; must be mode 0600).
   let passphrase;
-  const passphraseFile = flags["passphrase-file"];
   if (passphraseFile) {
     try {
       passphrase = readPassphraseFromFile(passphraseFile);
