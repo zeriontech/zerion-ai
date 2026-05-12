@@ -75,7 +75,7 @@ If no agent token is configured and stderr is a TTY, the CLI offers:
 Want to setup an agent token for "<wallet>"? [Y/n]
 ```
 
-…and runs `agent create-token` inline. After that completes, the original `sign-*` command continues with the fresh token. In non-TTY contexts (CI, piped) the command fails fast with `no_agent_token` — see `zerion-agent-management`.
+…and runs `agent create-token` inline. After that completes, the original `sign-*` command continues with the fresh token. In non-TTY contexts (CI, piped) the command fails fast with `no_agent_token` — pre-create the token with `agent create-token --passphrase-file <0600-path>` (see `zerion-agent-management`).
 
 ## Security
 

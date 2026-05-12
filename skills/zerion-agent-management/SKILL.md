@@ -61,6 +61,47 @@ zerion agent create-token --name <bot> --wallet <wallet> --policy <id1>,<id2>
 
 The token is auto-saved to `~/.zerion/config.json` under `agentTokens` and (if no token was active before) becomes the default. Trading commands (`zerion-trading`) and signing commands (`zerion-sign`) read it from config.
 
+### Non-interactive token creation (`--passphrase-file`)
+
+For CI, headless servers, or scripted agent setup, read the passphrase from a file instead of the TTY prompt:
+
+```bash
+# Write the passphrase to a file readable only by you
+umask 077                                   # ensure new files default to 0600
+printf '%s' "$ZERION_PASSPHRASE" > /run/zerion/pass
+chmod 600 /run/zerion/pass                  # required — refused if looser
+
+# Create the token non-interactively
+zerion agent create-token \
+  --name bot --wallet my-agent \
+  --policy <id> \
+  --passphrase-file /run/zerion/pass
+
+# Clean up immediately
+shred -u /run/zerion/pass 2>/dev/null || rm -f /run/zerion/pass
+```
+
+Rules:
+
+- File **must be mode `0600`** (owner read/write only). Any group/other bits → CLI refuses with `passphrase_file_error`.
+- Trailing newline (`\n` or `\r\n`) is stripped; leading/trailing spaces inside the passphrase are preserved.
+- Empty file is rejected.
+- Permission check is skipped on Windows (POSIX mode bits not meaningful there) — use NTFS ACLs to restrict access instead.
+
+Recommended patterns:
+
+| Environment | Source | Notes |
+|---|---|---|
+| Local dev | `~/.zerion-pass` (chmod 600) | Delete after use. |
+| Docker | Bind-mount a tmpfs file | `--tmpfs /run/zerion:mode=0700` then write passphrase inside. |
+| Kubernetes | Mount a `Secret` as a file | Default mount mode is `0644` — set `defaultMode: 0600` in the volume spec. |
+| GitHub Actions | Write `${{ secrets.X }}` to a temp file, `chmod 600`, then run | Cleanup is automatic at job end. |
+| HashiCorp Vault | `vault agent` template renders to a 0600 file | Renew & rotate centrally. |
+
+Threat model: same as an SSH private key on disk. Anyone with **active-session read access to the file** can unlock the keystore. Keep the file path off shared filesystems, out of git, out of process listings. Argv-passed passphrases (`--passphrase <value>`) are **not** supported because they leak to `ps aux`, shell history, and CI logs.
+
+`--passphrase-file` only affects `agent create-token` for now. `wallet create`, `wallet import`, and other passphrase-gated commands still require an interactive TTY.
+
 ### Revoke a token
 
 ```bash
@@ -148,3 +189,4 @@ zerion agent create-token --name agent-bot \
 | `policy_not_found` | Policy ID doesn't exist | `agent list-policies` to find valid IDs |
 | `policy_no_rules` | `create-policy` with no flags | Add at least one rule (`--chains`, `--expires`, `--deny-*`, `--allowlist`) |
 | `token_name_exists` | Duplicate `--name` | Choose another name or `agent revoke-token --name <bot>` first |
+| `passphrase_file_error` | `--passphrase-file` path missing, wrong perms, or empty | `chmod 600 <path>`; ensure file exists and is non-empty |

@@ -34,7 +34,7 @@ zerion wallet list                       # confirm wallet exists, see active pol
 zerion agent list-tokens                 # confirm agent token is set
 ```
 
-If no agent token, the CLI offers an inline create-token prompt on the next trade attempt (TTY only). In CI / piped contexts, see `zerion-agent-management`.
+If no agent token, the CLI offers an inline create-token prompt on the next trade attempt (TTY only). In CI / piped contexts, pre-create the token with `zerion agent create-token --passphrase-file <0600-path>` — see `zerion-agent-management`.
 
 ## Swap (same-chain)
 

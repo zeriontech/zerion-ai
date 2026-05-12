@@ -131,7 +131,7 @@ The agent reaches for the right skill (e.g. `zerion-analyze` for "what's in this
 
 Zerion CLI splits into two surfaces, by design.
 
-- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop.
+- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see the `zerion-agent-management` skill.
 - **Analysis, signing, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `sign-message`, `sign-typed-data`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, signing and trading fire immediately — the token authorizes operations on behalf of the wallet without a passphrase prompt.
 
 Setup gestures (`init`, `setup skills`, `config set/unset/list`, `watch` add/remove) are one-time configuration steps you run yourself before automation takes over.
@@ -264,7 +264,8 @@ Scoped API tokens for unattended trading. Token auto-saves to config; required f
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion agent create-token --name <bot> --wallet <wallet>` | Create scoped token | `zerion agent create-token --name dca-bot --wallet trading-bot` |
+| `zerion agent create-token --name <bot> --wallet <wallet>` | Create scoped token (interactive passphrase) | `zerion agent create-token --name dca-bot --wallet trading-bot` |
+| `zerion agent create-token … --passphrase-file <path>` | Non-interactive: passphrase read from a `chmod 600` file (CI / headless) | `zerion agent create-token --name dca-bot --wallet trading-bot --policy <id> --passphrase-file /run/zerion/pass` |
 | `zerion agent list-tokens` | List active agent tokens | `zerion agent list-tokens` |
 | `zerion agent use-token --wallet <wallet>` | Switch active token by wallet | `zerion agent use-token --wallet trading-bot` |
 | `zerion agent revoke-token --name <bot>` | Revoke a token | `zerion agent revoke-token --name dca-bot` |

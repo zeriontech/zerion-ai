@@ -1,7 +1,7 @@
 import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue, setConfigValue, saveAgentToken } from "../../utils/config.js";
-import { readPassphrase } from "../../utils/common/prompt.js";
+import { readPassphrase, readPassphraseFromFile } from "../../utils/common/prompt.js";
 import { pickPolicyInteractive } from "../../utils/wallet/policy-picker.js";
 
 export default async function agentCreateToken(args, flags) {
@@ -44,8 +44,23 @@ export default async function agentCreateToken(args, flags) {
     policyIds = [policyId];
   }
 
-  // Passphrase to prove wallet ownership — always interactive (after policy is resolved)
-  const passphrase = await readPassphrase();
+  // Passphrase to prove wallet ownership.
+  // Default: interactive TTY prompt (after policy is resolved).
+  // Non-interactive: --passphrase-file <path> (must be mode 0600).
+  let passphrase;
+  const passphraseFile = flags["passphrase-file"];
+  if (passphraseFile) {
+    try {
+      passphrase = readPassphraseFromFile(passphraseFile);
+    } catch (err) {
+      printError("passphrase_file_error", err.message, {
+        suggestion: "Ensure the file exists, is mode 0600, and contains the passphrase.",
+      });
+      process.exit(1);
+    }
+  } else {
+    passphrase = await readPassphrase();
+  }
 
   try {
     const result = ows.createAgentToken(name, walletName, passphrase, flags.expires, policyIds);
