@@ -58,7 +58,7 @@ function printUsage() {
     },
     agent_tokens: {
       "agent create-token --name <bot> --wallet <wallet>": "Create scoped API token for unattended trading",
-      "agent create-token --name <bot> --wallet <wallet> --passphrase-file <path>": "Non-interactive: read passphrase from a file (must be mode 0600)",
+      "agent create-token --name <bot> --wallet <wallet> --passphrase-file <path>": "Non-interactive: <path> is a plain-text file whose contents are the wallet passphrase (must be mode 0600, owned by you, UTF-8, one optional trailing newline stripped)",
       "agent list-tokens": "List active agent tokens",
       "agent use-token --wallet <wallet>": "Switch active agent token by wallet",
       "agent revoke-token --name <bot>": "Revoke an agent token",

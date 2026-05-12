@@ -67,7 +67,9 @@ The token is auto-saved to `~/.zerion/config.json` under `agentTokens` and (if n
 
 ### Non-interactive token creation (`--passphrase-file`)
 
-For CI, headless servers, or scripted agent setup, read the passphrase from a file instead of the TTY prompt:
+`--passphrase-file <path>` takes a path to a **plain-text file whose entire contents are the wallet passphrase** (the same string a human would type at the TTY prompt). The CLI reads the file once and uses its contents to unlock the keystore. Nothing else lives in the file — no JSON, no key=value, no header.
+
+For CI, headless servers, or scripted agent setup, write the passphrase to such a file instead of typing it:
 
 ```bash
 # Write the passphrase to a file readable only by you
@@ -96,7 +98,48 @@ zerion agent create-token ... --passphrase-file /run/zerion/pass
 
 On macOS, use `/private/tmp/<your-user>/...` or a per-app dir under `~/Library/Caches/`. macOS does not ship a user-writable `/run`.
 
-Rules:
+#### File format
+
+Plain UTF-8 text. The entire file (minus exactly one optional trailing `\n` or `\r\n`) is treated as the passphrase.
+
+| Rule | Reason |
+|---|---|
+| Content = raw passphrase bytes only | No JSON, no `key=value`, no comments, no quotes. Anything in the file is part of the passphrase. |
+| One trailing `\n` or `\r\n` stripped | So `echo "pass" > file` works as expected. Additional newlines are kept. |
+| Leading / trailing spaces inside the passphrase are preserved | Passphrases may legitimately contain them. CLI does **not** `.trim()`. |
+| UTF-8 encoded | Read via `readFileSync(path, "utf8")`. Non-UTF-8 bytes become replacement chars. |
+| Non-empty | Empty file or newline-only file → rejected. |
+| Mode `0600` (POSIX) | Refused otherwise — see Rules below. |
+| Regular file, owned by current uid | Symlinks-to-files are followed; the target must still pass perm + ownership checks. |
+
+Examples (file bytes → passphrase used by CLI):
+
+| Command | File bytes | Passphrase result |
+|---|---|---|
+| `printf '%s' 'hunter2' > f` | `hunter2` | `hunter2` ✅ |
+| `printf '%s\n' 'hunter2' > f` | `hunter2\n` | `hunter2` ✅ |
+| `echo 'hunter2' > f` | `hunter2\n` | `hunter2` ✅ |
+| `echo '"hunter2"' > f` | `"hunter2"\n` | `"hunter2"` (quotes included!) ❌ |
+| `echo '  spaces  ' > f` | `  spaces  \n` | `  spaces  ` (spaces kept) ✅ |
+| `printf '' > f` | (empty) | rejected ❌ |
+| `printf '\n' > f` | `\n` | rejected ❌ |
+
+Canonical form — no trailing newline, no surprises:
+
+```bash
+umask 077
+printf '%s' 'YOUR-PASSPHRASE' > ~/.zerion-pass
+chmod 600 ~/.zerion-pass
+```
+
+Verify before using:
+
+```bash
+wc -c ~/.zerion-pass     # byte count == passphrase length
+xxd ~/.zerion-pass | head # eyeball raw bytes — no BOM, no quotes, no CRLF
+```
+
+#### Rules
 
 - File **must be mode `0600`** (owner read/write only). Any group/other bits → CLI refuses with `passphrase_file_error`.
 - File **must be owned by the current uid** (POSIX). Reading another user's file (e.g. via symlink) is refused. Matches SSH `IdentityFile` behavior.
