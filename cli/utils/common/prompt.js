@@ -87,10 +87,13 @@ export async function readPassphrase({ confirm = false } = {}) {
  * Read a passphrase from a file. Used for non-interactive automation
  * (CI, headless servers, scripted agent setup).
  *
- * Security: refuse to read the file unless it is mode 0600 (owner-only).
- * The passphrase unlocks the keystore — same threat model as an SSH
- * private key, same perm requirement. Perm check is skipped on Windows
- * (POSIX mode bits not meaningful there).
+ * Security: on POSIX, refuse to read the file unless it is mode 0600
+ * AND owned by the current uid. The passphrase unlocks the keystore —
+ * same threat model as an SSH private key, same perm + ownership
+ * requirement. Without the uid check, a symlink at the given path
+ * could resolve to another user's 0600 file on a shared host. Perm
+ * and ownership checks are skipped on Windows (POSIX mode bits and
+ * uid are not meaningful there; use NTFS ACLs instead).
  *
  * Strips exactly one trailing newline (\n or \r\n) — passphrases may
  * legitimately contain leading/trailing spaces, so don't .trim().
@@ -110,12 +113,20 @@ export function readPassphraseFromFile(path) {
     throw new Error(`Passphrase file is not a regular file: ${path}`);
   }
 
-  if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) {
-    const got = (stat.mode & 0o777).toString(8).padStart(3, "0");
-    throw new Error(
-      `Passphrase file ${path} has insecure permissions (mode ${got}). ` +
-        `Run: chmod 600 ${path}`
-    );
+  if (process.platform !== "win32") {
+    if ((stat.mode & 0o077) !== 0) {
+      const got = (stat.mode & 0o777).toString(8).padStart(3, "0");
+      throw new Error(
+        `Passphrase file ${path} has insecure permissions (mode ${got}). ` +
+          `Run: chmod 600 ${path}`
+      );
+    }
+    if (typeof process.getuid === "function" && stat.uid !== process.getuid()) {
+      throw new Error(
+        `Passphrase file ${path} is not owned by the current user (uid ${stat.uid}). ` +
+          `Refusing to read another user's file.`
+      );
+    }
   }
 
   const raw = readFileSync(path, "utf8");

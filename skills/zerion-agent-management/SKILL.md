@@ -33,7 +33,9 @@ Requires Node.js ≥ 20. For auth see the `zerion` umbrella skill. To execute tr
 | Operation | Type | Notes |
 |-----------|------|-------|
 | `agent list-tokens`, `agent list-policies`, `agent show-policy`, `agent use-token` | **Agent** | Read-only or config-only. Safe autonomously. |
-| `agent create-token`, `agent revoke-token`, `agent create-policy`, `agent delete-policy` | **Manual** | Require passphrase or confirmation. Humans must run these directly. |
+| `agent create-token` (default) | **Manual** | Interactive passphrase prompt. Humans run it. |
+| `agent create-token --passphrase-file <path>` | **Agent-capable** | Reads passphrase from a `chmod 600` file. For CI / headless / scripted setup once the file is provisioned by a human or secrets manager. |
+| `agent revoke-token`, `agent create-policy`, `agent delete-policy` | **Manual** | Require passphrase or confirmation. Humans must run these directly. |
 
 ## Read-only — agents may invoke freely
 
@@ -44,7 +46,9 @@ zerion agent show-policy <id>         # Full policy details
 zerion agent use-token --wallet <wallet>   # Switch the active token (config edit, no passphrase)
 ```
 
-## Manual — humans only
+## Token + policy management
+
+The default flow is human-interactive. `agent create-token` also has a non-interactive variant (`--passphrase-file`) for automation once the passphrase file is provisioned. Everything else in this section requires a human.
 
 ### Create an agent token
 
@@ -68,25 +72,37 @@ For CI, headless servers, or scripted agent setup, read the passphrase from a fi
 ```bash
 # Write the passphrase to a file readable only by you
 umask 077                                   # ensure new files default to 0600
-printf '%s' "$ZERION_PASSPHRASE" > /run/zerion/pass
-chmod 600 /run/zerion/pass                  # required — refused if looser
+printf '%s' "$ZERION_PASSPHRASE" > ~/.zerion-pass
+chmod 600 ~/.zerion-pass                    # required — refused if looser
 
 # Create the token non-interactively
 zerion agent create-token \
   --name bot --wallet my-agent \
   --policy <id> \
-  --passphrase-file /run/zerion/pass
+  --passphrase-file ~/.zerion-pass
 
 # Clean up immediately
-shred -u /run/zerion/pass 2>/dev/null || rm -f /run/zerion/pass
+shred -u ~/.zerion-pass 2>/dev/null || rm -f ~/.zerion-pass
 ```
+
+For ephemeral storage (recommended on Linux), use a tmpfs mount instead of `$HOME`:
+
+```bash
+# Linux only — /run is tmpfs (RAM-only, gone on reboot)
+sudo install -d -m 0700 -o "$USER" /run/zerion
+printf '%s' "$ZERION_PASSPHRASE" > /run/zerion/pass && chmod 600 /run/zerion/pass
+zerion agent create-token ... --passphrase-file /run/zerion/pass
+```
+
+On macOS, use `/private/tmp/<your-user>/...` or a per-app dir under `~/Library/Caches/`. macOS does not ship a user-writable `/run`.
 
 Rules:
 
 - File **must be mode `0600`** (owner read/write only). Any group/other bits → CLI refuses with `passphrase_file_error`.
+- File **must be owned by the current uid** (POSIX). Reading another user's file (e.g. via symlink) is refused. Matches SSH `IdentityFile` behavior.
 - Trailing newline (`\n` or `\r\n`) is stripped; leading/trailing spaces inside the passphrase are preserved.
 - Empty file is rejected.
-- Permission check is skipped on Windows (POSIX mode bits not meaningful there) — use NTFS ACLs to restrict access instead.
+- Permission and ownership checks are skipped on Windows (POSIX mode bits and uid not meaningful there) — use NTFS ACLs to restrict access instead.
 
 Recommended patterns:
 
