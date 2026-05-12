@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/zeriontech/zerion-ai/compare/v1.1.0...v1.2.0) (2026-05-12)
+
+
+### Features
+
+* add zerion-umbra-privateTxn skill for Umbra private payments ([#40](https://github.com/zeriontech/zerion-ai/issues/40)) ([a0518ca](https://github.com/zeriontech/zerion-ai/commit/a0518ca5f92d7da50beb7fb9801efd82d8ac30e4))
+* **cli:** add --passphrase-file flag for agent create-token ([#67](https://github.com/zeriontech/zerion-ai/issues/67)) ([078cc34](https://github.com/zeriontech/zerion-ai/commit/078cc34927a63dc4dd44838a8923e52d29b9c06f))
+
 ## [1.1.0](https://github.com/zeriontech/zerion-ai/compare/v1.0.1...v1.1.0) (2026-05-08)
 
 
