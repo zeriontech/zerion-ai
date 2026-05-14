@@ -55,6 +55,7 @@ Skills contributed by ecosystem partners that combine their product with the Zer
 | [`zerion-somnia-reactivity`](./skills/zerion-somnia-reactivity/SKILL.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
 | [`zerion-trails-crosschainswap`](./skills/zerion-trails-crosschainswap/SKILL.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
 | [`zerion-trails-deposit`](./skills/zerion-trails-deposit/SKILL.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
+| [`zerion-0x`](./skills/zerion-0x/SKILL.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains | [0x](https://0x.org) |
 
 ### Install via zerion CLI (recommended)
 
