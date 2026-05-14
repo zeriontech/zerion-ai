@@ -9,11 +9,11 @@ license: MIT
 
 **Purpose:** Pair Zerion CLI's interpreted, multi-chain wallet data with Bankr's natural-language execution layer so an AI agent can go from on-chain insight to signed transaction in one workflow.
 
-**Architecture:** Zerion is the read-only research layer (works on any address). Bankr holds the wallet and signs every transaction. No Zerion-managed wallet required — `zerion swap` and `zerion bridge` are intentionally avoided so all execution routes through Bankr.
+**Architecture:** Zerion CLI is the research layer (interpreted wallet data across 41+ chains, works on any address) and has its own swap/bridge for direct execution. This skill complements that by routing actions through Bankr to reach surfaces Zerion doesn't natively cover — Hyperliquid perps, Polymarket, scheduled automation (DCA, limit, stop-loss), social-handle transfers, NFT trades, Base token deploys, and x402 paid APIs. One Bankr wallet covers the full action surface.
 
 ## Key Commands
 
-**Zerion (read-only):**
+**Zerion (research used here):**
 - `zerion analyze <addr>` — full portfolio, positions, transactions, PnL
 - `zerion portfolio <addr>` — USD value + chain distribution
 - `zerion positions <addr>` — token + DeFi positions
@@ -181,7 +181,7 @@ zerion history 0xWHALE_HOLDING_TARGET_TOKEN
 - **Bankr key is read-only** — re-login with `--read-write --agent-api` or every write returns 403
 - **Wallet-level safety limits** — Bankr defaults to $500 per tx and $500 / 24h at bankr.bot → Security; raise before large rebalances or deploys
 - **Wrong chain in prompt** — always say `on Base` / `on Solana` / `on Polygon`, or trades may pick the wrong network
-- **Avoid `zerion swap` / `zerion bridge`** — those use a Zerion-managed wallet; this skill keeps execution in Bankr, so use `bankr agent prompt` instead
+- **Execution path** — this skill routes every action through Bankr so one wallet covers everything (Hyperliquid, Polymarket, automation, etc.). Zerion's native `zerion swap` / `zerion bridge` work great standalone if you'd rather sign there — see the `zerion-trading` skill
 - **Rate limits** — Bankr ships 100 msg/day standard, 1,000/day with Bankr Club; Zerion API has its own per-key tier
 - **LLM credits are separate from the trading wallet** — `bankr llm credits add <n>` before using the gateway
 - **Polymarket lives on Polygon** — Bankr handles routing, but ensure the Bankr wallet has USDC + a little MATIC for gas
