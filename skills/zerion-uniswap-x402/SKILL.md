@@ -19,7 +19,7 @@ license: MIT
 
 **Zerion CLI (shell):**
 - `zerion positions <address>` — check token balances by chain
-- `zerion bridge <token> <chain> <amount> --to-address <address> --cheapest` — optionally pre-position capital to the signing wallet
+- `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <address> --cheapest` — optionally pre-position capital to the signing wallet
 - `zerion portfolio <address>` — verify balance before paying
 
 ## Requirements
@@ -71,7 +71,7 @@ Two paths — choose one:
 
 **Path A — Pre-bridge with Zerion CLI:**
 ```bash
-zerion bridge USDC base 50 --to-address $WALLET --cheapest
+zerion bridge ethereum USDC 50 base USDC --to-address $WALLET --cheapest
 ```
 Funds land in the signing wallet on the target chain. Use `--cheapest` to minimise bridge fees.
 
