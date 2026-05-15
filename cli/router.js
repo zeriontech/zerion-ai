@@ -42,7 +42,7 @@ function printUsage() {
     analysis: {
       "analyze <address|name>": "Full analysis (portfolio, positions, txs, PnL in parallel)",
       "portfolio <address|name>": "Portfolio value and top positions",
-      "positions <address|name>": "Token + DeFi positions (--positions all|simple|defi)",
+      "positions <address|name>": "Token + DeFi positions (--positions all|simple|defi, or --defi for grouped DeFi view)",
       "history <address|name>": "Transaction history (--limit <n>, --chain <chain>)",
       "pnl <address|name>": "Profit & loss (realized, unrealized, fees)",
     },
@@ -90,6 +90,7 @@ function printUsage() {
       "--to-wallet <name>": "Destination wallet for bridge (Solana ↔ EVM)",
       "--to-address <addr>": "Destination address for bridge (must match destination-chain format)",
       "--positions all|simple|defi": "Filter positions type",
+      "--defi": "Shorthand for --positions defi with grouped-by-protocol output (loans netted, LP tokens pooled)",
       "--limit <n>": "Limit results (transactions, wallet list; default: 20 for list)",
       "--offset <n>": "Skip first N results (pagination for wallet list)",
       "--search <query>": "Filter wallets by name or address",

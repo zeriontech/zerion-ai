@@ -131,6 +131,65 @@ export function formatPositions(data) {
   return lines.join("\n");
 }
 
+// Color tags per position_type. Picks reflect financial polarity:
+// loan = debt (red), reward = pending income (yellow), locked = illiquid (cyan),
+// deposit/staked = active asset (green). wallet/investment fall through to dim.
+const POSITION_TYPE_COLOR = {
+  deposit: GREEN,
+  staked: GREEN,
+  loan: RED,
+  reward: YELLOW,
+  locked: CYAN,
+};
+
+function positionTypeBadge(type) {
+  const color = POSITION_TYPE_COLOR[type] || DIM;
+  const label = (type || "—").padEnd(8);
+  return `${color}[${label}]${RESET}`;
+}
+
+// Format a position value with loan-aware sign + color. Loans display as
+// negative because their value represents outstanding debt, not asset value.
+function signedUsd(value, positionType) {
+  if (positionType === "loan") return `${RED}-${usd(value)}${RESET}`;
+  return usd(value);
+}
+
+export function formatDefiPositions(data) {
+  const walletLabel = data.wallet.name || data.wallet.address.slice(0, 10) + "...";
+  const { protocols, positions } = data.summary;
+  const lines = [
+    `${BOLD}DeFi Positions${RESET} — ${walletLabel}  ${DIM}(${protocols} protocols · ${positions} positions · net ${usd(data.summary.total_value)})${RESET}\n`,
+  ];
+
+  if (!data.protocols.length) {
+    lines.push(`  ${DIM}(no DeFi positions found)${RESET}`);
+    return lines.join("\n");
+  }
+
+  for (const proto of data.protocols) {
+    const moduleLabel = proto.module ? ` ${DIM}[${proto.module}]${RESET}` : "";
+    lines.push(`${BOLD}${proto.dapp}${RESET}${moduleLabel}  ${DIM}net${RESET} ${BOLD}${usd(proto.net_value)}${RESET}`);
+    lines.push(`  ${DIM}${"─".repeat(72)}${RESET}`);
+    for (const g of proto.groups) {
+      const isPool = g.tokens.length > 1 && g.group_id;
+      if (isPool) {
+        lines.push(`  ${DIM}Pool ${g.group_id.slice(0, 10)}…${RESET}  ${padStart(usd(g.value), 14)}`);
+        for (const t of g.tokens) lines.push(renderDefiRow(t, true));
+      } else {
+        for (const t of g.tokens) lines.push(renderDefiRow(t, false));
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+function renderDefiRow(t, indented) {
+  const indent = indented ? "      " : "    ";
+  return `${indent}${positionTypeBadge(t.position_type)} ${pad(t.symbol || "?", 10)} ${pad(t.chain || "?", 12)} ${padStart(t.quantity != null ? Number(t.quantity).toFixed(4) : "-", 14)} ${padStart(signedUsd(t.value, t.position_type), 18)}`;
+}
+
 function formatChange(position) {
   if (position.change_percent_1d == null) {
     return `${DIM}-${RESET}`;
