@@ -208,7 +208,7 @@ Read-only. Supports `--x402` and `--mpp` for pay-per-call.
 |---------|-------------|---------|
 | `zerion analyze <address\|ens>` | Full analysis — portfolio, positions, transactions, PnL in parallel | `zerion analyze vitalik.eth` |
 | `zerion portfolio <address\|ens>` | Portfolio value and top positions | `zerion portfolio 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` |
-| `zerion positions <address\|ens>` | Token + DeFi positions (`--positions all\|simple\|defi`) | `zerion positions vitalik.eth --positions defi` |
+| `zerion positions <address\|ens>` | Token + DeFi positions (`--positions all\|simple\|defi`, or `--defi` for grouped-by-protocol view with loans netted) | `zerion positions vitalik.eth --defi` |
 | `zerion history <address\|ens>` | Transaction history (`--limit`, `--chain`) | `zerion history vitalik.eth --limit 10 --chain ethereum` |
 | `zerion pnl <address\|ens>` | Profit & loss (realized, unrealized, fees) | `zerion pnl vitalik.eth` |
 | `zerion search <query>` | Search tokens by name or symbol | `zerion search USDC` |
@@ -330,6 +330,7 @@ Track wallets by name without exposing addresses in commands.
 | `--to-wallet <name>` | Destination wallet for `bridge` (Solana ↔ EVM) |
 | `--to-address <addr>` | Destination address for `bridge` (must match destination-chain format) |
 | `--positions all\|simple\|defi` | Filter positions type |
+| `--defi` | On `positions`: shorthand for `--positions defi` with output grouped by protocol (LP tokens pooled by `group_id`, loans netted in `net_value`) |
 | `--limit <n>` | Limit results (default: 20 for list ops) |
 | `--offset <n>` | Skip first N results (pagination) |
 | `--search <query>` | Filter wallets by name or address |
