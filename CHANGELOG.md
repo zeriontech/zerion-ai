@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/zeriontech/zerion-ai/compare/v1.2.0...v1.3.0) (2026-05-15)
+
+
+### Features
+
+* add zerion-bankr partner skill ([#72](https://github.com/zeriontech/zerion-ai/issues/72)) ([54ccf67](https://github.com/zeriontech/zerion-ai/commit/54ccf67e8581084246b90be237b768b1b7bea754))
+* add zerion-lifi-earn skill ([#69](https://github.com/zeriontech/zerion-ai/issues/69)) ([8a310d4](https://github.com/zeriontech/zerion-ai/commit/8a310d44ed2c0b5825f20ab1d18bc9a6a508aa13))
+* add zerion-uniswap-lp and zerion-uniswap-x402 partner skills ([#65](https://github.com/zeriontech/zerion-ai/issues/65)) ([175cc6a](https://github.com/zeriontech/zerion-ai/commit/175cc6a56fcc472b767a0a778aa6634c2bb335e7))
+* **positions:** add --defi flag with grouped DeFi view ([#77](https://github.com/zeriontech/zerion-ai/issues/77)) ([97da693](https://github.com/zeriontech/zerion-ai/commit/97da693adf837839c53ee8bc522b15d051b7cc56))
+
+
+### Bug Fixes
+
+* **zerion-uniswap-x402:** use canonical 5-arg zerion bridge signature ([#75](https://github.com/zeriontech/zerion-ai/issues/75)) ([bb3c946](https://github.com/zeriontech/zerion-ai/commit/bb3c946f93d121e89d5ca29b710741006f50a643))
+
 ## [1.2.0](https://github.com/zeriontech/zerion-ai/compare/v1.1.0...v1.2.0) (2026-05-12)
 
 
