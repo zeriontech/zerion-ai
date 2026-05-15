@@ -54,7 +54,8 @@ zerion portfolio --watch <name>                     # use watched wallet by name
 zerion positions <address|name>
 zerion positions <address|name> --positions all     # default: tokens + DeFi
 zerion positions <address|name> --positions simple  # tokens only
-zerion positions <address|name> --positions defi    # DeFi protocols only
+zerion positions <address|name> --positions defi    # DeFi protocols only (flat list)
+zerion positions <address|name> --defi              # DeFi grouped by protocol (recommended for DeFi analysis)
 zerion positions <address|name> --chain <chain>
 
 # Transaction history
@@ -67,6 +68,36 @@ zerion pnl <address|name>
 ```
 
 All accept `--x402` (or `--mpp`) for pay-per-call without an API key.
+
+### `--defi` output shape
+
+`zerion positions <addr> --defi` returns positions grouped by protocol with loans netted:
+
+```json
+{
+  "wallet": {...},
+  "filter": "defi",
+  "summary": { "total_value": 4200, "gross_value": 4500, "protocols": 2, "positions": 4 },
+  "protocols": [
+    {
+      "dapp": "Aave V3",
+      "module": "lending",
+      "net_value": 3700,
+      "gross_value": 4000,
+      "groups": [
+        { "position_type": "deposit", "value": 4000, "tokens": [...] },
+        { "position_type": "loan",    "value": 300,  "tokens": [...] }
+      ]
+    }
+  ]
+}
+```
+
+Key behaviors:
+- **Loans net against deposits** in `net_value` (so an Aave wallet with $4k USDC supplied and $300 DAI borrowed reports `net_value: 3700`). Use `gross_value` for total exposure.
+- **LP tokens with the same `group_id`** collapse into one `groups[]` entry (a Uniswap USDC/WETH pool returns one group with two tokens, not two unrelated rows).
+- **`position_type`** ∈ `deposit | loan | staked | locked | reward | wallet | investment` — tag each row for downstream filtering.
+- Combining `--defi` with `--positions all|simple` errors with `conflicting_flags`.
 
 ## Token search (find a contract address)
 
@@ -94,7 +125,8 @@ zerion analyze --watch vit
 
 1. Run `zerion analyze <address>` for the broad picture.
 2. Drill into specifics if needed:
-   - DeFi-only: `zerion positions <address> --positions defi`
+   - DeFi grouped by protocol: `zerion positions <address> --defi` (loans netted, LP tokens pooled by `group_id`)
+   - DeFi flat list: `zerion positions <address> --positions defi`
    - Single chain: `zerion positions <address> --chain ethereum` (or `--chain monad`)
    - More transactions: `zerion history <address> --limit 25`
 3. For repeat monitoring, add to watchlist: `zerion watch <addr> --name <label>`.
@@ -114,6 +146,7 @@ JSON on stdout, structured errors on stderr. See the `zerion` umbrella skill for
 | `missing_api_key` | No `ZERION_API_KEY` and no `--x402`/`--mpp` | Set the env var or pass the flag |
 | `unsupported_chain` | Invalid `--chain` | `zerion chains` for valid IDs |
 | `unsupported_positions_filter` | Invalid `--positions` | Use `all`, `simple`, or `defi` |
+| `conflicting_flags` | `--defi` combined with `--positions all\|simple` | Pick one — `--defi` already implies `--positions defi` |
 | `api_error` 429 | Rate limited | Wait, reduce frequency, or switch to `--x402` |
 | `api_error` 400 | Invalid address or ENS resolution failure | Retry with the resolved 0x address |
 
