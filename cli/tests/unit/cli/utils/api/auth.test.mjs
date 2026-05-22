@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveAuth, resolveApiKeyAuth, basicAuthHeader } from "#zerion/utils/api/auth.js";
+import { resolveAuth, resolveApiKeyAuth, basicAuthHeader, getApiKeyTier } from "#zerion/utils/api/auth.js";
 
 // Synthetic keys that pass the format detectors but are never used for
 // actual crypto operations — resolveAuth is pure and doesn't touch the network.
@@ -214,5 +214,42 @@ describe("basicAuthHeader", () => {
     const header = basicAuthHeader("key+with/special=chars");
     const decoded = Buffer.from(header.replace("Basic ", ""), "base64").toString();
     assert.equal(decoded, "key+with/special=chars:");
+  });
+});
+
+// AC 21a — getApiKeyTier classification. The Zerion dev API key (`zk_dev_*`)
+// is throttled at 120 req/min; paid keys have substantially higher limits.
+// Callers (consolidate) auto-size concurrency from this signal, so the
+// classification must be exact and stable.
+//
+// We pass the key directly via the `keyOverride` test seam so the test never
+// observes whatever the dev's local config has stored at ~/.zerion/config.json
+// (otherwise `getApiKey()` would fall through to that and the "missing" case
+// would falsely classify as "paid").
+describe("getApiKeyTier — classification", () => {
+  it("classifies `zk_dev_*` as dev", () => {
+    assert.equal(getApiKeyTier("zk_dev_abc123"), "dev");
+  });
+
+  it("classifies `zk_prod_*` as paid", () => {
+    assert.equal(getApiKeyTier("zk_prod_abc123"), "paid");
+  });
+
+  it("classifies `zk_live_*` as paid", () => {
+    assert.equal(getApiKeyTier("zk_live_xyz789"), "paid");
+  });
+
+  it("classifies bare `zk_*` (no second segment) as paid", () => {
+    // Defensive: any `zk_` prefix that isn't `zk_dev_` is treated as paid so
+    // a future production-key shape doesn't accidentally inherit the dev cap.
+    assert.equal(getApiKeyTier("zk_anything"), "paid");
+  });
+
+  it("classifies empty / missing as unknown (treated as dev for safety)", () => {
+    assert.equal(getApiKeyTier(""), "unknown");
+  });
+
+  it("classifies a non-zk_ key as unknown (e.g. a stray placeholder)", () => {
+    assert.equal(getApiKeyTier("not-a-real-key"), "unknown");
   });
 });

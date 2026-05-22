@@ -118,6 +118,32 @@ export function parseMinValue(raw) {
 }
 
 /**
+ * Parse `--concurrency` (positive integer in `[1, 10]`). Returns `undefined`
+ * when the flag isn't set so the CLI can auto-pick by API-key tier. Throws
+ * `{ code: "invalid_concurrency" }` on NaN, negative, zero, > 10, or
+ * non-integer input.
+ *
+ * The upper bound is a defensive ceiling: even on paid keys, more than 10
+ * in-flight quotes risks tripping per-IP rate limits and hides scaling bugs
+ * (e.g. /chains/ catalog cache races) behind a "looks fast" surface.
+ */
+export function parseConcurrency(raw) {
+  if (raw === undefined || raw === null || raw === "" || raw === true || raw === false) {
+    return undefined;
+  }
+  const trimmed = typeof raw === "string" ? raw.trim() : raw;
+  const n = typeof trimmed === "number" ? trimmed : Number(trimmed);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 10) {
+    const err = new Error(
+      `Invalid --concurrency: ${raw}. Must be an integer between 1 and 10.`,
+    );
+    err.code = "invalid_concurrency";
+    throw err;
+  }
+  return n;
+}
+
+/**
  * Parse `--gas-reserve` (native units). Returns a non-negative number or
  * `undefined` if the flag isn't set. Throws `{ code: "invalid_gas_reserve" }`
  * on bad input.
@@ -338,7 +364,145 @@ export function evaluateQuote({ estimatedOutput, targetUsdPrice, positionValueUs
 }
 
 /**
- * Build the dry-run plan by fetching one quote per candidate sequentially.
+ * Build a single plan row for one candidate. Pure of order — safe to run in
+ * parallel because each call only touches its own candidate. Errors thrown
+ * by `quoteFn` are caught and folded into the row as `status: "no_route"`,
+ * so callers don't need a try/catch around this.
+ */
+async function buildCandidateRow(c, ctx) {
+  // Native sweep amount uses (quantity - reserve) when the row is the chain's
+  // native gas token. Non-native rows sweep the full quantity.
+  let sweepQuantity = c.quantity;
+  if (c.isNative) {
+    const { amount, reason } = computeNativeSweepAmount(c.quantity, ctx.gasReserveValue);
+    if (reason) {
+      return {
+        symbol: c.symbol,
+        quantity: c.quantity,
+        value_usd: c.valueUsd,
+        expected_output: null,
+        expected_output_usd: null,
+        loss_pct: null,
+        status: "skipped",
+        reason: "below_reserve",
+      };
+    }
+    sweepQuantity = amount;
+  }
+
+  let quote;
+  try {
+    quote = await ctx.quoteFn({
+      fromToken: c.symbol,
+      toToken: ctx.toToken,
+      amount: String(sweepQuantity),
+      fromChain: ctx.chain,
+      toChain: ctx.chain,
+      walletAddress: ctx.walletAddress,
+      outputReceiver: ctx.walletAddress,
+      slippage: ctx.slippage,
+    });
+  } catch (err) {
+    return {
+      symbol: c.symbol,
+      quantity: sweepQuantity,
+      value_usd: c.valueUsd,
+      expected_output: null,
+      expected_output_usd: null,
+      loss_pct: null,
+      status: "no_route",
+      reason: err?.message || "no route",
+    };
+  }
+
+  const evaluation = evaluateQuote({
+    estimatedOutput: quote.estimatedOutput,
+    targetUsdPrice: ctx.targetUsdPrice,
+    positionValueUsd: c.valueUsd,
+    maxLoss: ctx.maxLoss,
+  });
+
+  if (evaluation.status === "skipped") {
+    return {
+      symbol: c.symbol,
+      quantity: sweepQuantity,
+      value_usd: c.valueUsd,
+      expected_output: null,
+      expected_output_usd: null,
+      loss_pct: null,
+      status: "skipped",
+      reason: evaluation.reason,
+      quote,
+    };
+  }
+  if (evaluation.status === "blocked") {
+    return {
+      symbol: c.symbol,
+      quantity: sweepQuantity,
+      value_usd: c.valueUsd,
+      expected_output: evaluation.expectedOutput,
+      expected_output_usd: evaluation.expectedOutputUsd,
+      loss_pct: evaluation.lossPct,
+      status: "blocked",
+      reason: "max_loss",
+      quote,
+    };
+  }
+  return {
+    symbol: c.symbol,
+    quantity: sweepQuantity,
+    value_usd: c.valueUsd,
+    expected_output: evaluation.expectedOutput,
+    expected_output_usd: evaluation.expectedOutputUsd,
+    loss_pct: evaluation.lossPct,
+    status: "ready",
+    quote,
+  };
+}
+
+/**
+ * Worker-pool runner. Spawns up to `concurrency` workers that pull items off
+ * a shared index counter; each worker writes the result to `results[i]` so
+ * the final array preserves the input order. Bounded in-flight count is
+ * exactly `concurrency` — no batching artefacts where one slow item holds up
+ * the next batch.
+ *
+ * The pool degenerates to a strict sequential `for await` loop when
+ * `concurrency <= 1`, so callers that want deterministic in-order quote
+ * fetches (dev-tier API keys, the existing in-order test) get the original
+ * behaviour exactly.
+ */
+async function runWithConcurrency(items, concurrency, work) {
+  const n = items.length;
+  const results = new Array(n);
+  const limit = Math.max(1, Math.floor(concurrency) || 1);
+
+  if (limit === 1 || n <= 1) {
+    for (let i = 0; i < n; i++) {
+      results[i] = await work(items[i], i);
+    }
+    return results;
+  }
+
+  let cursor = 0;
+  async function worker() {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= n) return;
+      results[idx] = await work(items[idx], idx);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, n) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Build the dry-run plan by fetching quotes for each candidate. Concurrency
+ * defaults to `1` (strictly sequential, preserves rate-limit-safe behaviour
+ * on dev API keys). With `concurrency > 1`, quotes fan out via a bounded
+ * worker pool; the resulting `rows` array still preserves the candidate
+ * order so plan output is deterministic.
  *
  * `quoteFn` is injected so tests can drive the loop without network mocks.
  * Defaults to `getSwapQuote` from the shared swap utils.
@@ -355,6 +519,7 @@ export async function buildConsolidatePlan({
   slippage,
   gasReserveValue,
   maxLoss,
+  concurrency = 1,
   quoteFn = getSwapQuote,
 }) {
   const rows = [];
@@ -373,102 +538,23 @@ export async function buildConsolidatePlan({
     });
   }
 
-  for (const c of candidates) {
-    // Native sweep amount uses (quantity - reserve) when the row is the chain's
-    // native gas token. Non-native rows sweep the full quantity.
-    let sweepQuantity = c.quantity;
-    if (c.isNative) {
-      const { amount, reason } = computeNativeSweepAmount(c.quantity, gasReserveValue);
-      if (reason) {
-        rows.push({
-          symbol: c.symbol,
-          quantity: c.quantity,
-          value_usd: c.valueUsd,
-          expected_output: null,
-          expected_output_usd: null,
-          loss_pct: null,
-          status: "skipped",
-          reason: "below_reserve",
-        });
-        continue;
-      }
-      sweepQuantity = amount;
-    }
+  const ctx = {
+    chain,
+    toToken,
+    targetUsdPrice,
+    walletAddress,
+    slippage,
+    gasReserveValue,
+    maxLoss,
+    quoteFn,
+  };
 
-    let quote;
-    try {
-      quote = await quoteFn({
-        fromToken: c.symbol,
-        toToken,
-        amount: String(sweepQuantity),
-        fromChain: chain,
-        toChain: chain,
-        walletAddress,
-        outputReceiver: walletAddress,
-        slippage,
-      });
-    } catch (err) {
-      rows.push({
-        symbol: c.symbol,
-        quantity: sweepQuantity,
-        value_usd: c.valueUsd,
-        expected_output: null,
-        expected_output_usd: null,
-        loss_pct: null,
-        status: "no_route",
-        reason: err?.message || "no route",
-      });
-      continue;
-    }
+  const candidateRows = await runWithConcurrency(candidates, concurrency, (c) => buildCandidateRow(c, ctx));
+  rows.push(...candidateRows);
 
-    const evaluation = evaluateQuote({
-      estimatedOutput: quote.estimatedOutput,
-      targetUsdPrice,
-      positionValueUsd: c.valueUsd,
-      maxLoss,
-    });
-
-    if (evaluation.status === "skipped") {
-      rows.push({
-        symbol: c.symbol,
-        quantity: sweepQuantity,
-        value_usd: c.valueUsd,
-        expected_output: null,
-        expected_output_usd: null,
-        loss_pct: null,
-        status: "skipped",
-        reason: evaluation.reason,
-        quote,
-      });
-      continue;
-    }
-    if (evaluation.status === "blocked") {
-      rows.push({
-        symbol: c.symbol,
-        quantity: sweepQuantity,
-        value_usd: c.valueUsd,
-        expected_output: evaluation.expectedOutput,
-        expected_output_usd: evaluation.expectedOutputUsd,
-        loss_pct: evaluation.lossPct,
-        status: "blocked",
-        reason: "max_loss",
-        quote,
-      });
-      continue;
-    }
-    rows.push({
-      symbol: c.symbol,
-      quantity: sweepQuantity,
-      value_usd: c.valueUsd,
-      expected_output: evaluation.expectedOutput,
-      expected_output_usd: evaluation.expectedOutputUsd,
-      loss_pct: evaluation.lossPct,
-      status: "ready",
-      quote,
-    });
-  }
-
-  return summarisePlan(rows, { chain, toToken, walletAddress, targetUsdPrice });
+  const plan = summarisePlan(rows, { chain, toToken, walletAddress, targetUsdPrice });
+  plan.concurrency = Math.max(1, Math.floor(concurrency) || 1);
+  return plan;
 }
 
 /**

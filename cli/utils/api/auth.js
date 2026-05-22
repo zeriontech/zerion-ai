@@ -13,6 +13,32 @@ export function basicAuthHeader(key) {
   return `Basic ${Buffer.from(`${key}:`).toString("base64")}`;
 }
 
+/**
+ * Classify a Zerion API key into a rate-limit tier so callers can size
+ * concurrency appropriately. Dev keys are throttled at 120 req/min /
+ * 5K req/day; paid keys have substantially higher limits.
+ *
+ * - `zk_dev_*`                 → "dev"
+ * - any other `zk_*`           → "paid" (covers zk_prod_, zk_live_, etc.)
+ * - missing or non-zk_-prefixed → "unknown"  (treat as dev for safety)
+ *
+ * When called with no arg, reads the key via `getApiKey()` (env or config) so
+ * config-stored keys count the same as env-supplied ones. The optional
+ * `keyOverride` parameter is the test seam — pass `""` to simulate "no key
+ * configured anywhere", or pass a literal key to drive classification
+ * without touching config / env.
+ *
+ * @param {string | undefined} [keyOverride]
+ * @returns {"dev" | "paid" | "unknown"}
+ */
+export function getApiKeyTier(keyOverride) {
+  const key = (keyOverride !== undefined ? keyOverride : getApiKey()) || "";
+  if (!key) return "unknown";
+  if (key.startsWith("zk_dev_")) return "dev";
+  if (key.startsWith("zk_")) return "paid";
+  return "unknown";
+}
+
 // Solana keypairs are 64 bytes; base58-encoded they are 87-88 characters.
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]+$/;
 const isEvmKey    = (k) => typeof k === "string" && k.startsWith("0x");

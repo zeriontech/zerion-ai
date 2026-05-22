@@ -13,6 +13,7 @@
  */
 
 import * as api from "../../utils/api/client.js";
+import { getApiKeyTier } from "../../utils/api/auth.js";
 import { executeSwap } from "../../utils/trading/swap.js";
 import {
   requireAgentToken,
@@ -33,8 +34,20 @@ import {
   parseMaxLoss,
   parseMinValue,
   parseGasReserve,
+  parseConcurrency,
   parseSymbolList,
 } from "../../utils/trading/consolidate.js";
+
+// Auto-pick the plan-phase quote concurrency from the API-key tier when the
+// user didn't pass --concurrency. Paid keys can comfortably handle a small
+// bounded parallel pool; dev / unknown keys stay sequential to respect the
+// 120 req/min limit and avoid burst-tripping the 5K/day quota during a sweep
+// of a wallet with many positions.
+const AUTO_CONCURRENCY_BY_TIER = {
+  paid: 5,
+  dev: 1,
+  unknown: 1,
+};
 
 // Mirrors `coerceBoolFlag` in cli/commands/trading/bridge.js (lines 55-64).
 // parseFlags consumes the next non-`--` token as the value, so a bare boolean
@@ -76,14 +89,24 @@ export default async function consolidate(args, flags) {
   let minValueUsd;
   let maxLoss;
   let explicitGasReserve;
+  let explicitConcurrency;
   try {
     minValueUsd = parseMinValue(flags["min-value"]);
     maxLoss = parseMaxLoss(flags["max-loss"]);
     explicitGasReserve = parseGasReserve(flags["gas-reserve"]);
+    explicitConcurrency = parseConcurrency(flags.concurrency);
   } catch (err) {
     printError(err.code || "invalid_flag", err.message);
     process.exit(1);
   }
+
+  // Resolve plan-phase quote concurrency. Explicit --concurrency wins; otherwise
+  // pick from the active API-key tier. The chosen value + provenance is surfaced
+  // in the plan output so callers can verify what actually ran.
+  const tier = getApiKeyTier();
+  const autoConcurrency = AUTO_CONCURRENCY_BY_TIER[tier] ?? 1;
+  const concurrency = explicitConcurrency ?? autoConcurrency;
+  const concurrencySource = explicitConcurrency !== undefined ? "flag" : "auto";
 
   if (explicitGasReserve !== undefined && !includeNative) {
     printError(
@@ -237,6 +260,9 @@ export default async function consolidate(args, flags) {
         targetUsdPrice,
         rows: [],
         totals: { ready: 0, blocked: 0, skipped: 0, no_route: 0, expected_output: 0, expected_output_usd: null },
+        concurrency,
+        apiKeyTier: tier,
+        concurrencySource,
         executed: false,
       },
       formatConsolidatePlan,
@@ -256,11 +282,18 @@ export default async function consolidate(args, flags) {
       slippage,
       gasReserveValue: reserve.value,
       maxLoss,
+      concurrency,
     });
   } catch (err) {
     handleTradingError(err, "consolidate_error");
     return;
   }
+
+  // Annotate the plan with API-key-tier provenance so the pretty formatter
+  // can render e.g. "Concurrency: 5 (paid key, auto)" and the JSON consumer
+  // sees which mode the planner actually ran in.
+  plan.apiKeyTier = tier;
+  plan.concurrencySource = concurrencySource;
 
   if (!execute) {
     // Strip embedded `quote` objects from the dry-run JSON output — they're

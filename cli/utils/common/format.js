@@ -313,6 +313,15 @@ export function formatConsolidatePlan(data) {
       (data.walletAddress ? `  ${DIM}(${data.walletAddress.slice(0, 8)}…)${RESET}` : "") +
       "\n",
   ];
+  if (Number.isFinite(data.concurrency)) {
+    // Surface the tier + provenance ("auto" vs "flag") so it's obvious why
+    // the planner picked a particular concurrency without having to read the
+    // JSON body — important when a dev key silently caps the user's
+    // expectation.
+    const tier = data.apiKeyTier ? `${data.apiKeyTier} key` : "unknown key";
+    const src = data.concurrencySource === "flag" ? "--concurrency" : "auto";
+    lines.push(`  ${DIM}Concurrency:${RESET} ${data.concurrency} ${DIM}(${tier}, ${src})${RESET}\n`);
+  }
   lines.push(
     `  ${DIM}${pad("#", W.idx)} ${pad("Symbol", W.symbol)} ${padStart("Qty", W.qty)} ${padStart("Value (USD)", W.value)} ${padStart("Output", W.output)} ${padStart("Loss %", W.loss)} ${pad("Status", W.status)}${RESET}`,
   );
