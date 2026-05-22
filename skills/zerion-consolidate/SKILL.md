@@ -49,12 +49,13 @@ zerion consolidate <chain> <to-token> [flags]
 | `--slippage <pct>` | `2` | Per-quote slippage tolerance (max 3, same as swap). |
 | `--concurrency <n>` | tier-aware (paid → 5, dev → 1) | Plan-phase quote-fetch concurrency. Integer `1..10`. Does NOT affect `--execute`; the broadcast phase is always sequential. |
 | `--wallet <name>` | default | Source wallet. |
-| `--continue-on-error` | _(off)_ | When `--execute`-ing, keep going past a failed swap instead of stopping. |
 | `--timeout <sec>` | `120` | Per-swap confirmation timeout. |
+
+Per-row failures during `--execute` are isolated — the batch continues. Each successful swap lands on chain immediately; each failure is recorded with its full error string and surfaced in the final `Failures:` block of the result. There is no opt-out: a single failing quote should not gate a sweep of independent on-chain transactions. If you genuinely want to halt mid-batch, Ctrl-C the process.
 
 The plan-phase concurrency is auto-picked from your active `ZERION_API_KEY` tier: `zk_dev_*` keys stay sequential (the 120 req/min dev limit trips quickly when sweeping a wallet with many positions); other `zk_*` (paid/prod/live) keys fan out to 5. Override with `--concurrency <n>` (1..10). The chosen value is reported in both the JSON output (`concurrency`, `apiKeyTier`, `concurrencySource` fields) and the pretty header (`Concurrency: 5 (paid key, auto)`).
 
-Boolean flags (`--execute`, `--include-stables`, `--exclude-stables`, `--include-native`, `--continue-on-error`) should appear **last on the command line**, or use the `--flag=true` / `--no-flag` forms. The flag parser consumes the next non-`--` token as the value, so `--include-native ethereum` would mistakenly set `include-native="ethereum"`. The CLI rejects that with `invalid_flag_value`.
+Boolean flags (`--execute`, `--include-stables`, `--exclude-stables`, `--include-native`) should appear **last on the command line**, or use the `--flag=true` / `--no-flag` forms. The flag parser consumes the next non-`--` token as the value, so `--include-native ethereum` would mistakenly set `include-native="ethereum"`. The CLI rejects that with `invalid_flag_value`.
 
 ## Examples
 
@@ -68,8 +69,8 @@ zerion consolidate base ETH --include-native
 # Execute — broadcasts each ready row sequentially after one passphrase prompt.
 zerion consolidate base USDC --execute
 
-# Allow looser loss tolerance (8%), force-exclude WETH, keep going on errors.
-zerion consolidate base USDC --max-loss 8 --exclude WETH --continue-on-error --execute
+# Allow looser loss tolerance (8%) and force-exclude WETH.
+zerion consolidate base USDC --max-loss 8 --exclude WETH --execute
 
 # Include stables in the sweep, override the dust threshold.
 zerion consolidate ethereum USDC --include-stables --min-value 5
@@ -173,7 +174,8 @@ By default the plan **excludes**:
 - **Native token excluded by default.** Gas reserve protection only kicks in when you explicitly pass `--include-native`. Without it, the native row is silently filtered out — your ETH/SOL stays put.
 - **Stables excluded by default in non-TTY contexts.** Agents and pipelines never auto-sweep stables without an explicit `--include-stables` flag.
 - **Max-loss filter is a backstop, not a cap.** A row marked `blocked: max_loss` will NOT be broadcast even with `--execute`. Tighten the filter for low-liquidity tokens with `--max-loss 2`.
-- **Sequential broadcast — no atomicity, regardless of `--concurrency`.** Plan-phase quote fetches may run in parallel (paid keys), but the `--execute` broadcast phase is always serial — parallel signed broadcasts would race EVM nonces. A failure mid-batch leaves earlier swaps confirmed and remaining ones unattempted (unless `--continue-on-error` is set). Plan accordingly when sweeping volatile tokens.
+- **Sequential broadcast — no atomicity, regardless of `--concurrency`.** Plan-phase quote fetches may run in parallel (paid keys), but the `--execute` broadcast phase is always serial — parallel signed broadcasts would race EVM nonces. Each row's swap is an independent on-chain transaction.
+- **Partial success is the only mode.** Per-row failures during `--execute` are recorded with their full error string and the batch continues to the next row — one failing quote does not gate the rest of a sweep. The final result lists which tokens succeeded and which failed under a `Failures:` block; correlate by symbol back to the table above.
 - **Fresh quotes on `--execute`.** The execute path re-fetches quotes at run time — but it does not re-prompt the operator. Treat `--execute` as a commitment to broadcast every ready row.
 - **One passphrase prompt for the whole batch.** The agent token is read once up-front; if you abort mid-batch, the remaining swaps will simply not run.
 

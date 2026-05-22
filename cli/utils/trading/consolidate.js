@@ -558,6 +558,49 @@ export async function buildConsolidatePlan({
 }
 
 /**
+ * Broadcast each ready row sequentially via the injected `executeFn`. Partial
+ * success is the only mode — per-row failures are appended to `results` with
+ * a `failed` status and the full error string, and the loop continues. Each
+ * swap is an independent on-chain transaction; one failing quote should not
+ * gate the rest of a sweep.
+ *
+ * `executeFn(quote, walletName, passphrase, { timeout })` matches the
+ * `executeSwap` signature so the CLI passes it through unwrapped. Tests inject
+ * a fake to drive failure scenarios without touching the keystore or RPC.
+ *
+ * Returns `{ results, summary: { succeeded, failed } }`. The caller is
+ * responsible for echoing this to stdout via `print(..., formatConsolidateResult)`.
+ */
+export async function executeReadyRows(readyRows, executeFn, { walletName, passphrase, timeout }) {
+  const results = [];
+  let succeeded = 0;
+  let failed = 0;
+  for (const row of readyRows) {
+    try {
+      const result = await executeFn(row.quote, walletName, passphrase, { timeout });
+      results.push({
+        symbol: row.symbol,
+        hash: result.hash,
+        status: result.status,
+        blockNumber: result.blockNumber,
+        gasUsed: result.gasUsed,
+      });
+      if (result.status === "success") succeeded++;
+      else failed++;
+    } catch (err) {
+      failed++;
+      results.push({
+        symbol: row.symbol,
+        hash: null,
+        status: "failed",
+        error: err?.message || String(err),
+      });
+    }
+  }
+  return { results, summary: { succeeded, failed } };
+}
+
+/**
  * Roll up the plan rows into the printable structure (totals + counts).
  * Kept separate so tests can assemble rows manually and exercise totals.
  */

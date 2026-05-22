@@ -24,6 +24,7 @@ import {
   evaluateQuote,
   summarisePlan,
   buildConsolidatePlan,
+  executeReadyRows,
 } from "#zerion/utils/trading/consolidate.js";
 
 // Realistic position rows shaped like the /positions response. Keep these
@@ -960,34 +961,112 @@ describe("auto-pick from tier (AC 21d)", () => {
 // NOT call `Promise.all` over `readyRows`. A future refactor that introduces
 // parallel broadcasts would race EVM nonces and lose user funds.
 describe("--execute broadcast loop is unconditionally sequential (AC 21e)", () => {
-  it("the broadcast loop in commands/trading/consolidate.js uses for-await on readyRows, no Promise.all", async () => {
+  it("the broadcast loop in utils/trading/consolidate.js (executeReadyRows) uses for-await on readyRows, no Promise.all", async () => {
     const { readFile } = await import("node:fs/promises");
     const { resolve, dirname } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
     const here = dirname(fileURLToPath(import.meta.url));
-    const cmdPath = resolve(here, "../../../../../..", "cli/commands/trading/consolidate.js");
-    const src = await readFile(cmdPath, "utf8");
+    const utilPath = resolve(here, "../../../../../..", "cli/utils/trading/consolidate.js");
+    const src = await readFile(utilPath, "utf8");
 
-    // The broadcast loop's exact shape: `for (const row of readyRows)` with an
-    // `await executeSwap(...)` inside. If a future refactor changes this we
-    // want the test to fail loudly.
+    // The broadcast loop now lives in `executeReadyRows`. Pin its shape:
+    // `for (const row of readyRows)` with `await executeFn(...)` inside. If a
+    // future refactor changes this we want the test to fail loudly.
+    assert.match(src, /export\s+async\s+function\s+executeReadyRows\b/);
     assert.match(src, /for\s*\(\s*const\s+row\s+of\s+readyRows\s*\)/);
-    assert.match(src, /await\s+executeSwap\(/);
+    assert.match(src, /await\s+executeFn\(/);
 
     // Guard against any Promise.all over readyRows — that would broadcast
-    // in parallel and race nonces.
+    // in parallel and race EVM nonces.
     assert.equal(
       /Promise\.all\([^)]*readyRows/.test(src),
       false,
       "broadcast loop must not call Promise.all over readyRows",
     );
-    // Defensive: also guard against runWithConcurrency / buildCandidateRow
-    // being misapplied to readyRows for parallel execution.
+    // Defensive: also guard against runWithConcurrency being misapplied to
+    // readyRows for parallel execution.
     assert.equal(
       /runWithConcurrency\([^)]*readyRows/.test(src),
       false,
       "broadcast loop must not pass readyRows through runWithConcurrency",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// executeReadyRows — partial-success contract. Each row is an independent
+// on-chain transaction; one failing quote must not gate the rest of the
+// sweep. This was a user-blocking issue in the local test where WSTETH
+// failed and the remaining 6 ready rows never ran.
+// ---------------------------------------------------------------------------
+describe("executeReadyRows — partial-success contract", () => {
+  function mkRow(symbol) {
+    return { symbol, quote: { from: { symbol }, to: { symbol: "ETH" } } };
+  }
+
+  it("with 5 ready rows where row 2 throws, all 5 executeFn calls fire", async () => {
+    const calls = [];
+    const executeFn = async (quote) => {
+      calls.push(quote.from.symbol);
+      if (quote.from.symbol === "ROW2") {
+        const err = new Error("Quote not executable: synthetic test failure");
+        throw err;
+      }
+      return { hash: `0xhash-${quote.from.symbol}`, status: "success", blockNumber: 1, gasUsed: "21000" };
+    };
+
+    const readyRows = ["ROW1", "ROW2", "ROW3", "ROW4", "ROW5"].map(mkRow);
+    const { results, summary } = await executeReadyRows(readyRows, executeFn, {
+      walletName: "test-wallet",
+      passphrase: "test-pass",
+      timeout: 120,
+    });
+
+    assert.deepEqual(calls, ["ROW1", "ROW2", "ROW3", "ROW4", "ROW5"], "every row must be attempted in order");
+    assert.equal(results.length, 5);
+    assert.equal(summary.succeeded, 4);
+    assert.equal(summary.failed, 1);
+    assert.equal(results[1].status, "failed");
+    assert.match(results[1].error, /synthetic test failure/);
+    // The successful rows after the failure carry their hash and status.
+    assert.equal(results[2].status, "success");
+    assert.equal(results[2].hash, "0xhash-ROW3");
+    assert.equal(results[4].status, "success");
+  });
+
+  it("records non-success result.status as `failed` count (e.g. on-chain revert)", async () => {
+    // An on-chain revert returns `{ status: "reverted" }` rather than throwing.
+    // The contract: any non-`success` status counts as failed and the loop
+    // still continues to the next row.
+    const calls = [];
+    const executeFn = async (quote) => {
+      calls.push(quote.from.symbol);
+      if (quote.from.symbol === "REVERT") {
+        return { hash: "0xreverted", status: "reverted", blockNumber: 1, gasUsed: "21000" };
+      }
+      return { hash: `0x${quote.from.symbol}`, status: "success", blockNumber: 1, gasUsed: "21000" };
+    };
+
+    const readyRows = ["A", "REVERT", "C"].map(mkRow);
+    const { results, summary } = await executeReadyRows(readyRows, executeFn, {});
+
+    assert.equal(calls.length, 3, "must keep iterating past the reverted row");
+    assert.equal(summary.succeeded, 2);
+    assert.equal(summary.failed, 1);
+    assert.equal(results[1].status, "reverted");
+  });
+
+  it("falls back to err.toString() when err.message is empty", async () => {
+    // Defensive: some thrown values aren't proper Error instances. The loop
+    // must still produce a usable string in the result.
+    const executeFn = async () => {
+      // eslint-disable-next-line no-throw-literal
+      throw "bare-string error";
+    };
+    const readyRows = [mkRow("X")];
+    const { results, summary } = await executeReadyRows(readyRows, executeFn, {});
+    assert.equal(summary.failed, 1);
+    assert.equal(results[0].error, "bare-string error");
   });
 });
 

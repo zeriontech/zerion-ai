@@ -30,6 +30,7 @@ import { formatConsolidatePlan, formatConsolidateResult } from "../../utils/comm
 import {
   filterCandidates,
   buildConsolidatePlan,
+  executeReadyRows,
   resolveGasReserve,
   parseMaxLoss,
   parseMinValue,
@@ -79,7 +80,6 @@ export default async function consolidate(args, flags) {
   const includeStablesFlag = coerceBoolFlag(flags["include-stables"], "include-stables");
   const excludeStablesFlag = coerceBoolFlag(flags["exclude-stables"], "exclude-stables");
   const includeNative = coerceBoolFlag(flags["include-native"], "include-native");
-  const continueOnError = coerceBoolFlag(flags["continue-on-error"], "continue-on-error");
 
   if (includeStablesFlag && excludeStablesFlag) {
     printError("conflicting_flags", "Pass either --include-stables or --exclude-stables, not both.");
@@ -335,36 +335,14 @@ export default async function consolidate(args, flags) {
   }
   const timeout = parseTimeout(flags.timeout);
 
-  const results = [];
-  let succeeded = 0;
-  let failed = 0;
-  for (const row of readyRows) {
-    try {
-      const result = await executeSwap(row.quote, walletName, passphrase, { timeout });
-      results.push({
-        symbol: row.symbol,
-        hash: result.hash,
-        status: result.status,
-        blockNumber: result.blockNumber,
-        gasUsed: result.gasUsed,
-      });
-      if (result.status === "success") {
-        succeeded++;
-      } else {
-        failed++;
-        if (!continueOnError) break;
-      }
-    } catch (err) {
-      failed++;
-      results.push({
-        symbol: row.symbol,
-        hash: null,
-        status: "failed",
-        error: err.message || String(err),
-      });
-      if (!continueOnError) break;
-    }
-  }
+  // Partial-success broadcast — see `executeReadyRows` in
+  // cli/utils/trading/consolidate.js for the contract. One failing swap does
+  // not gate the rest; failures land in the result with the full error string.
+  const { results, summary } = await executeReadyRows(readyRows, executeSwap, {
+    walletName,
+    passphrase,
+    timeout,
+  });
 
   print(
     {
@@ -373,7 +351,7 @@ export default async function consolidate(args, flags) {
       walletAddress: address,
       executed: true,
       results,
-      summary: { succeeded, failed },
+      summary,
     },
     formatConsolidateResult,
   );
