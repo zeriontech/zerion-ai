@@ -1,0 +1,197 @@
+---
+name: zerion-consolidate
+description: "Sweep all wallet positions on a single chain into one target token via the Zerion CLI. Use when the user says: consolidate dust tokens, sweep tokens into X, convert all tokens to ETH, treasury cleanup, convert dust to USDC, consolidate wallet on Base, swap all positions into <token>, gather stragglers, collapse balances. Default mode is a dry-run plan; --execute broadcasts each ready row sequentially. Pair with `zerion-analyze` to inspect positions first and `zerion-trading` for the underlying swap primitive."
+license: MIT
+allowed-tools: Bash
+---
+
+# Zerion — Consolidate
+
+Sweep every sweepable wallet position on a single chain into one target token. The command lists positions, filters defaults (target token, native gas, stables, dust, protocol positions), fetches one Zerion swap quote per remaining row, applies a max-loss filter, and either prints a plan (dry-run) or broadcasts each swap sequentially (`--execute`).
+
+## Setup
+
+If a `zerion` command fails with `command not found`, install once:
+
+```bash
+npm install -g zerion-cli
+```
+
+Requires Node.js ≥ 20. For auth see the `zerion` umbrella skill. **Trading needs an API key + agent token** (pay-per-call does NOT apply).
+
+## When to use
+
+- "Consolidate all tokens on Base into USDC"
+- "Sweep dust on ethereum into ETH"
+- "Convert everything in this wallet to MON on monad"
+- "Treasury cleanup — gather every position on arbitrum into one token"
+- "Solana same-chain sweep into SOL or USDC"
+
+For balance inspection before sweeping → `zerion-analyze`. For a single swap → `zerion-trading`. For setting up an agent token → `zerion-agent-management`.
+
+## Command shape
+
+```
+zerion consolidate <chain> <to-token> [flags]
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--execute` | _(off)_ | Broadcast the ready rows. Without this, the command prints a plan only. |
+| `--min-value <usd>` | `1` | Skip positions below this USD value (marked `skipped: dust`). |
+| `--max-loss <pct>` | `5` | Reject quotes losing more than this fraction vs current value. Dual form: values > 1 treated as percent (`5` → 5%), values ≤ 1 as fraction (`0.05` → 5%). |
+| `--include-stables` | _(off)_ | Include stablecoins (USDC, USDT, DAI, USDS, FRAX, TUSD, USDD, PYUSD, LUSD, GUSD, USDe, RLUSD, FDUSD, USDB, crvUSD). |
+| `--exclude-stables` | _(off)_ | Force-exclude stables, no prompt. |
+| `--include <symbols>` | _(none)_ | Comma-separated symbols to force-include even if filtered (case-insensitive). |
+| `--exclude <symbols>` | _(none)_ | Comma-separated extra exclusions on top of defaults. |
+| `--include-native` | _(off)_ | Sweep the chain's native gas token (ETH/SOL/etc). |
+| `--gas-reserve <amount>` | per-chain default | Native units to reserve when `--include-native` is on. Requires `--include-native`. |
+| `--slippage <pct>` | `2` | Per-quote slippage tolerance (max 3, same as swap). |
+| `--wallet <name>` | default | Source wallet. |
+| `--continue-on-error` | _(off)_ | When `--execute`-ing, keep going past a failed swap instead of stopping. |
+| `--timeout <sec>` | `120` | Per-swap confirmation timeout. |
+
+Boolean flags (`--execute`, `--include-stables`, `--exclude-stables`, `--include-native`, `--continue-on-error`) should appear **last on the command line**, or use the `--flag=true` / `--no-flag` forms. The flag parser consumes the next non-`--` token as the value, so `--include-native ethereum` would mistakenly set `include-native="ethereum"`. The CLI rejects that with `invalid_flag_value`.
+
+## Examples
+
+```bash
+# Dry-run — plan only, no signing.
+zerion consolidate base USDC
+
+# Sweep everything on base into ETH, including the native ETH balance.
+zerion consolidate base ETH --include-native
+
+# Execute — broadcasts each ready row sequentially after one passphrase prompt.
+zerion consolidate base USDC --execute
+
+# Allow looser loss tolerance (8%), force-exclude WETH, keep going on errors.
+zerion consolidate base USDC --max-loss 8 --exclude WETH --continue-on-error --execute
+
+# Include stables in the sweep, override the dust threshold.
+zerion consolidate ethereum USDC --include-stables --min-value 5
+
+# Solana same-chain consolidation into SOL.
+zerion consolidate solana SOL --execute
+
+# Sweep into the native chain token while keeping 0.002 ETH for gas.
+zerion consolidate base ETH --include-native --gas-reserve 0.002 --execute
+```
+
+## Output
+
+### Dry-run plan (default)
+
+JSON to stdout. Each row carries:
+
+```json
+{
+  "symbol": "WETH",
+  "quantity": 0.052,
+  "value_usd": 187.4,
+  "expected_output": 186.1,
+  "expected_output_usd": 186.1,
+  "loss_pct": 0.0069,
+  "status": "ready"
+}
+```
+
+`status` is one of:
+
+| Status | Meaning |
+|---|---|
+| `ready` | Quote within max-loss; ready to broadcast on `--execute`. |
+| `blocked` | Quote exceeds max-loss (`reason: "max_loss"`). |
+| `no_route` | The Zerion API returned no executable route for this pair. |
+| `skipped` | Filtered out: `dust`, `below_reserve` (native row), or `no_price`. |
+
+The totals line shows: `N ready, M blocked, K skipped, expected ~X TARGET (~$Y)`.
+
+### `--execute` result
+
+```json
+{
+  "executed": true,
+  "results": [
+    { "symbol": "WETH", "hash": "0x…", "status": "success", "blockNumber": 1234, "gasUsed": "42000" }
+  ],
+  "summary": { "succeeded": 1, "failed": 0 }
+}
+```
+
+## Filter defaults
+
+By default the plan **excludes**:
+
+1. The target token itself — by symbol AND on-chain address (so bridged variants like USDC.e mapping to the canonical USDC address are also excluded).
+2. The chain's native gas token (use `--include-native` to opt in).
+3. Stablecoins (use `--include-stables` to opt in, or answer the interactive prompt yes).
+4. Positions below `--min-value` (default $1, marked `skipped: dust`).
+5. All non-wallet positions — `deposit`, `loan`, `staked`, `locked`, `reward`, `investment`. These never appear in the plan.
+
+`--include <symbols>` overrides exclusions 2 and 3 (still subject to dust). `--exclude <symbols>` adds further symbol exclusions.
+
+## Stables behavior
+
+| Context | Result |
+|---|---|
+| `--include-stables` set | Include, no prompt. |
+| `--exclude-stables` set | Exclude, no prompt. |
+| Neither set, TTY | Prompt: `Include stables (USDC/USDT/DAI/...) in this sweep? [y/N]` (default No). |
+| Neither set, non-TTY (pipe / agent invocation) | Default to **exclude**, no prompt — agents never block on stdin. |
+
+## Native gas-token handling
+
+`--include-native` sweeps the chain's native currency too (e.g. ETH on base, SOL on solana, POL on polygon). Pair with `--gas-reserve <amount>` to leave a buffer for future txns; otherwise the per-chain default applies:
+
+| Chain | Default reserve |
+|---|---|
+| ethereum | 0.005 ETH |
+| base | 0.001 ETH |
+| arbitrum | 0.001 ETH |
+| optimism | 0.001 ETH |
+| polygon | 1 POL |
+| binance-smart-chain | 0.005 BNB |
+| avalanche | 0.05 AVAX |
+| gnosis | 1 xDAI |
+| scroll | 0.001 ETH |
+| linea | 0.001 ETH |
+| zksync-era | 0.001 ETH |
+| zora | 0.001 ETH |
+| blast | 0.001 ETH |
+| solana | 0.01 SOL |
+| _other_ | 0.01 (with stderr warning — set `--gas-reserve` explicitly) |
+
+`--gas-reserve` without `--include-native` errors with `conflicting_flags`. If the reserve is ≥ the position quantity, the row is marked `skipped: below_reserve`.
+
+## Safety
+
+- **Dry-run by default.** No signing happens without `--execute`. Always run the bare command first and read the plan before broadcasting.
+- **Native token excluded by default.** Gas reserve protection only kicks in when you explicitly pass `--include-native`. Without it, the native row is silently filtered out — your ETH/SOL stays put.
+- **Stables excluded by default in non-TTY contexts.** Agents and pipelines never auto-sweep stables without an explicit `--include-stables` flag.
+- **Max-loss filter is a backstop, not a cap.** A row marked `blocked: max_loss` will NOT be broadcast even with `--execute`. Tighten the filter for low-liquidity tokens with `--max-loss 2`.
+- **Sequential execution — no atomicity.** Each row is its own swap. A failure mid-batch leaves earlier swaps confirmed and remaining ones unattempted (unless `--continue-on-error` is set). Plan accordingly when sweeping volatile tokens.
+- **Fresh quotes on `--execute`.** The execute path re-fetches quotes at run time — but it does not re-prompt the operator. Treat `--execute` as a commitment to broadcast every ready row.
+- **One passphrase prompt for the whole batch.** The agent token is read once up-front; if you abort mid-batch, the remaining swaps will simply not run.
+
+## Common errors
+
+| Code | Cause | Fix |
+|---|---|---|
+| `missing_args` | `<chain>` or `<to-token>` missing | `zerion consolidate base USDC` |
+| `unsupported_chain` | Invalid chain | `zerion chains` |
+| `target_token_not_found` | The target symbol has no implementation on the chain | Check `zerion search <symbol> --chain <chain>` |
+| `invalid_min_value` | `--min-value` is NaN or negative | Pass a non-negative number, e.g. `--min-value 1` |
+| `invalid_max_loss` | `--max-loss` is NaN, negative, or > 100 | Use percent (`5`) or fraction (`0.05`); see Dual form above |
+| `invalid_gas_reserve` | `--gas-reserve` is NaN or negative | Pass a non-negative native-units number |
+| `conflicting_flags` | `--gas-reserve` without `--include-native`, or `--include-stables` with `--exclude-stables` | Pass `--include-native` to opt in, or pick one stables flag |
+| `invalid_flag_value` | Bare boolean flag got a non-positional consumed as value | Pass the boolean flag last, or use `--flag=true` / `--no-flag` |
+| `invalid_slippage` | `--slippage` not in 0–100 | `--slippage 2` |
+| `no_agent_token` | Trading needs an agent token | See `zerion-agent-management` |
+| `insufficient_funds` | A row's balance dropped between quote and broadcast | Refresh and re-run `--execute` |
+
+## Pair with
+
+- `zerion-analyze` — inspect positions before sweeping. Useful to spot the long tail of dust and decide on `--min-value`.
+- `zerion-trading` — the underlying same-chain swap primitive. Use it for one-off conversions; use `zerion-consolidate` when you want to sweep many at once.
+- `zerion-agent-management` — set up the agent token + policies the `--execute` path will use.

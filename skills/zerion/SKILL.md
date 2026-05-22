@@ -71,6 +71,7 @@ export ZERION_MPP=true
 |--------|-------|
 | What's in this wallet? portfolio, positions, history, PnL, watchlist | **`zerion-analyze`** |
 | Swap / bridge / send tokens | **`zerion-trading`** |
+| Sweep / consolidate / convert all tokens on a chain into one target | **`zerion-consolidate`** |
 | Sign a message or EIP-712 typed data (no broadcast) | **`zerion-sign`** |
 | Create / import / list / backup / delete wallets | **`zerion-wallet`** |
 | Set up agent tokens + policies for autonomous trading | **`zerion-agent-management`** |

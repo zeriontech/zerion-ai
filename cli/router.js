@@ -54,6 +54,7 @@ function printUsage() {
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-wallet <name>": "Bridge with explicit destination wallet (Solana ↔ EVM)",
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <addr>": "Bridge to a raw destination address (chain-format must match)",
       "send <token> <amount> --to <addr> [--chain <chain>]": "Send native ETH/SOL or ERC-20 to an address (chain auto-detected from address format)",
+      "consolidate <chain> <to-token>": "Sweep all wallet positions on <chain> into <to-token> (dry-run by default; add --execute to broadcast)",
       "search <query>": "Search for tokens by name or symbol",
     },
     agent_tokens: {
