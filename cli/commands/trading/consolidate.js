@@ -338,10 +338,15 @@ export default async function consolidate(args, flags) {
   // Partial-success broadcast — see `executeReadyRows` in
   // cli/utils/trading/consolidate.js for the contract. One failing swap does
   // not gate the rest; failures land in the result with the full error string.
+  // `chain` + `walletAddress` are passed in so the helper can manage a local
+  // nonce counter across the batch (RPC `latest` lags between successive
+  // approvals/swaps, which would otherwise cause `nonce too low` on row K+1).
   const { results, summary } = await executeReadyRows(readyRows, executeSwap, {
     walletName,
     passphrase,
     timeout,
+    walletAddress: address,
+    chain,
   });
 
   print(

@@ -300,8 +300,13 @@ export async function getSwapOffers(input) {
  * @param {string} passphrase
  * @param {object} [options]
  * @param {number} [options.timeout] - broadcast timeout in seconds
+ * @param {number} [options.approvalNonceOverride] - force the approval tx's
+ *   nonce instead of trusting RPC `latest`. Used by batch flows (e.g.
+ *   `zerion consolidate --execute`) where successive swaps share a wallet
+ *   and the RPC's `latest` nonce can lag the previous swap's submission.
+ *   Ignored on Solana (no nonce concept) and when no approval is needed.
  */
-export async function executeSwap(quote, walletName, passphrase, { timeout } = {}) {
+export async function executeSwap(quote, walletName, passphrase, { timeout, approvalNonceOverride } = {}) {
   if (quote.blocking) {
     const err = new Error(
       `Quote not executable: ${quote.blocking.message || quote.blocking.code}` +
@@ -318,6 +323,9 @@ export async function executeSwap(quote, walletName, passphrase, { timeout } = {
     if (!quote.transactionSwapSolana?.raw) {
       throw new Error("Quote did not include a Solana transaction");
     }
+    // Solana has no EVM-style nonce — approvalNonceOverride is irrelevant
+    // here. Forward it anyway in case future Solana flows want to thread
+    // their own equivalent; the executor ignores it.
     return executeSolanaSwap(quote, walletName, passphrase);
   }
 
@@ -325,7 +333,11 @@ export async function executeSwap(quote, walletName, passphrase, { timeout } = {
     throw new Error("Quote did not include an EVM transaction");
   }
 
-  return executeEvmSwap(quote, walletName, passphrase, zerionChainId, { timeout, isCrossChain });
+  return executeEvmSwap(quote, walletName, passphrase, zerionChainId, {
+    timeout,
+    isCrossChain,
+    approvalNonceOverride,
+  });
 }
 
 async function executeSolanaSwap(quote, walletName, passphrase) {
@@ -347,7 +359,7 @@ async function executeSolanaSwap(quote, walletName, passphrase) {
   };
 }
 
-async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { timeout, isCrossChain = false } = {}) {
+async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { timeout, isCrossChain = false, approvalNonceOverride } = {}) {
   // Snapshot destination balance before bridge (for delivery detection)
   let preBalance = null;
   if (isCrossChain) {
@@ -379,11 +391,17 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
       });
 
       process.stderr.write(`Approving ${quote.from.symbol} for swap...\n`);
+      // Honour an external nonce hint when the caller knows where the wallet's
+      // pending queue should be (batch flows that don't trust RPC `latest`
+      // between back-to-back swaps). With no override we fall through to the
+      // signer's default (read `latest` from RPC), preserving the one-shot
+      // swap/bridge contract.
       const { signedTxHex, client, tx: signedApprove } = await signSwapTransaction(
         approveTx,
         zerionChainId,
         walletName,
-        passphrase
+        passphrase,
+        approvalNonceOverride != null ? { nonceOverride: approvalNonceOverride } : undefined,
       );
       approvalNonce = signedApprove.nonce;
       const approvalResult = await broadcastAndWait(client, signedTxHex, { timeout });

@@ -25,17 +25,34 @@ import {
   summarisePlan,
   buildConsolidatePlan,
   executeReadyRows,
+  rawWeiToDecimalString,
 } from "#zerion/utils/trading/consolidate.js";
 
 // Realistic position rows shaped like the /positions response. Keep these
-// minimal but with the fields the filter actually reads.
-function walletPosition({ symbol, value, quantity, chain = "base", address, decimals = 18, positionType = "wallet" }) {
+// minimal but with the fields the filter actually reads. `quantity.int` is
+// derived from the float + decimals so tests can stay in human-readable
+// numbers; tests that need a precise smallest-units quantity (e.g. the
+// 18-decimal precision test) pass `quantityIntOverride` to bypass the
+// derivation.
+function walletPosition({
+  symbol,
+  value,
+  quantity,
+  chain = "base",
+  address,
+  decimals = 18,
+  positionType = "wallet",
+  quantityIntOverride,
+}) {
+  const qInt = quantityIntOverride != null
+    ? String(quantityIntOverride)
+    : (quantity != null ? BigInt(Math.round(Number(quantity) * 10 ** decimals)).toString() : "0");
   return {
     attributes: {
       position_type: positionType,
       value,
       price: value != null && quantity ? value / quantity : null,
-      quantity: { float: quantity },
+      quantity: { float: quantity, int: qInt },
       fungible_info: {
         symbol,
         implementations: address
@@ -206,28 +223,39 @@ describe("resolveGasReserve", () => {
 });
 
 describe("computeNativeSweepAmount", () => {
-  it("returns (quantity - reserve) when positive", () => {
-    // Float subtraction can carry a tiny epsilon (0.01 - 0.001 ≈ 0.009 + 1e-18).
-    // We assert closeness rather than exact equality — the contract is "qty -
-    // reserve", not "the exact decimal you'd get with arbitrary precision".
-    const a = computeNativeSweepAmount(0.01, 0.001);
+  // New signature: (quantityIntWei, reserveHumanReadable, decimals=18) →
+  // { amount: decimal string, reason }. BigInt subtraction avoids the float
+  // epsilon that the previous Number-based implementation carried.
+  const wei = (human, decimals = 18) => BigInt(Math.round(human * 10 ** decimals)).toString();
+
+  it("returns (quantity - reserve) as a precise decimal string when positive", () => {
+    const a = computeNativeSweepAmount(wei(0.01), 0.001, 18);
     assert.equal(a.reason, null);
-    assert.ok(Math.abs(a.amount - 0.009) < 1e-12, `amount=${a.amount}`);
+    assert.equal(a.amount, "0.009");
 
-    const b = computeNativeSweepAmount(1, 0.5);
+    const b = computeNativeSweepAmount(wei(1), 0.5, 18);
     assert.equal(b.reason, null);
-    assert.equal(b.amount, 0.5);
+    assert.equal(b.amount, "0.5");
   });
 
-  it("returns below_reserve when reserve >= quantity", () => {
-    assert.deepEqual(computeNativeSweepAmount(0.001, 0.001), { amount: 0, reason: "below_reserve" });
-    assert.deepEqual(computeNativeSweepAmount(0.0005, 0.001), { amount: 0, reason: "below_reserve" });
-    assert.deepEqual(computeNativeSweepAmount(0, 0.001), { amount: 0, reason: "below_reserve" });
+  it("returns below_reserve when reserve >= quantity (with amount=\"0\")", () => {
+    assert.deepEqual(computeNativeSweepAmount(wei(0.001), 0.001, 18), { amount: "0", reason: "below_reserve" });
+    assert.deepEqual(computeNativeSweepAmount(wei(0.0005), 0.001, 18), { amount: "0", reason: "below_reserve" });
+    assert.deepEqual(computeNativeSweepAmount("0", 0.001, 18), { amount: "0", reason: "below_reserve" });
   });
 
-  it("rejects non-finite inputs as below_reserve (safer than dividing by NaN downstream)", () => {
-    assert.deepEqual(computeNativeSweepAmount(NaN, 0.001), { amount: 0, reason: "below_reserve" });
-    assert.deepEqual(computeNativeSweepAmount(0.01, undefined), { amount: 0, reason: "below_reserve" });
+  it("rejects unusable inputs as below_reserve", () => {
+    assert.deepEqual(computeNativeSweepAmount(null, 0.001, 18), { amount: "0", reason: "below_reserve" });
+    assert.deepEqual(computeNativeSweepAmount(wei(0.01), undefined, 18), { amount: "0", reason: "below_reserve" });
+    assert.deepEqual(computeNativeSweepAmount("not-a-bigint", 0.001, 18), { amount: "0", reason: "below_reserve" });
+    assert.deepEqual(computeNativeSweepAmount(wei(0.01), -1, 18), { amount: "0", reason: "below_reserve" });
+  });
+
+  it("respects chain-specific decimals (e.g. 6 for USDC-style natives)", () => {
+    // wei(1, 6) = "1000000" → 1 unit; reserve 0.5 → 0.5 unit sweepable.
+    const r = computeNativeSweepAmount(wei(1, 6), 0.5, 6);
+    assert.equal(r.reason, null);
+    assert.equal(r.amount, "0.5");
   });
 });
 
@@ -607,7 +635,17 @@ describe("buildConsolidatePlan — sequential quote loop", () => {
     };
 
     const candidates = [
-      { symbol: "ETH", valueUsd: 100, quantity: 0.01, fungible: {}, implAddress: null, isNative: true },
+      {
+        symbol: "ETH",
+        valueUsd: 100,
+        quantity: "0.01",
+        quantityFloat: 0.01,
+        rawInt: "10000000000000000", // 0.01 ETH = 1e16 wei
+        decimals: 18,
+        fungible: {},
+        implAddress: null,
+        isNative: true,
+      },
     ];
 
     await buildConsolidatePlan({
@@ -624,11 +662,8 @@ describe("buildConsolidatePlan — sequential quote loop", () => {
     });
 
     assert.equal(quoteInputs.length, 1);
-    // 0.01 - 0.001 ≈ 0.009 (with a possible 1e-18 epsilon from float math).
-    // Parse the string back to a number and assert proximity — the contract
-    // is "sweep quantity minus reserve", not a particular decimal rendering.
-    const passed = parseFloat(quoteInputs[0].amount);
-    assert.ok(Math.abs(passed - 0.009) < 1e-12, `amount string=${quoteInputs[0].amount}`);
+    // 0.01 ETH - 0.001 ETH = 0.009 ETH, exact in BigInt — no float epsilon.
+    assert.equal(quoteInputs[0].amount, "0.009");
   });
 
   it("marks the native row below_reserve when reserve >= quantity (no quote call)", async () => {
@@ -639,7 +674,17 @@ describe("buildConsolidatePlan — sequential quote loop", () => {
     };
 
     const candidates = [
-      { symbol: "ETH", valueUsd: 100, quantity: 0.001, fungible: {}, implAddress: null, isNative: true },
+      {
+        symbol: "ETH",
+        valueUsd: 100,
+        quantity: "0.001",
+        quantityFloat: 0.001,
+        rawInt: "1000000000000000", // 0.001 ETH = 1e15 wei
+        decimals: 18,
+        fungible: {},
+        implAddress: null,
+        isNative: true,
+      },
     ];
 
     const plan = await buildConsolidatePlan({
@@ -1133,5 +1178,296 @@ describe("formatConsolidateResult — full failure messages", () => {
       false,
       "Failures block should be hidden when summary.failed is 0",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC 22 — executeReadyRows nonce tracking. RPC `latest` lags between
+// back-to-back approvals during a sweep, causing `nonce too low` on row K+1.
+// The helper now tracks its own counter, seeded from `pending`, and feeds it
+// to executeFn as `approvalNonceOverride`. Pure unit test via a fake client.
+// ---------------------------------------------------------------------------
+describe("executeReadyRows — nonce tracking (AC 22)", () => {
+  // Tiny fake `getPublicClient` that returns a constant starting nonce. The
+  // helper reads pending once at start, then advances locally.
+  function mkClientFactory(startingNonce) {
+    return async () => ({
+      getTransactionCount: async () => BigInt(startingNonce),
+    });
+  }
+
+  function mkRow(symbol) {
+    return { symbol, quote: { from: { symbol }, to: { symbol: "ETH" }, fromChain: "base", toChain: "base" } };
+  }
+
+  it("feeds approvalNonceOverride to executeFn as [N, N+2, N+4, ...] when every row needs approval", async () => {
+    const overrides = [];
+    const executeFn = async (quote, _wallet, _passphrase, opts) => {
+      overrides.push(opts.approvalNonceOverride);
+      return { hash: `0x${quote.from.symbol}`, status: "success", approvalHash: "0xapproval" };
+    };
+
+    const readyRows = ["A", "B", "C", "D", "E"].map(mkRow);
+    const { summary } = await executeReadyRows(readyRows, executeFn, {
+      walletName: "w",
+      passphrase: "p",
+      timeout: 120,
+      walletAddress: "0xabc",
+      chain: "base",
+      clientFactory: mkClientFactory(42),
+    });
+
+    assert.deepEqual(overrides, [42, 44, 46, 48, 50], "every approval-needed row advances by +2");
+    assert.equal(summary.succeeded, 5);
+    assert.equal(summary.failed, 0);
+  });
+
+  it("advances by +1 when a row's approval was skipped (no approvalHash)", async () => {
+    const overrides = [];
+    const executeFn = async (quote, _w, _p, opts) => {
+      overrides.push(opts.approvalNonceOverride);
+      // Rows B and D had the allowance already in place → no approval tx →
+      // approvalHash is null → counter advances by +1 (swap only).
+      const needsApproval = !["B", "D"].includes(quote.from.symbol);
+      return {
+        hash: `0x${quote.from.symbol}`,
+        status: "success",
+        approvalHash: needsApproval ? "0xapproval" : null,
+      };
+    };
+
+    const readyRows = ["A", "B", "C", "D", "E"].map(mkRow);
+    await executeReadyRows(readyRows, executeFn, {
+      walletName: "w",
+      passphrase: "p",
+      timeout: 120,
+      walletAddress: "0xabc",
+      chain: "base",
+      clientFactory: mkClientFactory(10),
+    });
+
+    // A: needs approval (+2) → 12. B: no approval (+1) → 13. C: needs (+2)
+    // → 15. D: no approval (+1) → 16. E: needs (+2) → 18.
+    assert.deepEqual(overrides, [10, 12, 13, 15, 16]);
+  });
+
+  it("re-reads pending nonce after a row throws (so the next override isn't stale)", async () => {
+    const overrides = [];
+    let pendingReads = 0;
+    const factory = async () => ({
+      getTransactionCount: async () => {
+        pendingReads++;
+        // First call (start of batch) returns 100; after the throw, returns
+        // 102 (e.g. the approval-only tx landed but the swap reverted in
+        // simulation, advancing the chain's pending count).
+        return pendingReads === 1 ? 100n : 102n;
+      },
+    });
+
+    const executeFn = async (quote, _w, _p, opts) => {
+      overrides.push(opts.approvalNonceOverride);
+      if (quote.from.symbol === "ROW2") {
+        throw new Error("synthetic failure mid-batch");
+      }
+      return { hash: `0x${quote.from.symbol}`, status: "success", approvalHash: "0xapproval" };
+    };
+
+    const readyRows = ["ROW1", "ROW2", "ROW3"].map(mkRow);
+    const { summary } = await executeReadyRows(readyRows, executeFn, {
+      walletName: "w",
+      passphrase: "p",
+      timeout: 120,
+      walletAddress: "0xabc",
+      chain: "base",
+      clientFactory: factory,
+    });
+
+    // ROW1: start at 100, success +2. ROW2: tried with 102, throws → re-fetch
+    // pending → 102. ROW3: tried with 102 from the re-fetch.
+    assert.equal(overrides[0], 100);
+    assert.equal(overrides[1], 102);
+    assert.equal(overrides[2], 102);
+    assert.equal(summary.succeeded, 2);
+    assert.equal(summary.failed, 1);
+    assert.equal(pendingReads, 2, "pending nonce must be re-read after the throw");
+  });
+
+  it("skips nonce tracking on Solana (no EVM nonce concept) — no approvalNonceOverride passed", async () => {
+    const overrides = [];
+    const executeFn = async (quote, _w, _p, opts) => {
+      overrides.push(opts.approvalNonceOverride);
+      return { hash: `0x${quote.from.symbol}`, status: "success" };
+    };
+    let factoryCalled = false;
+    const factory = async () => {
+      factoryCalled = true;
+      return { getTransactionCount: async () => 0n };
+    };
+
+    const readyRows = [mkRow("USDC"), mkRow("BONK")];
+    await executeReadyRows(readyRows, executeFn, {
+      walletName: "w",
+      passphrase: "p",
+      timeout: 120,
+      walletAddress: "8xLdoxKr3J5dQX2dQuzC7v3sqXq6ZwVz1aVzaB6gqW9F",
+      chain: "solana",
+      clientFactory: factory,
+    });
+
+    assert.equal(factoryCalled, false, "no public client should be built on Solana");
+    assert.deepEqual(overrides, [undefined, undefined]);
+  });
+
+  it("falls back to per-row RPC nonce when the starting-nonce read throws", async () => {
+    const overrides = [];
+    const stderrChunks = [];
+    const origStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk) => { stderrChunks.push(String(chunk)); return true; };
+
+    try {
+      const executeFn = async (quote, _w, _p, opts) => {
+        overrides.push(opts.approvalNonceOverride);
+        return { hash: `0x${quote.from.symbol}`, status: "success" };
+      };
+      const factory = async () => ({
+        getTransactionCount: async () => { throw new Error("RPC down"); },
+      });
+
+      const readyRows = [mkRow("A"), mkRow("B")];
+      await executeReadyRows(readyRows, executeFn, {
+        walletName: "w",
+        passphrase: "p",
+        timeout: 120,
+        walletAddress: "0xabc",
+        chain: "base",
+        clientFactory: factory,
+      });
+
+      assert.deepEqual(overrides, [undefined, undefined], "fallback means no override is passed");
+      const stderrText = stderrChunks.join("");
+      assert.match(stderrText, /could not read starting nonce/i);
+    } finally {
+      process.stderr.write = origStderrWrite;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC 23 — BigInt-safe amount path. `Number(quantity.float)` truncates 18-
+// decimal balances past ~15 significant digits, so the API reconstructs a
+// smaller wei amount than the wallet actually holds and rejects the quote
+// with "Input asset balance is not enough." Use the raw `quantity.int`
+// + impl `decimals` to build a precise decimal string.
+// ---------------------------------------------------------------------------
+describe("rawWeiToDecimalString — precision contract (AC 23)", () => {
+  it("preserves all 18 fractional digits of a wstETH-style balance", () => {
+    // 1.234567890123456789 — exactly the kind of value that would lose its
+    // trailing digits via parseFloat / Number().
+    assert.equal(rawWeiToDecimalString("1234567890123456789", 18), "1.234567890123456789");
+  });
+
+  it("strips trailing zeros — `1.0` collapses to `1`", () => {
+    assert.equal(rawWeiToDecimalString("1000000000000000000", 18), "1");
+  });
+
+  it("handles sub-unit amounts (`100000` USDC-6dp = `0.1`)", () => {
+    assert.equal(rawWeiToDecimalString("100000", 6), "0.1");
+  });
+
+  it("returns `\"0\"` for zero", () => {
+    assert.equal(rawWeiToDecimalString("0", 18), "0");
+  });
+
+  it("handles 0-decimals tokens (e.g. some NFT-like fungibles)", () => {
+    assert.equal(rawWeiToDecimalString("42", 0), "42");
+  });
+
+  it("preserves precision past JavaScript Number's ~15-sigfig ceiling", () => {
+    // Number("12345678901234567") rounds to 12345678901234568 — silently lossy.
+    const intStr = "12345678901234567"; // 17 digits, past Number's safe range
+    const out = rawWeiToDecimalString(intStr, 0);
+    assert.equal(out, "12345678901234567");
+  });
+});
+
+describe("classifyPosition — precise quantity threads through (AC 23)", () => {
+  function preciseRow({ symbol, valueUsd, intStr, decimals, address }) {
+    return {
+      attributes: {
+        position_type: "wallet",
+        value: valueUsd,
+        quantity: { float: parseFloat(intStr) / 10 ** decimals, int: intStr },
+        fungible_info: {
+          symbol,
+          implementations: [{ chain_id: "base", address, decimals }],
+        },
+      },
+    };
+  }
+
+  it("threads quantity.int + decimals into the candidate's `quantity` string", () => {
+    const row = preciseRow({
+      symbol: "WSTETH",
+      valueUsd: 4800,
+      intStr: "1234567890123456789", // 1.234567890123456789 WSTETH
+      decimals: 18,
+      address: "0xwsteth",
+    });
+    const result = classifyPosition(row, baseCtx());
+    assert.equal(result.kind, "candidate");
+    assert.equal(result.quantity, "1.234567890123456789", "precise decimal string");
+    // quantityFloat is a (lossy) Number for display only.
+    assert.ok(Math.abs(result.quantityFloat - 1.234567890123456789) < 1e-9);
+    // The decimals + rawInt propagate so the native sweep path can do BigInt math.
+    assert.equal(result.decimals, 18);
+    assert.equal(result.rawInt, "1234567890123456789");
+  });
+
+  it("falls back to the float when quantity.int / decimals are missing", () => {
+    // Some positions (e.g. for a chain where the impl is missing decimals)
+    // can lack one or both fields. We must still produce SOMETHING usable
+    // rather than crashing.
+    const row = {
+      attributes: {
+        position_type: "wallet",
+        value: 100,
+        quantity: { float: 1.5 }, // no .int
+        fungible_info: {
+          symbol: "WEIRD",
+          implementations: [{ chain_id: "base", address: "0xweird" }], // no decimals
+        },
+      },
+    };
+    const result = classifyPosition(row, baseCtx());
+    assert.equal(result.kind, "candidate");
+    assert.equal(result.quantity, "1.5");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC 24 — STABLE_SYMBOLS additions. USDT0 was the user-blocking case from a
+// real local sweep. Also added: USD0 (Usual), BOLD (Liquity v2), USDY (Ondo).
+// All are bona-fide stables; recognising them by default avoids the user
+// having to remember `--exclude USDT0,USD0,BOLD,USDY` on every sweep.
+// ---------------------------------------------------------------------------
+describe("STABLE_SYMBOLS — new additions (AC 24)", () => {
+  it("recognises USDT0 in every casing (the user-blocking variant)", () => {
+    assert.equal(isStable("USDT0"), true);
+    assert.equal(isStable("usdt0"), true);
+    assert.equal(isStable("Usdt0"), true);
+  });
+
+  it("recognises USD0, BOLD, USDY (additional bona-fide stables)", () => {
+    for (const sym of ["USD0", "usd0", "BOLD", "bold", "USDY", "usdy"]) {
+      assert.equal(isStable(sym), true, `${sym} should match`);
+    }
+  });
+
+  it("does NOT match similar-looking non-stables (defence against false positives)", () => {
+    // No "USDT00" / "BOLDED" / "USD000" — these would be malformed but the
+    // O(1) Set.has check is exact-match, so we just confirm the contract.
+    for (const sym of ["USDT00", "BOLDED", "USD000", "USDT01", "USDS0"]) {
+      assert.equal(isStable(sym), false, `${sym} should NOT match`);
+    }
   });
 });

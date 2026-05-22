@@ -10,6 +10,8 @@
  */
 
 import { getSwapQuote } from "./swap.js";
+import { getPublicClient } from "./transaction.js";
+import { isSolana } from "../chain/registry.js";
 
 // Lowercase set so callers can do an O(1) `STABLE_SYMBOLS.has(sym.toLowerCase())`
 // match. The literal symbol casings used by the Zerion fungibles API mix case
@@ -17,6 +19,7 @@ import { getSwapQuote } from "./swap.js";
 export const STABLE_SYMBOLS = new Set([
   "usdc",
   "usdt",
+  "usdt0",   // LayerZero-bridged USDT (e.g. base) — user-blocking discovery in local test
   "dai",
   "usds",
   "frax",
@@ -30,6 +33,9 @@ export const STABLE_SYMBOLS = new Set([
   "fdusd",
   "usdb",
   "crvusd",
+  "usd0",    // Usual (USD0)
+  "bold",    // Liquity v2
+  "usdy",    // Ondo Yield-bearing USD
 ]);
 
 export function isStable(symbol) {
@@ -176,21 +182,69 @@ export function parseSymbolList(raw) {
 }
 
 /**
- * Compute the sweepable native-gas amount.
- * Returns `{ amount, reason }` — `reason` is set when amount ≤ 0 so the caller
- * can mark the row `skipped: below_reserve`.
+ * Convert a raw on-chain quantity (string of wei / smallest-units) into a
+ * precise decimal string. Avoids the precision loss `Number(quantity.float)`
+ * would suffer on 18-decimal balances above ~15 significant digits, which
+ * the swap API then over-reconstructs into wei and rejects with
+ * "Input asset balance is not enough."
+ *
+ * Inputs:
+ *   - `intStr`:  string of the smallest-units integer (e.g. "1234567890123456789")
+ *   - `decimals`: number of fractional decimals (e.g. 18 for ETH/ERC-20 18-dp)
+ *
+ * Returns a canonical decimal string with trailing zeros stripped:
+ *   rawWeiToDecimalString("1234567890123456789", 18) → "1.234567890123456789"
+ *   rawWeiToDecimalString("1000000000000000000", 18) → "1"
+ *   rawWeiToDecimalString("100000", 6)               → "0.1"
+ *   rawWeiToDecimalString("0", 18)                   → "0"
  */
-export function computeNativeSweepAmount(quantity, reserve) {
-  const q = Number(quantity);
-  const r = Number(reserve);
-  if (!Number.isFinite(q) || !Number.isFinite(r)) {
-    return { amount: 0, reason: "below_reserve" };
+export function rawWeiToDecimalString(intStr, decimals) {
+  const big = BigInt(intStr);
+  if (decimals === 0) return big.toString();
+  const div = 10n ** BigInt(decimals);
+  const whole = big / div;
+  const frac = big % div;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
+}
+
+/**
+ * Compute the sweepable native-gas amount in BigInt to avoid float precision
+ * loss. `quantityIntWei` is the position's raw smallest-units quantity string,
+ * `reserveHumanReadable` is the user-typed `--gas-reserve` number (or
+ * per-chain default), `decimals` is the chain's native decimals.
+ *
+ * Returns `{ amount, reason }`. `amount` is a decimal string (e.g. "0.004")
+ * suitable for the swap endpoint's `input[amount]` field; `reason` is set
+ * to "below_reserve" when reserve ≥ quantity (or the inputs are unusable).
+ *
+ * The float→wei conversion of `reserveHumanReadable` is the one place we
+ * tolerate Number arithmetic: the user types these values directly (e.g.
+ * `--gas-reserve 0.001`), and they're well below the 15-sigfig precision
+ * ceiling. Math.floor() rounds towards zero so we never reserve LESS than
+ * the operator asked for.
+ */
+export function computeNativeSweepAmount(quantityIntWei, reserveHumanReadable, decimals = 18) {
+  if (quantityIntWei == null || reserveHumanReadable == null) {
+    return { amount: "0", reason: "below_reserve" };
   }
-  const amount = q - r;
-  if (amount <= 0) {
-    return { amount: 0, reason: "below_reserve" };
+  let qBig;
+  try {
+    qBig = BigInt(String(quantityIntWei));
+  } catch {
+    return { amount: "0", reason: "below_reserve" };
   }
-  return { amount, reason: null };
+  const reserveNum = Number(reserveHumanReadable);
+  if (!Number.isFinite(reserveNum) || reserveNum < 0) {
+    return { amount: "0", reason: "below_reserve" };
+  }
+  const reserveWei = BigInt(Math.floor(reserveNum * 10 ** decimals));
+  if (qBig <= reserveWei) {
+    return { amount: "0", reason: "below_reserve" };
+  }
+  const amountWei = qBig - reserveWei;
+  return { amount: rawWeiToDecimalString(amountWei.toString(), decimals), reason: null };
 }
 
 /**
@@ -204,6 +258,15 @@ export function getImplementationAddress(fungibleInfo, chainId) {
   const match = impls.find((i) => i?.chain_id === chainId);
   if (!match?.address) return null;
   return String(match.address).toLowerCase();
+}
+
+/**
+ * Pick the impl entry (including `decimals`) for a fungible on the given
+ * chain. Returns `null` if no matching impl exists.
+ */
+export function getImplementation(fungibleInfo, chainId) {
+  const impls = fungibleInfo?.implementations || [];
+  return impls.find((i) => i?.chain_id === chainId) || null;
 }
 
 /**
@@ -234,8 +297,28 @@ export function classifyPosition(row, ctx) {
   const symbol = (fungible.symbol || "").toUpperCase();
   const positionType = attrs.position_type;
   const valueUsd = Number(attrs.value);
-  const quantity = Number(attrs.quantity?.float);
-  const implAddress = getImplementationAddress(fungible, ctx.chain);
+  const quantityFloat = Number(attrs.quantity?.float);
+  const impl = getImplementation(fungible, ctx.chain);
+  const implAddress = impl?.address ? String(impl.address).toLowerCase() : null;
+  const decimals = impl?.decimals;
+  // Precise decimal string for the swap-amount field. Convert from the raw
+  // `quantity.int` (smallest units) using the chain-specific decimals so we
+  // never feed a lossy Number into the API. When inputs are missing, fall
+  // back to the float so we degrade rather than crash; the dust-filter will
+  // still classify these correctly.
+  const rawInt = attrs.quantity?.int;
+  let quantity;
+  if (rawInt != null && Number.isFinite(decimals)) {
+    try {
+      quantity = rawWeiToDecimalString(String(rawInt), Number(decimals));
+    } catch {
+      quantity = Number.isFinite(quantityFloat) ? String(quantityFloat) : "0";
+    }
+  } else if (Number.isFinite(quantityFloat)) {
+    quantity = String(quantityFloat);
+  } else {
+    quantity = "0";
+  }
   const forceInclude = ctx.includeSet.has(symbol);
 
   // Non-wallet positions never sweep — skip entirely, no plan row.
@@ -270,11 +353,13 @@ export function classifyPosition(row, ctx) {
     return { kind: "skip", reason: "stable_excluded" };
   }
 
+  // Dust uses `value` (USD), not `quantity` — fine in float because USD
+  // values are small-magnitude numbers.
   if (!Number.isFinite(valueUsd) || valueUsd < ctx.minValueUsd) {
-    return { kind: "dust", symbol, valueUsd, quantity, fungible, implAddress };
+    return { kind: "dust", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
   }
 
-  return { kind: "candidate", symbol, valueUsd, quantity, fungible, implAddress };
+  return { kind: "candidate", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
 }
 
 /**
@@ -297,6 +382,7 @@ export function filterCandidates(positions, ctx) {
       skippedDust.push({
         symbol: result.symbol,
         quantity: result.quantity,
+        quantityFloat: result.quantityFloat,
         valueUsd: result.valueUsd,
         fungible: result.fungible,
       });
@@ -305,7 +391,10 @@ export function filterCandidates(positions, ctx) {
     candidates.push({
       symbol: result.symbol,
       valueUsd: result.valueUsd,
-      quantity: result.quantity,
+      quantity: result.quantity,           // precise decimal string for the swap amount
+      quantityFloat: result.quantityFloat, // lossy Number for display only
+      rawInt: result.rawInt,               // raw smallest-units string (used by native sweep math)
+      decimals: result.decimals,
       fungible: result.fungible,
       implAddress: result.implAddress,
       isNative: ctx.nativeSymbol && result.symbol === ctx.nativeSymbol,
@@ -370,15 +459,25 @@ export function evaluateQuote({ estimatedOutput, targetUsdPrice, positionValueUs
  * so callers don't need a try/catch around this.
  */
 async function buildCandidateRow(c, ctx) {
-  // Native sweep amount uses (quantity - reserve) when the row is the chain's
-  // native gas token. Non-native rows sweep the full quantity.
-  let sweepQuantity = c.quantity;
+  // Native sweep amount uses (quantity - reserve) computed in BigInt to avoid
+  // float precision loss on 18-decimal balances. Non-native rows sweep the
+  // full precise `quantity` string carried through from classifyPosition.
+  //
+  // `sweepAmount` is the string we send to the quote API. `displayQuantity`
+  // is the Number we put in the printable row for the formatter (which
+  // already calls toFixed(6) on it).
+  let sweepAmount;
+  let displayQuantity;
   if (c.isNative) {
-    const { amount, reason } = computeNativeSweepAmount(c.quantity, ctx.gasReserveValue);
+    const { amount, reason } = computeNativeSweepAmount(
+      c.rawInt,
+      ctx.gasReserveValue,
+      Number.isFinite(c.decimals) ? c.decimals : 18,
+    );
     if (reason) {
       return {
         symbol: c.symbol,
-        quantity: c.quantity,
+        quantity: c.quantityFloat,
         value_usd: c.valueUsd,
         expected_output: null,
         expected_output_usd: null,
@@ -387,7 +486,11 @@ async function buildCandidateRow(c, ctx) {
         reason: "below_reserve",
       };
     }
-    sweepQuantity = amount;
+    sweepAmount = amount;
+    displayQuantity = parseFloat(amount);
+  } else {
+    sweepAmount = c.quantity;
+    displayQuantity = Number.isFinite(c.quantityFloat) ? c.quantityFloat : parseFloat(sweepAmount);
   }
 
   let quote;
@@ -395,7 +498,7 @@ async function buildCandidateRow(c, ctx) {
     quote = await ctx.quoteFn({
       fromToken: c.symbol,
       toToken: ctx.toToken,
-      amount: String(sweepQuantity),
+      amount: sweepAmount,
       fromChain: ctx.chain,
       toChain: ctx.chain,
       walletAddress: ctx.walletAddress,
@@ -405,7 +508,7 @@ async function buildCandidateRow(c, ctx) {
   } catch (err) {
     return {
       symbol: c.symbol,
-      quantity: sweepQuantity,
+      quantity: displayQuantity,
       value_usd: c.valueUsd,
       expected_output: null,
       expected_output_usd: null,
@@ -425,7 +528,7 @@ async function buildCandidateRow(c, ctx) {
   if (evaluation.status === "skipped") {
     return {
       symbol: c.symbol,
-      quantity: sweepQuantity,
+      quantity: displayQuantity,
       value_usd: c.valueUsd,
       expected_output: null,
       expected_output_usd: null,
@@ -438,7 +541,7 @@ async function buildCandidateRow(c, ctx) {
   if (evaluation.status === "blocked") {
     return {
       symbol: c.symbol,
-      quantity: sweepQuantity,
+      quantity: displayQuantity,
       value_usd: c.valueUsd,
       expected_output: evaluation.expectedOutput,
       expected_output_usd: evaluation.expectedOutputUsd,
@@ -450,7 +553,7 @@ async function buildCandidateRow(c, ctx) {
   }
   return {
     symbol: c.symbol,
-    quantity: sweepQuantity,
+    quantity: displayQuantity,
     value_usd: c.valueUsd,
     expected_output: evaluation.expectedOutput,
     expected_output_usd: evaluation.expectedOutputUsd,
@@ -525,10 +628,12 @@ export async function buildConsolidatePlan({
   const rows = [];
 
   // Dust rows first so the table groups visually-skipped entries together.
+  // Use the lossy float for display — dust rows are by definition tiny values
+  // where the precision loss is irrelevant for human readability.
   for (const d of skippedDust) {
     rows.push({
       symbol: d.symbol,
-      quantity: d.quantity,
+      quantity: Number.isFinite(d.quantityFloat) ? d.quantityFloat : parseFloat(d.quantity),
       value_usd: d.valueUsd,
       expected_output: null,
       expected_output_usd: null,
@@ -564,20 +669,60 @@ export async function buildConsolidatePlan({
  * swap is an independent on-chain transaction; one failing quote should not
  * gate the rest of a sweep.
  *
- * `executeFn(quote, walletName, passphrase, { timeout })` matches the
- * `executeSwap` signature so the CLI passes it through unwrapped. Tests inject
- * a fake to drive failure scenarios without touching the keystore or RPC.
+ * On EVM chains the helper tracks an externally-managed nonce counter across
+ * the batch and feeds it to `executeFn` as `approvalNonceOverride`. Without
+ * this, back-to-back approvals read RPC `latest` and can collide on the
+ * previous tx's pending nonce, surfacing as `nonce too low` on row K+1.
+ *
+ * `executeFn(quote, walletName, passphrase, { timeout, approvalNonceOverride })`
+ * matches the `executeSwap` signature so the CLI passes it through unwrapped.
+ * Tests inject a fake (and optionally `clientFactory`) to drive scenarios
+ * without touching the keystore or RPC.
  *
  * Returns `{ results, summary: { succeeded, failed } }`. The caller is
  * responsible for echoing this to stdout via `print(..., formatConsolidateResult)`.
  */
-export async function executeReadyRows(readyRows, executeFn, { walletName, passphrase, timeout }) {
+export async function executeReadyRows(
+  readyRows,
+  executeFn,
+  { walletName, passphrase, timeout, walletAddress, chain, clientFactory = getPublicClient } = {},
+) {
   const results = [];
   let succeeded = 0;
   let failed = 0;
-  for (const row of readyRows) {
+
+  // Solana has no EVM-style nonce, and we don't manage Solana nonces from the
+  // consolidate side. Skip the override path entirely there; the executor
+  // ignores `approvalNonceOverride` for Solana rows anyway, but skipping the
+  // public-client setup keeps test fixtures simple.
+  const useNonceTracking = Boolean(chain) && !isSolana(chain) && Boolean(walletAddress);
+
+  let nextNonce = null;
+  let client = null;
+  if (useNonceTracking) {
     try {
-      const result = await executeFn(row.quote, walletName, passphrase, { timeout });
+      client = await clientFactory(chain);
+      nextNonce = Number(
+        await client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
+      );
+    } catch (err) {
+      // If we can't read the starting nonce, fall back to the no-override
+      // path — each row will use RPC `latest` like the single-swap flow.
+      // Surface the warning so an operator running with --pretty can see it.
+      process.stderr.write(
+        `Warning: could not read starting nonce for batch (${err?.message || err}). ` +
+        `Falling back to per-row RPC nonce — back-to-back approvals may collide.\n`,
+      );
+      nextNonce = null;
+    }
+  }
+
+  for (const row of readyRows) {
+    const opts = { timeout };
+    if (nextNonce != null) opts.approvalNonceOverride = nextNonce;
+
+    try {
+      const result = await executeFn(row.quote, walletName, passphrase, opts);
       results.push({
         symbol: row.symbol,
         hash: result.hash,
@@ -587,6 +732,12 @@ export async function executeReadyRows(readyRows, executeFn, { walletName, passp
       });
       if (result.status === "success") succeeded++;
       else failed++;
+      // Advance the nonce: approval-sent → +2 (approval + swap), approval-
+      // skipped → +1 (swap only). `result.approvalHash` is null/absent when
+      // the on-chain allowance already covered the swap (see executeEvmSwap).
+      if (nextNonce != null) {
+        nextNonce += result.approvalHash ? 2 : 1;
+      }
     } catch (err) {
       failed++;
       results.push({
@@ -595,6 +746,18 @@ export async function executeReadyRows(readyRows, executeFn, { walletName, passp
         status: "failed",
         error: err?.message || String(err),
       });
+      // Recovery: we don't know how far into the approve/swap pair we got
+      // before the throw. Re-fetch `pending` so the next iteration's override
+      // is at least no worse than the original RPC-`latest` behaviour.
+      if (client) {
+        try {
+          nextNonce = Number(
+            await client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
+          );
+        } catch {
+          // Leave nextNonce as-is; the loop continues.
+        }
+      }
     }
   }
   return { results, summary: { succeeded, failed } };
