@@ -88,26 +88,32 @@ function baseCtx(overrides = {}) {
 
 describe("STABLE_SYMBOLS coverage", () => {
   it("matches the documented stablecoin set case-insensitively", () => {
-    // The acceptance criteria lists these exact symbols (case-insensitive).
+    // The set is intentionally small — covers what wallets predominantly hold
+    // (USDC/USDT variants, USDS, USDe). Anything not on this list is a sweep
+    // candidate by default; users add legacy/niche stables via --exclude.
     const documented = [
-      "USDC", "USDT", "DAI", "USDS", "FRAX", "TUSD", "USDD", "PYUSD",
-      "LUSD", "GUSD", "USDe", "RLUSD", "FDUSD", "USDB", "crvUSD",
+      "USDC", "USDT", "USDC.e", "USDT0", "USDS", "TUSD", "USDe",
     ];
     for (const sym of documented) {
       assert.equal(isStable(sym), true, `${sym} should match`);
       assert.equal(isStable(sym.toLowerCase()), true, `${sym.toLowerCase()} should match`);
       assert.equal(isStable(sym.toUpperCase()), true, `${sym.toUpperCase()} should match`);
     }
-    // Mixed-case forms also match — guards against a regression where the set
-    // was stored upper-case and lower-case input would silently fail.
-    for (const variant of ["Usdc", "uSdC", "Usde", "CrvUsd", "PyUsd"]) {
+    // Mixed-case forms also match.
+    for (const variant of ["Usdc", "uSdC", "Usde", "UsDc.E", "Tusd"]) {
       assert.equal(isStable(variant), true, `${variant} should match`);
     }
   });
 
-  it("does not flag non-stable symbols", () => {
-    for (const sym of ["ETH", "BTC", "MATIC", "SOL", "MON", "USD"]) {
-      // "USD" is not in the documented list — exact-symbol match only.
+  it("does not flag non-stable symbols (incl. legacy stables removed from the curated set)", () => {
+    // Legacy/niche stables (DAI, FRAX, PYUSD, etc.) are explicitly NOT stables
+    // for sweep purposes — they get swept like any other token. Operators can
+    // protect them with --exclude if they hold legacy bags.
+    for (const sym of [
+      "ETH", "BTC", "MATIC", "SOL", "MON", "USD",
+      "DAI", "FRAX", "PYUSD", "FDUSD", "crvUSD", "LUSD", "GUSD", "USDD",
+      "RLUSD", "USDB", "USD0", "BOLD", "USDY",
+    ]) {
       assert.equal(isStable(sym), false, `${sym} should not match`);
     }
   });
@@ -373,11 +379,12 @@ describe("filterCandidates — position type, stables, native, dust", () => {
   });
 
   it("excludes stables by default", () => {
+    // USDe is a representative non-target stable on the curated list.
     const row = walletPosition({
-      symbol: "DAI",
+      symbol: "USDe",
       value: 50,
       quantity: 50,
-      address: "0xdai",
+      address: "0xusde",
     });
     const { candidates } = filterCandidates([row], baseCtx());
     assert.equal(candidates.length, 0);
@@ -385,14 +392,14 @@ describe("filterCandidates — position type, stables, native, dust", () => {
 
   it("--include-stables opts stables back in", () => {
     const row = walletPosition({
-      symbol: "DAI",
+      symbol: "USDe",
       value: 50,
       quantity: 50,
-      address: "0xdai",
+      address: "0xusde",
     });
     const { candidates } = filterCandidates([row], baseCtx({ includeStables: true }));
     assert.equal(candidates.length, 1);
-    assert.equal(candidates[0].symbol, "DAI");
+    assert.equal(candidates[0].symbol, "USDE"); // classifyPosition uppercases the symbol
   });
 
   it("dust positions land on the skippedDust list (still emit a plan row)", () => {
@@ -505,12 +512,12 @@ describe("filterCandidates — --include / --exclude overrides", () => {
 
   it("--include overrides the stables exclusion", () => {
     const row = walletPosition({
-      symbol: "DAI",
+      symbol: "TUSD",
       value: 50,
       quantity: 50,
-      address: "0xdai",
+      address: "0xtusd",
     });
-    const { candidates } = filterCandidates([row], baseCtx({ includeSet: new Set(["DAI"]) }));
+    const { candidates } = filterCandidates([row], baseCtx({ includeSet: new Set(["TUSD"]) }));
     assert.equal(candidates.length, 1);
   });
 
@@ -1555,28 +1562,25 @@ describe("classifyPosition — precise quantity threads through (AC 23)", () => 
 });
 
 // ---------------------------------------------------------------------------
-// AC 24 — STABLE_SYMBOLS additions. USDT0 was the user-blocking case from a
-// real local sweep. Also added: USD0 (Usual), BOLD (Liquity v2), USDY (Ondo).
-// All are bona-fide stables; recognising them by default avoids the user
-// having to remember `--exclude USDT0,USD0,BOLD,USDY` on every sweep.
+// Bridge-variant stables. USDT0 (LayerZero-bridged USDT) and USDC.e (bridged
+// USDC) are the two bridged forms recognised as stables — without them, the
+// operator would have to remember `--exclude USDT0,USDC.E` on every sweep.
 // ---------------------------------------------------------------------------
-describe("STABLE_SYMBOLS — new additions (AC 24)", () => {
-  it("recognises USDT0 in every casing (the user-blocking variant)", () => {
+describe("STABLE_SYMBOLS — bridged variants", () => {
+  it("recognises USDT0 in every casing", () => {
     assert.equal(isStable("USDT0"), true);
     assert.equal(isStable("usdt0"), true);
     assert.equal(isStable("Usdt0"), true);
   });
 
-  it("recognises USD0, BOLD, USDY (additional bona-fide stables)", () => {
-    for (const sym of ["USD0", "usd0", "BOLD", "bold", "USDY", "usdy"]) {
+  it("recognises USDC.e in every casing (the dot is part of the symbol)", () => {
+    for (const sym of ["USDC.e", "USDC.E", "usdc.e", "Usdc.E"]) {
       assert.equal(isStable(sym), true, `${sym} should match`);
     }
   });
 
-  it("does NOT match similar-looking non-stables (defence against false positives)", () => {
-    // No "USDT00" / "BOLDED" / "USD000" — these would be malformed but the
-    // O(1) Set.has check is exact-match, so we just confirm the contract.
-    for (const sym of ["USDT00", "BOLDED", "USD000", "USDT01", "USDS0"]) {
+  it("exact-match only: no false positives on lookalikes", () => {
+    for (const sym of ["USDT00", "USDC.f", "USDCe", "USDC_E", "USDS0"]) {
       assert.equal(isStable(sym), false, `${sym} should NOT match`);
     }
   });

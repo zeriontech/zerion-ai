@@ -201,7 +201,7 @@ export default async function consolidate(args, flags) {
     includeStables = false;
   } else if (process.stdin.isTTY) {
     includeStables = await confirm(
-      "Include stables (USDC/USDT/DAI/...) in this sweep? [y/N] ",
+      "Include stables (USDC/USDT/USDS/...) in this sweep? [y/N] ",
       { defaultYes: false },
     );
   } else {

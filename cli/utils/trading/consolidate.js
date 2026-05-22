@@ -19,23 +19,11 @@ import { isSolana } from "../chain/registry.js";
 export const STABLE_SYMBOLS = new Set([
   "usdc",
   "usdt",
-  "usdt0",   // LayerZero-bridged USDT (e.g. base) — user-blocking discovery in local test
-  "dai",
-  "usds",
-  "frax",
+  "usdc.e",  // bridged USDC (e.g. polygon, arbitrum, optimism) — treated as USDC for filter purposes
+  "usdt0",   // LayerZero-bridged USDT (e.g. base)
+  "usds",    // Sky / Maker rebrand of DAI
   "tusd",
-  "usdd",
-  "pyusd",
-  "lusd",
-  "gusd",
-  "usde",
-  "rlusd",
-  "fdusd",
-  "usdb",
-  "crvusd",
-  "usd0",    // Usual (USD0)
-  "bold",    // Liquity v2
-  "usdy",    // Ondo Yield-bearing USD
+  "usde",    // Ethena
 ]);
 
 export function isStable(symbol) {

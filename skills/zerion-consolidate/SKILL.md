@@ -48,7 +48,7 @@ Anything else fails with `target_token_not_found` and the error names the curate
 | `--min-value <usd>` | `1` | Skip positions below this USD value (marked `skipped: dust`). |
 | `--max-value <usd>` | _(no cap)_ | Skip positions above this USD value (marked `skipped: above_max`). Pair with `--min-value` to sweep only a band — useful for "clear dust, keep main bags". |
 | `--max-loss <pct>` | `5` | Reject quotes losing more than this fraction vs current value. Dual form: values > 1 treated as percent (`5` → 5%), values ≤ 1 as fraction (`0.05` → 5%). |
-| `--include-stables` | _(off)_ | Include stablecoins (USDC, USDT, DAI, USDS, FRAX, TUSD, USDD, PYUSD, LUSD, GUSD, USDe, RLUSD, FDUSD, USDB, crvUSD). |
+| `--include-stables` | _(off)_ | Include stablecoins (USDC, USDT, USDC.e, USDT0, USDS, TUSD, USDe). Match is case-insensitive; bridged USDC.e is treated as a stable so it isn't unintentionally swept. |
 | `--exclude-stables` | _(off)_ | Force-exclude stables, no prompt. |
 | `--include <symbols>` | _(none)_ | Comma-separated symbols to force-include even if filtered (case-insensitive). |
 | `--exclude <symbols>` | _(none)_ | Comma-separated extra exclusions on top of defaults. |
@@ -156,7 +156,7 @@ By default the plan **excludes**:
 |---|---|
 | `--include-stables` set | Include, no prompt. |
 | `--exclude-stables` set | Exclude, no prompt. |
-| Neither set, TTY | Prompt: `Include stables (USDC/USDT/DAI/...) in this sweep? [y/N]` (default No). |
+| Neither set, TTY | Prompt: `Include stables (USDC/USDT/USDS/...) in this sweep? [y/N]` (default No). |
 | Neither set, non-TTY (pipe / agent invocation) | Default to **exclude**, no prompt — agents never block on stdin. |
 
 ## Native gas-token handling
