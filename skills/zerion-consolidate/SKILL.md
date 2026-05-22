@@ -35,6 +35,13 @@ For balance inspection before sweeping → `zerion-analyze`. For a single swap �
 zerion consolidate <chain> <to-token> [flags]
 ```
 
+`<to-token>` accepts either:
+
+- A **curated symbol** — the chain's native gas token (e.g. `ETH` on base, `POL` on polygon, `SOL` on solana) or one of the canonical bluechips in `cli/utils/trading/consolidate-targets.js` (`USDC`, `USDT`, `DAI`, `WETH`, `WBTC`). The curated map stores one Zerion fungible id per asset; the chain implementation address is fetched live from `GET /fungibles/{id}`. Whichever address Zerion lists for that fungible on the chain — Circle-native USDC on some chains, bridged USDC.e on others — is what gets targeted.
+- A **contract address** — `0x…` on EVM chains, base58 on Solana. Use this for any token outside the curated list, or to override Zerion's choice (e.g. to target Circle-native USDC on a chain where Zerion's canonical USDC impl is the bridged variant).
+
+Anything else fails with `target_token_not_found` and the error names the curated symbols.
+
 | Flag | Default | Meaning |
 |---|---|---|
 | `--execute` | _(off)_ | Broadcast the ready rows. Without this, the command prints a plan only. |
@@ -127,7 +134,7 @@ The totals line shows: `N ready, M blocked, K skipped, expected ~X TARGET (~$Y)`
 
 By default the plan **excludes**:
 
-1. The target token itself — by symbol AND on-chain address (so bridged variants like USDC.e mapping to the canonical USDC address are also excluded).
+1. The target token itself — by symbol AND by the address Zerion lists for the target's fungible on this chain. On chains where Zerion treats a bridged variant (e.g. USDC.e on polygon) as the canonical impl of `USDC`, positions at that address are excluded automatically; positions whose symbol is `USDC` at any other address are also excluded via the symbol check.
 2. The chain's native gas token (use `--include-native` to opt in).
 3. Stablecoins (use `--include-stables` to opt in, or answer the interactive prompt yes).
 4. Positions below `--min-value` (default $1, marked `skipped: dust`).
@@ -185,7 +192,7 @@ By default the plan **excludes**:
 |---|---|---|
 | `missing_args` | `<chain>` or `<to-token>` missing | `zerion consolidate base USDC` |
 | `unsupported_chain` | Invalid chain | `zerion chains` |
-| `target_token_not_found` | The target symbol has no implementation on the chain | Check `zerion search <symbol> --chain <chain>` |
+| `target_token_not_found` | Target is neither a curated symbol on this chain nor a contract address | Pass a contract address (`0x…` / Solana base58), or use one of the curated symbols named in the error |
 | `invalid_min_value` | `--min-value` is NaN or negative | Pass a non-negative number, e.g. `--min-value 1` |
 | `invalid_max_loss` | `--max-loss` is NaN, negative, or > 100 | Use percent (`5`) or fraction (`0.05`); see Dual form above |
 | `invalid_gas_reserve` | `--gas-reserve` is NaN or negative | Pass a non-negative native-units number |

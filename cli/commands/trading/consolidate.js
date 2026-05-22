@@ -38,6 +38,7 @@ import {
   parseConcurrency,
   parseSymbolList,
 } from "../../utils/trading/consolidate.js";
+import { resolveTargetToken } from "../../utils/trading/consolidate-targets.js";
 
 // Auto-pick the plan-phase quote concurrency from the API-key tier when the
 // user didn't pass --concurrency. Paid keys can comfortably handle a small
@@ -135,41 +136,27 @@ export default async function consolidate(args, flags) {
 
   const { walletName, address } = resolveWallet({ ...flags, chain });
 
-  // Target token resolution — searchFungibles is fuzzy, so we filter to an
-  // exact symbol match on the requested chain. Capture the on-chain address
-  // so filterCandidates can do an address-level target exclusion in addition
-  // to the symbol check.
-  const targetUpper = String(toToken).toUpperCase();
-  let targetFungible;
+  // Target token resolution. Symbol matching is unreliable (case, bridged
+  // variants, collisions), so resolveTargetToken accepts only curated symbols
+  // or raw contract addresses — anything else throws target_token_not_found.
+  let target;
   try {
-    const response = await api.searchFungibles(toToken, { chainId: chain, limit: 5 });
-    const results = response.data || [];
-    targetFungible = results.find((r) => {
-      const sym = r.attributes?.symbol?.toUpperCase();
-      const implOnChain = (r.attributes?.implementations || []).some((i) => i.chain_id === chain);
-      return sym === targetUpper && implOnChain;
-    }) || null;
+    target = await resolveTargetToken({
+      toToken,
+      chain,
+      api,
+      getNativeFungible,
+    });
   } catch (err) {
-    printError(err.code || "search_error", err.message);
+    printError(err.code || "target_token_not_found", err.message, {
+      suggestion: err.suggestion,
+    });
     process.exit(1);
   }
 
-  if (!targetFungible) {
-    printError(
-      "target_token_not_found",
-      `Could not resolve "${toToken}" on chain "${chain}".`,
-      {
-        suggestion: `Confirm the symbol with: zerion search ${toToken} --chain ${chain}`,
-      },
-    );
-    process.exit(1);
-  }
-
-  const targetUsdPrice = Number(targetFungible.attributes?.market_data?.price);
-  const targetImpl = (targetFungible.attributes?.implementations || []).find(
-    (i) => i.chain_id === chain,
-  );
-  const targetAddress = targetImpl?.address ? String(targetImpl.address).toLowerCase() : null;
+  const targetUpper = target.symbol;
+  const targetAddress = target.address;
+  const targetUsdPrice = target.usdPrice;
 
   // Native gas-token symbol — used by the filter to detect the chain's native
   // currency in positions. Catalog lookup can fail (rate limit / no native
