@@ -6,8 +6,7 @@
  * everything testable without network mocks lives here.
  *
  * Quotes are fetched sequentially via the shared `getSwapQuote` to stay under
- * the Zerion API rate limit — same approach as the reference impl in
- * `~/WebstormProjects/safe-manager/trade.js`.
+ * the Zerion API rate limit.
  */
 
 import { getSwapQuote } from "./swap.js";

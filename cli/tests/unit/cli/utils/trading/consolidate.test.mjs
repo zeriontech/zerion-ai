@@ -505,10 +505,9 @@ describe("evaluateQuote — loss math + tolerance", () => {
 
 describe("buildConsolidatePlan — sequential quote loop", () => {
   it("calls the injected quoteFn once per candidate, in order, and never in parallel", async () => {
-    // The reference impl (safe-manager/trade.js) is sequential and the API
-    // is rate-limited at 1 RPS on demo tier — Promise.all would be a
-    // regression. Track concurrency via a counter that the fake quoteFn
-    // increments on entry and decrements on exit.
+    // The Zerion API is rate-limited at 1 RPS on the demo tier — Promise.all
+    // would be a regression. Track concurrency via a counter that the fake
+    // quoteFn increments on entry and decrements on exit.
     let active = 0;
     let maxActive = 0;
     const order = [];
