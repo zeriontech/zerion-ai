@@ -990,3 +990,69 @@ describe("--execute broadcast loop is unconditionally sequential (AC 21e)", () =
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// formatConsolidateResult — full failure messages are visible by default.
+// The summary table truncates at ~27 chars + ellipsis, which buries actionable
+// reasons ("Quote not executable: Input asset balance is not enough" becomes
+// "Quote not executable: Input…"). The Failures block below the totals prints
+// the full string per failed row.
+// ---------------------------------------------------------------------------
+describe("formatConsolidateResult — full failure messages", () => {
+  it("prints the un-truncated error string for every non-success row in a Failures block", async () => {
+    const { formatConsolidateResult } = await import("#zerion/utils/common/format.js");
+    const longError =
+      "Quote not executable: insufficient_liquidity on uniswap-v3 (hint: try a smaller amount)";
+    // Sanity: this string is well past the in-table truncation cap of ~27.
+    assert.ok(longError.length > 27);
+
+    const out = formatConsolidateResult({
+      chain: "base",
+      toToken: "ETH",
+      walletAddress: "0xabc",
+      results: [
+        { symbol: "USDC", hash: "0xaaa", status: "success" },
+        { symbol: "WSTETH", hash: null, status: "failed", error: longError },
+      ],
+      summary: { succeeded: 1, failed: 1 },
+    });
+
+    // Top of the formatter output still renders the compact table — that's
+    // by design (the user can scan many rows quickly). The Failures block at
+    // the bottom is the new escape hatch.
+    assert.match(out, /Failures:/);
+    // The full string is present without ellipsis. Use a substring check
+    // rather than a regex so ANSI escapes between the row prefix and the
+    // message don't trip us up.
+    assert.ok(
+      out.includes(longError),
+      `formatter output must include the full error string; got:\n${out}`,
+    );
+    // The symbol prefixes the failed message so an operator can correlate
+    // it back to the row in the table above.
+    assert.match(out, /WSTETH: Quote not executable/);
+    // Successful rows must NOT appear under Failures — otherwise the block
+    // would just duplicate the table.
+    assert.equal(
+      out.lastIndexOf("USDC:") < out.indexOf("Failures:") || !out.includes("USDC:"),
+      true,
+      "successful rows must not appear in the Failures block",
+    );
+  });
+
+  it("omits the Failures block when no rows failed", async () => {
+    const { formatConsolidateResult } = await import("#zerion/utils/common/format.js");
+    const out = formatConsolidateResult({
+      chain: "base",
+      toToken: "ETH",
+      walletAddress: "0xabc",
+      results: [{ symbol: "USDC", hash: "0xaaa", status: "success" }],
+      summary: { succeeded: 1, failed: 0 },
+    });
+    assert.equal(
+      out.includes("Failures:"),
+      false,
+      "Failures block should be hidden when summary.failed is 0",
+    );
+  });
+});

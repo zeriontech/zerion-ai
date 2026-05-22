@@ -387,6 +387,24 @@ export function formatConsolidateResult(data) {
   lines.push(
     `  ${BOLD}${summary.succeeded || 0} succeeded${RESET}, ${summary.failed || 0} failed`,
   );
+
+  // The table's Error column truncates at ~27 chars, which buries the actual
+  // reason for any failure ("Quote not executable: Input asset balance is not
+  // enough…" gets clipped to "Quote not executable: Input…"). Print the full
+  // error string per failed row below the summary so operators can act on it
+  // without re-running with --verbose or scraping JSON.
+  if ((summary.failed || 0) > 0) {
+    const failures = results.filter((r) => r.status !== "success");
+    if (failures.length > 0) {
+      lines.push("");
+      lines.push(`  ${RED}Failures:${RESET}`);
+      for (const r of failures) {
+        const msg = r.error || r.status || "(no error message)";
+        lines.push(`    ${r.symbol}: ${msg}`);
+      }
+    }
+  }
+
   return lines.join("\n");
 }
 
