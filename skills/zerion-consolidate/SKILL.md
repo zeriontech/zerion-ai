@@ -46,6 +46,7 @@ Anything else fails with `target_token_not_found` and the error names the curate
 |---|---|---|
 | `--execute` | _(off)_ | Broadcast the ready rows. Without this, the command prints a plan only. |
 | `--min-value <usd>` | `1` | Skip positions below this USD value (marked `skipped: dust`). |
+| `--max-value <usd>` | _(no cap)_ | Skip positions above this USD value (marked `skipped: above_max`). Pair with `--min-value` to sweep only a band — useful for "clear dust, keep main bags". |
 | `--max-loss <pct>` | `5` | Reject quotes losing more than this fraction vs current value. Dual form: values > 1 treated as percent (`5` → 5%), values ≤ 1 as fraction (`0.05` → 5%). |
 | `--include-stables` | _(off)_ | Include stablecoins (USDC, USDT, DAI, USDS, FRAX, TUSD, USDD, PYUSD, LUSD, GUSD, USDe, RLUSD, FDUSD, USDB, crvUSD). |
 | `--exclude-stables` | _(off)_ | Force-exclude stables, no prompt. |
@@ -82,6 +83,12 @@ zerion consolidate base USDC --max-loss 8 --exclude WETH --execute
 # Include stables in the sweep, override the dust threshold.
 zerion consolidate ethereum USDC --include-stables --min-value 5
 
+# Dust cleanup only — sweep rows up to $10 into USDC, leave main bags alone.
+zerion consolidate base USDC --max-value 10
+
+# Band — sweep mid-size positions ($5–$50). Outside the band: dust below, main bags above.
+zerion consolidate base USDC --min-value 5 --max-value 50
+
 # Solana same-chain consolidation into SOL.
 zerion consolidate solana SOL --execute
 
@@ -114,7 +121,7 @@ JSON to stdout. Each row carries:
 | `ready` | Quote within max-loss; ready to broadcast on `--execute`. |
 | `blocked` | Quote exceeds max-loss (`reason: "max_loss"`). |
 | `no_route` | The Zerion API returned no executable route for this pair. |
-| `skipped` | Filtered out: `dust`, `below_reserve` (native row), or `no_price`. |
+| `skipped` | Filtered out: `dust` (below `--min-value`), `above_max` (above `--max-value`), `below_reserve` (native row), or `no_price`. |
 
 The totals line shows: `N ready, M blocked, K skipped, expected ~X TARGET (~$Y)`.
 
@@ -138,7 +145,8 @@ By default the plan **excludes**:
 2. The chain's native gas token (use `--include-native` to opt in).
 3. Stablecoins (use `--include-stables` to opt in, or answer the interactive prompt yes).
 4. Positions below `--min-value` (default $1, marked `skipped: dust`).
-5. All non-wallet positions — `deposit`, `loan`, `staked`, `locked`, `reward`, `investment`. These never appear in the plan.
+5. Positions above `--max-value` if set (no default — uncapped; marked `skipped: above_max`).
+6. All non-wallet positions — `deposit`, `loan`, `staked`, `locked`, `reward`, `investment`. These never appear in the plan.
 
 `--include <symbols>` overrides exclusions 2 and 3 (still subject to dust). `--exclude <symbols>` adds further symbol exclusions.
 
@@ -194,10 +202,11 @@ By default the plan **excludes**:
 | `unsupported_chain` | Invalid chain | `zerion chains` |
 | `target_token_not_found` | Target is neither a curated symbol on this chain nor a contract address | Pass a contract address (`0x…` / Solana base58), or use one of the curated symbols named in the error |
 | `invalid_min_value` | `--min-value` is NaN or negative | Pass a non-negative number, e.g. `--min-value 1` |
+| `invalid_max_value` | `--max-value` is NaN, zero, or negative | Pass a positive number, e.g. `--max-value 10` |
 | `invalid_max_loss` | `--max-loss` is NaN, negative, or > 100 | Use percent (`5`) or fraction (`0.05`); see Dual form above |
 | `invalid_gas_reserve` | `--gas-reserve` is NaN or negative | Pass a non-negative native-units number |
 | `invalid_concurrency` | `--concurrency` is NaN, non-integer, < 1, or > 10 | Pass an integer in `1..10`, e.g. `--concurrency 5` |
-| `conflicting_flags` | `--gas-reserve` without `--include-native`, or `--include-stables` with `--exclude-stables` | Pass `--include-native` to opt in, or pick one stables flag |
+| `conflicting_flags` | `--gas-reserve` without `--include-native`, `--include-stables` with `--exclude-stables`, or `--max-value < --min-value` | Pass `--include-native` to opt in, pick one stables flag, or widen the band |
 | `invalid_flag_value` | Bare boolean flag got a non-positional consumed as value | Pass the boolean flag last, or use `--flag=true` / `--no-flag` |
 | `invalid_slippage` | `--slippage` not in 0–100 | `--slippage 2` |
 | `no_agent_token` | Trading needs an agent token | See `zerion-agent-management` |
@@ -209,15 +218,16 @@ How common natural-language requests map to invocations.
 
 | User prompt | Invocation |
 |---|---|
-| `clear dust tokens on base for default wallet` | `zerion consolidate base USDC --min-value 5` (USDC chosen as a sensible stable target on base; raise `--min-value` to widen what counts as dust) |
+| `clear dust tokens on base for default wallet` | `zerion consolidate base USDC --max-value 10` (sweep rows up to $10; main bags above $10 stay put. `--min-value` defaults to $1 so genuinely-tiny rows still skip as `dust`.) |
 | `consolidate everything on arbitrum into USDC` | `zerion consolidate arbitrum USDC` (dry-run first, then re-run with `--execute`) |
-| `sweep dust on polygon into USDC including the small stables` | `zerion consolidate polygon USDC --include-stables --min-value 2` |
+| `sweep dust on polygon into USDC including the small stables` | `zerion consolidate polygon USDC --include-stables --max-value 10` |
 | `convert all my base tokens to ETH and keep some for gas` | `zerion consolidate base ETH --include-native --gas-reserve 0.002` |
-| `dust cleanup on optimism but be conservative on slippage` | `zerion consolidate optimism USDC --max-loss 2 --slippage 1` |
+| `dust cleanup on optimism but be conservative on slippage` | `zerion consolidate optimism USDC --max-value 10 --max-loss 2 --slippage 1` |
 | `treasury sweep on ethereum into USDC for wallet treasury-1` | `zerion consolidate ethereum USDC --wallet treasury-1` |
 | `consolidate solana wallet into SOL` | `zerion consolidate solana SOL --include-native` |
-| `move all my polygon tokens to <0x…>` | `zerion consolidate polygon 0x… --min-value 1` (curated symbols don't cover this token; pass the address) |
-| `clear dust but skip WETH and WBTC` | `zerion consolidate base USDC --exclude WETH,WBTC --min-value 5` |
+| `move all my polygon tokens to <0x…>` | `zerion consolidate polygon 0x… ` (curated symbols don't cover this token; pass the address) |
+| `clear dust but skip WETH and WBTC` | `zerion consolidate base USDC --exclude WETH,WBTC --max-value 10` |
+| `sweep only mid-size positions on base ($5–$50) into USDC` | `zerion consolidate base USDC --min-value 5 --max-value 50` (band: rows below $5 → `dust`, above $50 → `above_max`) |
 
 Always start in dry-run (omit `--execute`) so the operator can read the plan before broadcasting. Surface the totals line (`N ready, M blocked, K skipped`) before suggesting `--execute`.
 

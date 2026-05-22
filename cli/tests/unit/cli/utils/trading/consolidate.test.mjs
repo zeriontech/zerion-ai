@@ -14,6 +14,7 @@ import {
   resolveGasReserve,
   parseMaxLoss,
   parseMinValue,
+  parseMaxValue,
   parseGasReserve,
   parseConcurrency,
   parseSymbolList,
@@ -80,6 +81,7 @@ function baseCtx(overrides = {}) {
     includeSet: new Set(),
     excludeSet: new Set(),
     minValueUsd: 1,
+    maxValueUsd: Infinity,
     ...overrides,
   };
 }
@@ -164,6 +166,27 @@ describe("parseMinValue / parseGasReserve", () => {
   it("parseMinValue rejects NaN and negative", () => {
     for (const bad of ["abc", -1, -0.01, "-5"]) {
       assert.throws(() => parseMinValue(bad), (err) => err.code === "invalid_min_value");
+    }
+  });
+
+  it("parseMaxValue defaults to Infinity (uncapped) when unset", () => {
+    assert.equal(parseMaxValue(undefined), Infinity);
+    assert.equal(parseMaxValue(""), Infinity);
+    assert.equal(parseMaxValue(null), Infinity);
+    // Bare boolean flag (next positional swallowed by parseFlags before the
+    // CLI guard kicks in) — also unset.
+    assert.equal(parseMaxValue(true), Infinity);
+  });
+
+  it("parseMaxValue accepts positive numbers", () => {
+    assert.equal(parseMaxValue("10"), 10);
+    assert.equal(parseMaxValue(50.5), 50.5);
+    assert.equal(parseMaxValue("0.5"), 0.5);
+  });
+
+  it("parseMaxValue rejects NaN, zero, and negative (zero would skip every row)", () => {
+    for (const bad of ["abc", 0, "0", -1, -0.01]) {
+      assert.throws(() => parseMaxValue(bad), (err) => err.code === "invalid_max_value");
     }
   });
 
@@ -383,6 +406,93 @@ describe("filterCandidates — position type, stables, native, dust", () => {
     assert.equal(candidates.length, 0);
     assert.equal(skippedDust.length, 1);
     assert.equal(skippedDust[0].symbol, "WETH");
+    assert.equal(skippedDust[0].reason, "dust");
+  });
+
+  it("max-value: positions above the cap are surfaced as `above_max`, not silently skipped", () => {
+    const big = walletPosition({
+      symbol: "WETH",
+      value: 500,
+      quantity: 0.15,
+      address: "0xweth",
+    });
+    const small = walletPosition({
+      symbol: "WBTC",
+      value: 5,
+      quantity: 0.0001,
+      address: "0xwbtc",
+    });
+    const ctx = baseCtx({ maxValueUsd: 50 });
+    const { candidates, skippedDust } = filterCandidates([big, small], ctx);
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].symbol, "WBTC");
+    assert.equal(skippedDust.length, 1);
+    assert.equal(skippedDust[0].symbol, "WETH");
+    assert.equal(skippedDust[0].reason, "above_max");
+  });
+
+  it("max-value: uses inclusive upper bound (exactly at the cap → candidate, just over → skipped)", () => {
+    const atCap = walletPosition({ symbol: "WETH", value: 50, quantity: 0.02, address: "0xweth" });
+    const overCap = walletPosition({ symbol: "WBTC", value: 50.01, quantity: 0.001, address: "0xwbtc" });
+    const ctx = baseCtx({ maxValueUsd: 50 });
+    const { candidates, skippedDust } = filterCandidates([atCap, overCap], ctx);
+    assert.deepEqual(candidates.map((c) => c.symbol), ["WETH"]);
+    assert.deepEqual(skippedDust.map((d) => d.symbol), ["WBTC"]);
+    assert.equal(skippedDust[0].reason, "above_max");
+  });
+
+  it("band: --min-value + --max-value sweeps only the window between the two", () => {
+    const dust = walletPosition({ symbol: "AAA", value: 0.5, quantity: 1, address: "0xaaa" });
+    const inBand1 = walletPosition({ symbol: "BBB", value: 10, quantity: 1, address: "0xbbb" });
+    const inBand2 = walletPosition({ symbol: "CCC", value: 40, quantity: 1, address: "0xccc" });
+    const main = walletPosition({ symbol: "DDD", value: 500, quantity: 1, address: "0xddd" });
+
+    const ctx = baseCtx({ minValueUsd: 5, maxValueUsd: 50 });
+    const { candidates, skippedDust } = filterCandidates([dust, inBand1, inBand2, main], ctx);
+    assert.deepEqual(candidates.map((c) => c.symbol).sort(), ["BBB", "CCC"]);
+
+    const reasonsBySymbol = Object.fromEntries(skippedDust.map((d) => [d.symbol, d.reason]));
+    assert.equal(reasonsBySymbol.AAA, "dust");
+    assert.equal(reasonsBySymbol.DDD, "above_max");
+  });
+
+  it("max-value: defaults to Infinity (no cap) so existing callers see no behavior change", () => {
+    const big = walletPosition({
+      symbol: "WETH",
+      value: 1_000_000,
+      quantity: 300,
+      address: "0xweth",
+    });
+    const { candidates, skippedDust } = filterCandidates([big], baseCtx());
+    assert.equal(candidates.length, 1);
+    assert.equal(skippedDust.length, 0);
+  });
+
+  it("buildConsolidatePlan emits reason='above_max' on the plan row (not 'dust')", async () => {
+    const big = walletPosition({
+      symbol: "WETH",
+      value: 500,
+      quantity: 0.15,
+      address: "0xweth",
+    });
+    const ctx = baseCtx({ maxValueUsd: 50 });
+    const { skippedDust } = filterCandidates([big], ctx);
+    const plan = await buildConsolidatePlan({
+      candidates: [],
+      skippedDust,
+      chain: CHAIN,
+      toToken: TARGET.symbol,
+      targetUsdPrice: 1,
+      walletAddress: "0xwallet",
+      slippage: 2,
+      gasReserveValue: 0,
+      maxLoss: 0.05,
+      quoteFn: async () => { throw new Error("not used — no candidates"); },
+    });
+    const row = plan.rows.find((r) => r.symbol === "WETH");
+    assert.ok(row, "WETH row should appear in plan");
+    assert.equal(row.status, "skipped");
+    assert.equal(row.reason, "above_max");
   });
 });
 

@@ -34,6 +34,7 @@ import {
   resolveGasReserve,
   parseMaxLoss,
   parseMinValue,
+  parseMaxValue,
   parseGasReserve,
   parseConcurrency,
   parseSymbolList,
@@ -88,16 +89,32 @@ export default async function consolidate(args, flags) {
   }
 
   let minValueUsd;
+  let maxValueUsd;
   let maxLoss;
   let explicitGasReserve;
   let explicitConcurrency;
   try {
     minValueUsd = parseMinValue(flags["min-value"]);
+    maxValueUsd = parseMaxValue(flags["max-value"]);
     maxLoss = parseMaxLoss(flags["max-loss"]);
     explicitGasReserve = parseGasReserve(flags["gas-reserve"]);
     explicitConcurrency = parseConcurrency(flags.concurrency);
   } catch (err) {
     printError(err.code || "invalid_flag", err.message);
+    process.exit(1);
+  }
+
+  // Band sanity: if both bounds are set and the window collapses, every row
+  // would be filtered. Surface this as a clear validation error rather than
+  // an empty plan.
+  if (Number.isFinite(maxValueUsd) && maxValueUsd < minValueUsd) {
+    printError(
+      "conflicting_flags",
+      `--max-value (${maxValueUsd}) must be ≥ --min-value (${minValueUsd}).`,
+      {
+        suggestion: "Widen the band, drop one of the flags, or swap their values.",
+      },
+    );
     process.exit(1);
   }
 
@@ -234,6 +251,7 @@ export default async function consolidate(args, flags) {
     includeSet,
     excludeSet,
     minValueUsd,
+    maxValueUsd,
   };
 
   const { candidates, skippedDust } = filterCandidates(positionsResponse.data || [], ctx);

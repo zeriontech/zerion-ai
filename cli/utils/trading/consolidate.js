@@ -124,6 +124,27 @@ export function parseMinValue(raw) {
 }
 
 /**
+ * Parse `--max-value` (USD). Returns a positive number, or `Infinity` when
+ * the flag is unset (no upper bound). Combined with `--min-value`, expresses
+ * a band: positions with `value ∈ [min, max]` are sweep candidates; below
+ * `min` is dust, above `max` is "main holdings" (skipped, surfaced).
+ *
+ * Throws `{ code: "invalid_max_value" }` on bad input.
+ */
+export function parseMaxValue(raw) {
+  if (raw === undefined || raw === null || raw === "" || raw === true || raw === false) {
+    return Infinity;
+  }
+  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
+  if (!Number.isFinite(n) || n <= 0) {
+    const err = new Error(`Invalid --max-value: ${raw}. Must be a positive number.`);
+    err.code = "invalid_max_value";
+    throw err;
+  }
+  return n;
+}
+
+/**
  * Parse `--concurrency` (positive integer in `[1, 10]`). Returns `undefined`
  * when the flag isn't set so the CLI can auto-pick by API-key tier. Throws
  * `{ code: "invalid_concurrency" }` on NaN, negative, zero, > 10, or
@@ -284,11 +305,16 @@ export function getImplementation(fungibleInfo, chainId) {
  *     includeSet            - Set of upper-case symbols to force-include (overrides
  *                             native/stables exclusions; still subject to dust filter)
  *     excludeSet            - Set of upper-case symbols to force-exclude
- *     minValueUsd           - dust threshold
+ *     minValueUsd           - inclusive lower bound; rows below are dust
+ *     maxValueUsd           - inclusive upper bound; rows above are "main
+ *                             holdings" (skipped, surfaced). `Infinity` =
+ *                             no cap (the default).
  *
  * Returns one of:
  *   { kind: "skip", reason }            — row excluded entirely (no plan entry)
- *   { kind: "dust" }                    — emit a plan row `status: skipped, dust`
+ *   { kind: "dust", reason }            — emit a plan row `status: skipped`.
+ *                                          `reason` is "dust" (below min) or
+ *                                          "above_max" (above max).
  *   { kind: "candidate", symbol, valueUsd, quantity, fungible, implAddress }
  */
 export function classifyPosition(row, ctx) {
@@ -354,9 +380,18 @@ export function classifyPosition(row, ctx) {
   }
 
   // Dust uses `value` (USD), not `quantity` — fine in float because USD
-  // values are small-magnitude numbers.
+  // values are small-magnitude numbers. NaN/missing values fail closed as
+  // dust so the row is surfaced rather than silently swept.
   if (!Number.isFinite(valueUsd) || valueUsd < ctx.minValueUsd) {
-    return { kind: "dust", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
+    return { kind: "dust", reason: "dust", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
+  }
+
+  // Above the upper bound — likely a main holding the operator doesn't want
+  // to sweep. Surfaced (not silently dropped) so the operator sees what got
+  // filtered. `maxValueUsd === Infinity` when --max-value isn't set, so this
+  // branch is a no-op by default.
+  if (Number.isFinite(ctx.maxValueUsd) && valueUsd > ctx.maxValueUsd) {
+    return { kind: "dust", reason: "above_max", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
   }
 
   return { kind: "candidate", symbol, valueUsd, quantity, quantityFloat, fungible, implAddress, decimals, rawInt };
@@ -381,6 +416,7 @@ export function filterCandidates(positions, ctx) {
     if (result.kind === "dust") {
       skippedDust.push({
         symbol: result.symbol,
+        reason: result.reason,
         quantity: result.quantity,
         quantityFloat: result.quantityFloat,
         valueUsd: result.valueUsd,
@@ -627,9 +663,9 @@ export async function buildConsolidatePlan({
 }) {
   const rows = [];
 
-  // Dust rows first so the table groups visually-skipped entries together.
-  // Use the lossy float for display — dust rows are by definition tiny values
-  // where the precision loss is irrelevant for human readability.
+  // Value-filtered rows first so the table groups visually-skipped entries
+  // together. `reason` is "dust" for below-min or "above_max" for the
+  // optional upper-bound filter.
   for (const d of skippedDust) {
     rows.push({
       symbol: d.symbol,
@@ -639,7 +675,7 @@ export async function buildConsolidatePlan({
       expected_output_usd: null,
       loss_pct: null,
       status: "skipped",
-      reason: "dust",
+      reason: d.reason || "dust",
     });
   }
 
