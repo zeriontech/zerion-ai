@@ -203,6 +203,24 @@ By default the plan **excludes**:
 | `no_agent_token` | Trading needs an agent token | See `zerion-agent-management` |
 | `insufficient_funds` | A row's balance dropped between quote and broadcast | Refresh and re-run `--execute` |
 
+## AI prompt examples
+
+How common natural-language requests map to invocations.
+
+| User prompt | Invocation |
+|---|---|
+| `clear dust tokens on base for default wallet` | `zerion consolidate base USDC --min-value 5` (USDC chosen as a sensible stable target on base; raise `--min-value` to widen what counts as dust) |
+| `consolidate everything on arbitrum into USDC` | `zerion consolidate arbitrum USDC` (dry-run first, then re-run with `--execute`) |
+| `sweep dust on polygon into USDC including the small stables` | `zerion consolidate polygon USDC --include-stables --min-value 2` |
+| `convert all my base tokens to ETH and keep some for gas` | `zerion consolidate base ETH --include-native --gas-reserve 0.002` |
+| `dust cleanup on optimism but be conservative on slippage` | `zerion consolidate optimism USDC --max-loss 2 --slippage 1` |
+| `treasury sweep on ethereum into USDC for wallet treasury-1` | `zerion consolidate ethereum USDC --wallet treasury-1` |
+| `consolidate solana wallet into SOL` | `zerion consolidate solana SOL --include-native` |
+| `move all my polygon tokens to <0x…>` | `zerion consolidate polygon 0x… --min-value 1` (curated symbols don't cover this token; pass the address) |
+| `clear dust but skip WETH and WBTC` | `zerion consolidate base USDC --exclude WETH,WBTC --min-value 5` |
+
+Always start in dry-run (omit `--execute`) so the operator can read the plan before broadcasting. Surface the totals line (`N ready, M blocked, K skipped`) before suggesting `--execute`.
+
 ## Pair with
 
 - `zerion-analyze` — inspect positions before sweeping. Useful to spot the long tail of dust and decide on `--min-value`.
