@@ -14,13 +14,21 @@ export function basicAuthHeader(key) {
 }
 
 /**
- * Classify a Zerion API key into a rate-limit tier so callers can size
- * concurrency appropriately. Dev keys are throttled at 120 req/min /
- * 5K req/day; paid keys have substantially higher limits.
+ * Classify the active Zerion API key into a rate-limit tier so callers can
+ * size concurrency appropriately. Dev keys (`zk_dev_*` per
+ * `skills/zerion/SKILL.md`) are throttled at 120 req/min / 5K req/day; paid
+ * keys have substantially higher limits.
  *
- * - `zk_dev_*`                 → "dev"
- * - any other `zk_*`           → "paid" (covers zk_prod_, zk_live_, etc.)
- * - missing or non-zk_-prefixed → "unknown"  (treat as dev for safety)
+ * `zk_dev_*` is the only documented prefix in this codebase. Paid-key
+ * formats are not documented here, so we conservatively treat any non-empty
+ * non-dev key as paid rather than risk silently capping a paid customer at
+ * dev concurrency. The cost of a false positive is bounded: a garbage key
+ * still fails the underlying API call, so a too-aggressive concurrency only
+ * burns a handful of request slots before erroring out.
+ *
+ *   - `zk_dev_*`              → "dev"
+ *   - any other non-empty key → "paid"
+ *   - missing / empty         → "unknown" (callers treat as dev for safety)
  *
  * When called with no arg, reads the key via `getApiKey()` (env or config) so
  * config-stored keys count the same as env-supplied ones. The optional
@@ -35,8 +43,7 @@ export function getApiKeyTier(keyOverride) {
   const key = (keyOverride !== undefined ? keyOverride : getApiKey()) || "";
   if (!key) return "unknown";
   if (key.startsWith("zk_dev_")) return "dev";
-  if (key.startsWith("zk_")) return "paid";
-  return "unknown";
+  return "paid";
 }
 
 // Solana keypairs are 64 bytes; base58-encoded they are 87-88 characters.
