@@ -384,6 +384,24 @@ npm run test:all          # both
 node ./cli/zerion.js --help
 ```
 
+Development requires **npm >=11.10** (see Supply-chain cooldown below); CI and `npm publish` run on Node 24.
+
+### Supply-chain cooldown
+
+To reduce exposure to npm supply-chain attacks, this repo enforces a **release-age cooldown**: `npm install` will only resolve dependency versions that have been published for at least a fixed number of days. Compromised "fresh" releases are usually detected and unpublished within that window.
+
+The cooldown length is set by `min-release-age` in [`.npmrc`](./.npmrc) — that line is the single source of truth for the window. It requires **npm >=11.10** (older npm silently ignores it); `devEngines` in `package.json` pins npm to that range with `onFail: error`, so an unsupported npm hard-fails instead of quietly skipping the cooldown.
+
+The cooldown only affects version _resolution_ (i.e. updating `package-lock.json`); a plain install from the existing lockfile — including `npm ci` in CI — is unaffected.
+
+**Overriding for an urgent fix.** If you need a security patch newer than the window, bypass it for a single install and commit the result:
+
+```bash
+npm install <package>@<version> --min-release-age=0
+```
+
+Then commit the updated `package-lock.json` with a note explaining why.
+
 ### Contribution guidelines
 
 - Keep examples copy-pasteable.
