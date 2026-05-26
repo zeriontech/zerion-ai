@@ -54,7 +54,7 @@ Anything else fails with `target_token_not_found` and the error names the curate
 | `--exclude <symbols>` | _(none)_ | Comma-separated extra exclusions on top of defaults. |
 | `--include-native` | _(off)_ | Sweep the chain's native gas token (ETH/SOL/etc). |
 | `--gas-reserve <amount>` | per-chain default | Native units to reserve when `--include-native` is on. Requires `--include-native`. |
-| `--slippage <pct>` | `2` | Per-quote slippage tolerance (max 3, same as swap). |
+| `--slippage <pct>` | `2` | Per-quote slippage tolerance, percent. Accepts 0–100; **values above ~5 burn substantial money across an N-position sweep** — keep low unless you know the destination is illiquid. |
 | `--concurrency <n>` | tier-aware (paid → 5, dev → 1) | Plan-phase quote-fetch concurrency. Integer `1..10`. Does NOT affect `--execute`; the broadcast phase is always sequential. |
 | `--wallet <name>` | default | Source wallet. |
 | `--timeout <sec>` | `120` | Per-swap confirmation timeout. |
@@ -191,7 +191,8 @@ By default the plan **excludes**:
 - **Max-loss filter is a backstop, not a cap.** A row marked `blocked: max_loss` will NOT be broadcast even with `--execute`. Tighten the filter for low-liquidity tokens with `--max-loss 2`.
 - **Sequential broadcast — no atomicity, regardless of `--concurrency`.** Plan-phase quote fetches may run in parallel (paid keys), but the `--execute` broadcast phase is always serial — parallel signed broadcasts would race EVM nonces. Each row's swap is an independent on-chain transaction.
 - **Partial success is the only mode.** Per-row failures during `--execute` are recorded with their full error string and the batch continues to the next row — one failing quote does not gate the rest of a sweep. The final result lists which tokens succeeded and which failed under a `Failures:` block; correlate by symbol back to the table above.
-- **Fresh quotes on `--execute`.** The execute path re-fetches quotes at run time — but it does not re-prompt the operator. Treat `--execute` as a commitment to broadcast every ready row.
+- **Quotes are taken from the plan phase, not re-fetched on `--execute`.** The execute path broadcasts the same quotes the plan just showed you, so the operator's read of the plan is what's signed. Staleness is bounded by `--slippage` and the on-chain `outputMin` returned by the quote API. Treat `--execute` as a commitment to broadcast every ready row.
+- **`loss_pct` reports the quote's expected loss, not the on-chain floor.** Realized output is bounded below by `outputMin` (= `minimum_output_amount.quantity`), which sits ~`--slippage`% below the expected output. A row at `loss_pct = 4.9%` with default `--slippage 2` can land at ~6.9% realized loss. Tighten `--max-loss` for low-liquidity sweeps.
 - **One passphrase prompt for the whole batch.** The agent token is read once up-front; if you abort mid-batch, the remaining swaps will simply not run.
 
 ## Common errors

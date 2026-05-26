@@ -291,14 +291,15 @@ function formatStatusCell(row) {
 
 function lossCell(value) {
   if (value == null) return "-";
-  // Loss is reported as a fraction (0.05 = 5% loss). Render as a positive
-  // percent in red when > 0, green when ≤ 0 (the quote returns *more* USD).
+  // Loss is reported as a fraction (0.05 = 5% loss). Loss positive → red.
+  // Gain (negative loss) → green, displayed with a `+` prefix and the
+  // absolute magnitude so it reads as `+2.50%` rather than `+-2.50%`.
   const n = Number(value);
   if (!Number.isFinite(n)) return "-";
   const pctValue = n * 100;
   const color = pctValue > 0 ? RED : GREEN;
   const sign = pctValue >= 0 ? "" : "+";
-  return `${color}${sign}${pctValue.toFixed(2)}%${RESET}`;
+  return `${color}${sign}${Math.abs(pctValue).toFixed(2)}%${RESET}`;
 }
 
 export function formatConsolidatePlan(data) {

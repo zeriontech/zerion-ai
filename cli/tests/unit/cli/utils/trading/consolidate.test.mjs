@@ -1368,16 +1368,19 @@ describe("executeReadyRows — nonce tracking (AC 22)", () => {
     assert.deepEqual(overrides, [10, 12, 13, 15, 16]);
   });
 
-  it("re-reads pending nonce after a row throws (so the next override isn't stale)", async () => {
+  it("invalidates the tracked nonce after a row throws — next row falls back to RPC `latest`", async () => {
+    // After a row throws, `pending` may transiently include the failed
+    // submission for several seconds. Trusting it can over-shoot the counter
+    // and surface as `replacement underpriced` / `nonce too low` on the very
+    // next row. The recovery contract: null out the tracked counter and let
+    // the next row fall back to the signer's default — we lose per-row batch
+    // protection for one row but don't compound a wrong counter.
     const overrides = [];
     let pendingReads = 0;
     const factory = async () => ({
       getTransactionCount: async () => {
         pendingReads++;
-        // First call (start of batch) returns 100; after the throw, returns
-        // 102 (e.g. the approval-only tx landed but the swap reverted in
-        // simulation, advancing the chain's pending count).
-        return pendingReads === 1 ? 100n : 102n;
+        return 100n;
       },
     });
 
@@ -1399,14 +1402,15 @@ describe("executeReadyRows — nonce tracking (AC 22)", () => {
       clientFactory: factory,
     });
 
-    // ROW1: start at 100, success +2. ROW2: tried with 102, throws → re-fetch
-    // pending → 102. ROW3: tried with 102 from the re-fetch.
+    // ROW1: tracked nonce 100, success +2 → 102. ROW2: tried with 102, throws
+    // → counter invalidated. ROW3: tried with `undefined` (signer falls back
+    // to RPC latest).
     assert.equal(overrides[0], 100);
     assert.equal(overrides[1], 102);
-    assert.equal(overrides[2], 102);
+    assert.equal(overrides[2], undefined, "after throw, next row gets no override");
     assert.equal(summary.succeeded, 2);
     assert.equal(summary.failed, 1);
-    assert.equal(pendingReads, 2, "pending nonce must be re-read after the throw");
+    assert.equal(pendingReads, 1, "no `pending` re-read after the throw — counter is invalidated instead");
   });
 
   it("skips nonce tracking on Solana (no EVM nonce concept) — no approvalNonceOverride passed", async () => {
@@ -1466,6 +1470,86 @@ describe("executeReadyRows — nonce tracking (AC 22)", () => {
     } finally {
       process.stderr.write = origStderrWrite;
     }
+  });
+
+  // Source-pin: when the allowance already covers the swap, no approval tx is
+  // sent and `approvalNonce` stays null in executeEvmSwap. The swap must
+  // still use the batch's tracked override — otherwise two back-to-back
+  // allowance-covered rows race RPC `latest`. Pinning the expression because
+  // mocking signSwapTransaction's nonce flow end-to-end is heavy.
+  it("executeEvmSwap forwards approvalNonceOverride to the swap when approval is skipped", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { resolve, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const swapPath = resolve(here, "../../../../../..", "cli/utils/trading/swap.js");
+    const src = await readFile(swapPath, "utf8");
+
+    // The fallback when approvalNonce is null MUST be `approvalNonceOverride`
+    // (the caller's tracked counter), not `undefined`.
+    assert.match(
+      src,
+      /approvalNonce\s*!=\s*null\s*\?\s*approvalNonce\s*\+\s*1\s*:\s*approvalNonceOverride/,
+      "swapNonceOverride must fall through to approvalNonceOverride when approval is skipped",
+    );
+
+    // Guard against a future regression that reverts to undefined.
+    assert.equal(
+      /approvalNonce\s*!=\s*null\s*\?\s*approvalNonce\s*\+\s*1\s*:\s*undefined/.test(src),
+      false,
+      "swapNonceOverride must not silently fall back to undefined",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lossCell — sign + magnitude rendering. Loss positive → red, no sign. Gain
+// (negative loss_pct, quote returns *more* USD than the source) → green
+// with a `+` prefix on the absolute magnitude. The previous form printed
+// `+-2.50%` for gains because `toFixed` preserved the negative sign.
+// ---------------------------------------------------------------------------
+describe("formatConsolidatePlan — loss/gain cell rendering", () => {
+  it("renders a gain as `+2.50%` (not `+-2.50%`)", async () => {
+    const { formatConsolidatePlan } = await import("#zerion/utils/common/format.js");
+    const out = formatConsolidatePlan({
+      chain: "base",
+      toToken: "USDC",
+      walletAddress: "0x" + "a".repeat(40),
+      rows: [{
+        symbol: "FOO",
+        quantity: 1,
+        value_usd: 100,
+        expected_output: 102.5,
+        expected_output_usd: 102.5,
+        loss_pct: -0.025,
+        status: "ready",
+      }],
+      totals: { ready: 1, blocked: 0, skipped: 0, no_route: 0, expected_output: 102.5, expected_output_usd: 102.5 },
+    });
+    assert.ok(out.includes("+2.50%"), `expected "+2.50%" in plan output, got:\n${out}`);
+    assert.ok(!out.includes("+-2.50%"), `must not render "+-2.50%" in plan output`);
+  });
+
+  it("renders a loss as `2.50%` (no sign, red)", async () => {
+    const { formatConsolidatePlan } = await import("#zerion/utils/common/format.js");
+    const out = formatConsolidatePlan({
+      chain: "base",
+      toToken: "USDC",
+      walletAddress: "0x" + "a".repeat(40),
+      rows: [{
+        symbol: "FOO",
+        quantity: 1,
+        value_usd: 100,
+        expected_output: 97.5,
+        expected_output_usd: 97.5,
+        loss_pct: 0.025,
+        status: "ready",
+      }],
+      totals: { ready: 1, blocked: 0, skipped: 0, no_route: 0, expected_output: 97.5, expected_output_usd: 97.5 },
+    });
+    assert.ok(out.includes("2.50%"), `expected "2.50%" in plan output, got:\n${out}`);
+    assert.ok(!out.includes("+2.50%"), "loss must not be prefixed with +");
+    assert.ok(!out.includes("-2.50%"), "loss must not render with a negative sign");
   });
 });
 

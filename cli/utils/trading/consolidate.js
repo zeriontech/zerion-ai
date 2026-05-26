@@ -771,17 +771,12 @@ export async function executeReadyRows(
         error: err?.message || String(err),
       });
       // Recovery: we don't know how far into the approve/swap pair we got
-      // before the throw. Re-fetch `pending` so the next iteration's override
-      // is at least no worse than the original RPC-`latest` behaviour.
-      if (client) {
-        try {
-          nextNonce = Number(
-            await client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
-          );
-        } catch {
-          // Leave nextNonce as-is; the loop continues.
-        }
-      }
+      // before the throw, and `pending` may transiently include the failed
+      // submission for several seconds. Invalidate the tracked counter so
+      // the next row falls back to RPC `latest` via the signer's default —
+      // we lose per-row batch protection for one row, but we don't compound
+      // a wrong counter across the rest of the batch.
+      nextNonce = null;
     }
   }
   return { results, summary: { succeeded, failed } };

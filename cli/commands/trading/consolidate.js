@@ -139,6 +139,16 @@ export default async function consolidate(args, flags) {
   }
 
   const slippage = parseSlippage(flags.slippage);
+  // High-slippage warning. parseSlippage allows 0–100 (shared across
+  // swap/bridge), but consolidate iterates over N positions so an aggressive
+  // value compounds. Surface a stderr warning above 5% to nudge operators
+  // toward tightening before `--execute`.
+  if (slippage != null && slippage > 5) {
+    process.stderr.write(
+      `Warning: --slippage ${slippage} is high; across an N-position sweep this can ` +
+      `realize a large absolute loss. Consider --slippage 2 (default) for liquid targets.\n`,
+    );
+  }
 
   const includeSet = parseSymbolList(flags.include);
   const excludeSet = parseSymbolList(flags.exclude);

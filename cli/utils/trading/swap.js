@@ -429,7 +429,13 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
     data: swapTx.data,
   });
 
-  const swapNonceOverride = approvalNonce != null ? approvalNonce + 1 : undefined;
+  // When approval is needed, the swap's nonce is approvalNonce + 1. When the
+  // allowance already covers the swap (no approval tx), the swap consumes the
+  // same nonce the batch reserved for the approval — fall through to the
+  // caller's override directly so back-to-back allowance-covered rows don't
+  // race RPC `latest`.
+  const swapNonceOverride =
+    approvalNonce != null ? approvalNonce + 1 : approvalNonceOverride;
   const { signedTxHex, client } = await signSwapTransaction(
     swapTx,
     zerionChainId,
