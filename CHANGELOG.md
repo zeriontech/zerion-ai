@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/zeriontech/zerion-ai/compare/v1.3.0...v1.4.0) (2026-05-26)
+
+
+### Features
+
+* add zerion-0x partner skill for 0x API v2 swap integration ([#74](https://github.com/zeriontech/zerion-ai/issues/74)) ([e89f01a](https://github.com/zeriontech/zerion-ai/commit/e89f01a3ca9327a8bb097d511fc9bd12818f8733))
+
 ## [1.3.0](https://github.com/zeriontech/zerion-ai/compare/v1.2.0...v1.3.0) (2026-05-15)
 
 
