@@ -25,37 +25,43 @@ npm install -g zerion-cli
 
 Requires Node.js 20 or later.
 
-## Agent skills
+## Agent skill
 
-All skills live under [`./skills/`](./skills/) and follow the [agentskills.io](https://agentskills.io) open standard — a single `skills/` tree powers every supported host.
+One skill, [`zerion`](./skills/zerion/SKILL.md), under [`./skills/zerion/`](./skills/zerion/) — follows the [agentskills.io](https://agentskills.io) open standard. All capabilities and partner integrations live as nested files that load on demand (progressive disclosure), so a single install + single picker entry exposes everything below.
 
-### Core skills (Zerion)
+### Capabilities (`skills/zerion/capabilities/`)
 
-| Skill | What it does |
-|-------|--------------|
-| [`zerion`](./skills/zerion/SKILL.md) | Umbrella: install, authentication, routing to specific skills, chains reference |
-| [`zerion-analyze`](./skills/zerion-analyze/SKILL.md) | Portfolio, positions, history, PnL, analyze, token search, watchlist (read-only; supports x402 / MPP) |
-| [`zerion-trading`](./skills/zerion-trading/SKILL.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
-| [`zerion-sign`](./skills/zerion-sign/SKILL.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
-| [`zerion-wallet`](./skills/zerion-wallet/SKILL.md) | Wallet management — create, import, list, fund, backup, delete, sync |
-| [`zerion-agent-management`](./skills/zerion-agent-management/SKILL.md) | Agent tokens + policies (the autonomous-trading primitives) |
+| File | What it covers |
+|------|----------------|
+| [`analyze.md`](./skills/zerion/capabilities/analyze.md) | Portfolio, positions, history, PnL, token search, watchlist (read-only; supports x402 / MPP) |
+| [`trading.md`](./skills/zerion/capabilities/trading.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
+| [`sign.md`](./skills/zerion/capabilities/sign.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
+| [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, list, fund, backup, delete, sync |
+| [`agent-management.md`](./skills/zerion/capabilities/agent-management.md) | Agent tokens + policies (the autonomous-trading primitives) |
+| [`swap-0x.md`](./skills/zerion/capabilities/swap-0x.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains |
 
-### Partner skills
+### Partner integrations (`skills/zerion/partners/`)
 
-Skills contributed by ecosystem partners that combine their product with the Zerion CLI. See [`zerion-partner-skill-creator`](./skills/zerion-partner-skill-creator/SKILL.md) to contribute one.
+Ecosystem partners that combine their product with the Zerion CLI. See [`partner-skill-creator.md`](./skills/zerion/partner-skill-creator.md) to contribute one. Loaded only when the user names the partner.
 
-| Skill | What it does | Partner |
-|-------|--------------|---------|
-| [`zerion-monad-addresses`](./skills/zerion-monad-addresses/SKILL.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
-| [`zerion-moonpay-onramp`](./skills/zerion-moonpay-onramp/SKILL.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
-| [`zerion-moonpay-iron`](./skills/zerion-moonpay-iron/SKILL.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
-| [`zerion-moonpay-predict`](./skills/zerion-moonpay-predict/SKILL.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
-| [`zerion-sendai-ideas`](./skills/zerion-sendai-ideas/SKILL.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | [SendAI](https://github.com/sendaifun/solana-new) (MIT) |
-| [`zerion-somnia-blockchain`](./skills/zerion-somnia-blockchain/SKILL.md) | Somnia L1 reference — network info, gas model, deployment guidance | [Somnia](https://somnia.network) |
-| [`zerion-somnia-reactivity`](./skills/zerion-somnia-reactivity/SKILL.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
-| [`zerion-trails-crosschainswap`](./skills/zerion-trails-crosschainswap/SKILL.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
-| [`zerion-trails-deposit`](./skills/zerion-trails-deposit/SKILL.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
-| [`zerion-0x`](./skills/zerion-0x/SKILL.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains | [0x](https://0x.org) |
+| File | What it covers | Partner |
+|------|----------------|---------|
+| [`bankr.md`](./skills/zerion/partners/bankr.md) | Twitter/X-native trading bot patterns | [Bankr](https://bankr.bot) |
+| [`lifi-earn.md`](./skills/zerion/partners/lifi-earn.md) | Cross-chain yield routing | [Li.Fi](https://li.fi) |
+| [`monad-addresses.md`](./skills/zerion/partners/monad-addresses.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
+| [`moonpay-onramp.md`](./skills/zerion/partners/moonpay-onramp.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
+| [`moonpay-iron.md`](./skills/zerion/partners/moonpay-iron.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
+| [`moonpay-predict.md`](./skills/zerion/partners/moonpay-predict.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
+| [`sendai-ideas.md`](./skills/zerion/partners/sendai-ideas.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | [SendAI](https://github.com/sendaifun/solana-new) (MIT) |
+| [`somnia-blockchain.md`](./skills/zerion/partners/somnia-blockchain.md) | Somnia L1 reference — network info, gas model, deployment guidance | [Somnia](https://somnia.network) |
+| [`somnia-reactivity.md`](./skills/zerion/partners/somnia-reactivity.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
+| [`trails-crosschainswap.md`](./skills/zerion/partners/trails-crosschainswap.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
+| [`trails-deposit.md`](./skills/zerion/partners/trails-deposit.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
+| [`umbra-privatetxn.md`](./skills/zerion/partners/umbra-privatetxn.md) | Private (stealth-address) transfers | [Umbra](https://umbra.cash) |
+| [`uniswap-lp.md`](./skills/zerion/partners/uniswap-lp.md) | Liquidity position management | [Uniswap](https://uniswap.org) |
+| [`uniswap-x402.md`](./skills/zerion/partners/uniswap-x402.md) | Swap with x402 pay-per-call | [Uniswap](https://uniswap.org) |
+| [`vaultsfyi-*.md`](./skills/zerion/partners/) | Deposit, market intel, rebalance, risk monitor, strategist, watchlist, yield optimizer | [Vaults.fyi](https://vaults.fyi) |
+| [`consolidate.md`](./skills/zerion/partners/consolidate.md) | Sweep all tokens on a chain into one target | Zerion |
 
 ### Install via zerion CLI (recommended)
 
@@ -126,13 +132,13 @@ After install, ask the agent in natural language.
 
 > Sign the EIP-712 message in `typed.json` using my `bot-1` wallet.
 
-The agent reaches for the right skill (e.g. `zerion-analyze` for "what's in this wallet", `zerion-trading` for swap/bridge/send) and invokes the underlying `zerion` CLI commands. Skills load only when relevant — agentskills.io's progressive disclosure keeps your context window clean. Multiple skills compose at runtime: a "create wallet, set up agent token, then swap" flow loads `zerion-wallet` → `zerion-agent-management` → `zerion-trading` in sequence.
+The agent reaches for the `zerion` skill, which routes by task to the right nested file under `capabilities/` or `partners/`. Progressive disclosure means only the matching capability doc loads — context stays clean. A "create wallet, set up agent token, then swap" flow Reads `capabilities/wallet.md` → `capabilities/agent-management.md` → `capabilities/trading.md` in sequence.
 
 ## Manual setup, agent execution
 
 Zerion CLI splits into two surfaces, by design.
 
-- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see the `zerion-agent-management` skill.
+- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see [`capabilities/agent-management.md`](./skills/zerion/capabilities/agent-management.md).
 - **Analysis, signing, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `sign-message`, `sign-typed-data`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, signing and trading fire immediately — the token authorizes operations on behalf of the wallet without a passphrase prompt.
 
 Setup gestures (`init`, `setup skills`, `config set/unset/list`, `watch` add/remove) are one-time configuration steps you run yourself before automation takes over.

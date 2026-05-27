@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { print, printError } from "../utils/common/output.js";
 import { readSecret } from "../utils/common/prompt.js";
 import { getApiKey, setConfigValue } from "../utils/config.js";
@@ -35,6 +38,28 @@ function isNpxTempInvocation() {
   return path.includes("/_npx/") || path.includes("\\_npx\\");
 }
 
+function hasGlobalZerion() {
+  const res = spawnSync("zerion", ["--version"], { stdio: "ignore" });
+  return res.status === 0;
+}
+
+const AGENT_FINGERPRINTS = [
+  { name: "claude-code", env: ["CLAUDECODE", "CLAUDE_CODE"], dir: ".claude" },
+  { name: "cursor", env: ["CURSOR_TRACE_ID"], dir: ".cursor" },
+  { name: "codex", env: ["CODEX_HOME"], dir: ".codex" },
+  { name: "gemini", env: ["GEMINI_API_KEY"], dir: ".gemini" },
+];
+
+function detectAgent() {
+  for (const a of AGENT_FINGERPRINTS) {
+    if (a.env.some((k) => process.env[k])) return a.name;
+  }
+  for (const a of AGENT_FINGERPRINTS) {
+    if (existsSync(join(homedir(), a.dir))) return a.name;
+  }
+  return null;
+}
+
 function openBrowser(url) {
   const cmd =
     process.platform === "darwin"
@@ -47,7 +72,10 @@ function openBrowser(url) {
 }
 
 function ensureGlobalInstall() {
-  if (!isNpxTempInvocation()) {
+  // Two skip conditions:
+  //  1. Running from a global install (not npx temp dir).
+  //  2. Running from npx temp but `zerion` already resolves globally → don't re-install.
+  if (!isNpxTempInvocation() || hasGlobalZerion()) {
     log("  ✓ CLI already installed globally");
     return { ok: true, skipped: true };
   }
@@ -103,21 +131,24 @@ function installSkills({ agent, yes }) {
   // can pick which Zerion skills to install. Only force non-interactive when
   // the caller explicitly passed --yes or stdin is not a TTY (CI / piped).
   const nonInteractive = yes || !process.stdin.isTTY;
+  // Auto-pin agent if caller didn't pass one. Picker shows 55+ entries and
+  // ~70% of users are on Claude Code — detect and skip the multi-select.
+  const targetAgent = agent || detectAgent();
   const npxArgs = ["-y", "skills", "add", ZERION_AGENT_REPO, "-g"];
   if (nonInteractive) npxArgs.push("--yes");
-  if (agent) npxArgs.push("-a", agent);
+  if (targetAgent) npxArgs.push("-a", targetAgent);
 
   log(
     nonInteractive
-      ? "  Installing all Zerion skills for AI coding agents..."
-      : "  Pick which Zerion skills to install (space to toggle, enter to confirm)..."
+      ? `  Installing Zerion skills${targetAgent ? ` for ${targetAgent}` : ""}...`
+      : `  Pick which Zerion skills to install${targetAgent ? ` (${targetAgent} pre-selected)` : ""}...`
   );
   const res = spawnSync("npx", npxArgs, { stdio: "inherit" });
   if (res.status !== 0) {
     return { ok: false, exitCode: res.status };
   }
   log("  ✓ Skills installed");
-  return { ok: true, interactive: !nonInteractive };
+  return { ok: true, interactive: !nonInteractive, agent: targetAgent };
 }
 
 function printSuccessSummary() {

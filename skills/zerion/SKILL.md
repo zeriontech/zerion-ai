@@ -1,13 +1,13 @@
 ---
 name: zerion
-description: "Crypto wallet API + CLI for AI agents — install, authentication, and routing to specific Zerion capabilities. Use this skill for setup or to learn which `zerion-*` skill applies; deep-dive skills handle individual capabilities (analyze, trade, sign, manage wallets, manage agent tokens)."
+description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
 license: MIT
-allowed-tools: Bash
+allowed-tools: Bash, Read
 ---
 
 # Zerion
 
-Unified API + CLI for crypto wallets across 14 EVM chains and Solana. The `zerion` binary ships from npm; this skill is the entry point for install, authentication, and routing to specific capability skills.
+Unified API + CLI for crypto wallets across 14 EVM chains and Solana. The `zerion` binary ships from npm; this skill is the entry point for **all** Zerion capabilities. Capability and partner docs live in nested files and are **loaded on demand**.
 
 ## Setup
 
@@ -65,17 +65,55 @@ export ZERION_MPP=true
 
 > Trading commands (`swap`, `bridge`, `send`) always use the API key + an agent token, regardless of `ZERION_X402` / `ZERION_MPP`.
 
-## Which skill for which task
+## Capabilities — load on demand
 
-| Intent | Skill |
-|--------|-------|
-| What's in this wallet? portfolio, positions, history, PnL, watchlist | **`zerion-analyze`** |
-| Swap / bridge / send tokens | **`zerion-trading`** |
-| Sweep / consolidate / convert all tokens on a chain into one target | **`zerion-consolidate`** |
-| Sign a message or EIP-712 typed data (no broadcast) | **`zerion-sign`** |
-| Create / import / list / backup / delete wallets | **`zerion-wallet`** |
-| Set up agent tokens + policies for autonomous trading | **`zerion-agent-management`** |
-| Discover / validate a crypto idea, map competitors, DeFi TVL research | **`zerion-sendai-ideas`** (partner skill, adapted from sendaifun/solana-new) |
+Before executing any capability below, **Read the matching file** for the full command surface, flags, edge cases, and examples.
+
+| Task | Read |
+|------|------|
+| Wallet analysis: portfolio, positions, history, PnL, watchlist | `capabilities/analyze.md` |
+| On-chain trading: swap, bridge, send | `capabilities/trading.md` |
+| Off-chain signing: EIP-191 messages, EIP-712 typed data | `capabilities/sign.md` |
+| Wallet management: create, import, list, fund, backup, delete | `capabilities/wallet.md` |
+| Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
+| 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
+
+**Pairing rules:**
+- Trading + signing require an agent token → see `capabilities/agent-management.md` first if user has none.
+- Run analysis before trading to verify balances and positions.
+
+## Partner integrations — opt-in
+
+These cover specialized flows on top of the core CLI. User must **name the partner** (or describe a flow that maps to one). Then Read `partners/<name>.md`.
+
+| Partner | What it does | Read |
+|---------|--------------|------|
+| Bankr | Twitter/X-native trading bot patterns | `partners/bankr.md` |
+| Li.Fi Earn | Cross-chain yield routing | `partners/lifi-earn.md` |
+| Monad addresses | Monad chain address tooling | `partners/monad-addresses.md` |
+| Moonpay (onramp) | Fiat → crypto onramp | `partners/moonpay-onramp.md` |
+| Moonpay (Iron) | Iron stablecoin flows | `partners/moonpay-iron.md` |
+| Moonpay (Predict) | Prediction market integration | `partners/moonpay-predict.md` |
+| Sendai ideas | Crypto idea discovery + validation, competitor mapping, DeFi TVL research | `partners/sendai-ideas.md` |
+| Somnia (blockchain) | Somnia L1 ops | `partners/somnia-blockchain.md` |
+| Somnia (reactivity) | Somnia reactive smart contracts | `partners/somnia-reactivity.md` |
+| Trails (cross-chain swap) | Cross-chain swap routing | `partners/trails-crosschainswap.md` |
+| Trails (deposit) | Cross-chain deposit flows | `partners/trails-deposit.md` |
+| Umbra | Private (stealth-address) transfers | `partners/umbra-privatetxn.md` |
+| Uniswap LP | Liquidity position management | `partners/uniswap-lp.md` |
+| Uniswap x402 | Swap with x402 pay-per-call | `partners/uniswap-x402.md` |
+| Vaults.fyi (deposit) | Vault deposits | `partners/vaultsfyi-deposit.md` |
+| Vaults.fyi (market intel) | Yield market intelligence | `partners/vaultsfyi-market-intel.md` |
+| Vaults.fyi (rebalance) | Auto-rebalance positions | `partners/vaultsfyi-rebalance.md` |
+| Vaults.fyi (risk monitor) | Risk dashboards | `partners/vaultsfyi-risk-monitor.md` |
+| Vaults.fyi (strategist) | Multi-strategy yield agent | `partners/vaultsfyi-strategist.md` |
+| Vaults.fyi (watchlist) | Vault watchlists | `partners/vaultsfyi-watchlist.md` |
+| Vaults.fyi (yield optimizer) | Yield optimization | `partners/vaultsfyi-yield-optimizer.md` |
+| Consolidate | Sweep all tokens on a chain into one target | `partners/consolidate.md` |
+
+**Rule:** never preload partner docs. Only Read when the user explicitly invokes the partner or asks for a flow that uniquely maps to it.
+
+For authoring new partner integrations, Read `partner-skill-creator.md`.
 
 ## Output contract
 
@@ -97,7 +135,7 @@ Command shapes:
 - Same-chain swap: `zerion swap <chain> <amount> <from-token> <to-token>`
 - Cross-chain bridge: `zerion bridge <from-chain> <from-token> <amount> <to-chain> <to-token>`
 
-See `zerion-trading` for the full flag reference.
+See `capabilities/trading.md` for the full flag reference.
 
 Use `zerion chains` for the live catalog with metadata.
 
@@ -106,7 +144,7 @@ Use `zerion chains` for the live catalog with metadata.
 | Code | Cause | Fix |
 |------|-------|-----|
 | `missing_api_key` | No `ZERION_API_KEY` set | Set env var or use `--x402` for analytics |
-| `no_agent_token` | No agent token for trading/signing | See `zerion-agent-management` skill |
+| `no_agent_token` | No agent token for trading/signing | See `capabilities/agent-management.md` |
 | `no_wallet` | No wallet specified, no default | `--wallet <name>` or set `defaultWallet` config |
 | `wallet_not_found` | Wallet not in local vault | `zerion wallet list` to check |
 | `unsupported_chain` | Invalid `--chain` value | `zerion chains` for valid IDs |
@@ -124,4 +162,4 @@ Wallets are encrypted with AES-256-GCM via the Open Wallet Standard (OWS) vault 
 - API docs: [developers.zerion.io](https://developers.zerion.io)
 - Dashboard: [dashboard.zerion.io](https://dashboard.zerion.io)
 - x402 protocol: [x402.org](https://www.x402.org/)
-- CLI source: [github.com/zeriontech/zerion-cli](https://github.com/zeriontech/zerion-cli)
+- CLI source: [github.com/zeriontech/zerion-ai](https://github.com/zeriontech/zerion-ai)
