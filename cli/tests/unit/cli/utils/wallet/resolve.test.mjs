@@ -6,16 +6,34 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { resolveDestination } from "#zerion/utils/wallet/resolve.js";
 import * as ows from "#zerion/utils/wallet/keystore.js";
+import { setWalletOrigin, removeWalletOrigin } from "#zerion/utils/config.js";
+import { WALLET_ORIGIN } from "#zerion/utils/common/constants.js";
 
 const MULTI = "resolve-test-multi";
+const EVM_KEY_WALLET = "resolve-test-evm-key";
+const SOL_KEY_WALLET = "resolve-test-sol-key";
+
+// Deterministic test keys — never used on mainnet.
+const TEST_EVM_KEY = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318";
+const TEST_SOL_KEY = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
 
 before(() => {
   try { ows.deleteWallet(MULTI); } catch {}
+  try { ows.deleteWallet(EVM_KEY_WALLET); } catch {}
+  try { ows.deleteWallet(SOL_KEY_WALLET); } catch {}
   ows.createWallet(MULTI);  // mnemonic-derived → has both EVM + Solana
+  ows.importFromKey(EVM_KEY_WALLET, TEST_EVM_KEY, undefined, "evm");
+  setWalletOrigin(EVM_KEY_WALLET, WALLET_ORIGIN.EVM_KEY);
+  ows.importFromKey(SOL_KEY_WALLET, TEST_SOL_KEY, undefined, "solana");
+  setWalletOrigin(SOL_KEY_WALLET, WALLET_ORIGIN.SOL_KEY);
 });
 
 after(() => {
   try { ows.deleteWallet(MULTI); } catch {}
+  try { ows.deleteWallet(EVM_KEY_WALLET); } catch {}
+  try { ows.deleteWallet(SOL_KEY_WALLET); } catch {}
+  removeWalletOrigin(EVM_KEY_WALLET);
+  removeWalletOrigin(SOL_KEY_WALLET);
 });
 
 describe("resolveDestination — chain-aware receiver picker", () => {
@@ -89,5 +107,46 @@ describe("resolveDestination — chain-aware receiver picker", () => {
       resolveDestination({ targetChain: "solana" }),
       /Cross-chain destination required/i
     );
+  });
+
+  it("blocks fallback to EVM-key wallet when target is Solana (random ed25519 key)", async () => {
+    await assert.rejects(
+      resolveDestination({
+        fallbackWallet: EVM_KEY_WALLET,
+        targetChain: "solana",
+      }),
+      /imported from an EVM private key.*not recoverable/is
+    );
+  });
+
+  it("blocks --to-wallet pointing at EVM-key wallet when target is Solana", async () => {
+    await assert.rejects(
+      resolveDestination({
+        toWalletName: EVM_KEY_WALLET,
+        targetChain: "solana",
+      }),
+      /imported from an EVM private key.*not recoverable/is
+    );
+  });
+
+  it("blocks fallback to Solana-key wallet when target is EVM (random secp256k1 key)", async () => {
+    await assert.rejects(
+      resolveDestination({
+        fallbackWallet: SOL_KEY_WALLET,
+        targetChain: "ethereum",
+      }),
+      /imported from a Solana private key.*not recoverable/is
+    );
+  });
+
+  it("still allows explicit --to-address for EVM-key source bridging to Solana", async () => {
+    const sol = "8xLdoxKr3J5dQX2dQuzC7v3sqXq6ZwVz1aVzaB6gqW9F";
+    const dest = await resolveDestination({
+      toAddressOrEns: sol,
+      fallbackWallet: EVM_KEY_WALLET,
+      targetChain: "solana",
+    });
+    assert.equal(dest.address, sol);
+    assert.equal(dest.source, "address");
   });
 });
