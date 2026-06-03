@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/zeriontech/zerion-ai/compare/v1.4.0...v1.5.0) (2026-06-03)
+
+
+### Features
+
+* **skills:** consolidate 30 skills into single zerion skill + fix init.js ([#86](https://github.com/zeriontech/zerion-ai/issues/86)) ([257ebe0](https://github.com/zeriontech/zerion-ai/commit/257ebe0230fae1690e8a449062269512bc456bab))
+* **wallet:** add `wallet export-key` to export raw private keys ([5bb9951](https://github.com/zeriontech/zerion-ai/commit/5bb9951095ba4d09a259f6231c25159bd3e8e95e))
+
 ## [1.4.0](https://github.com/zeriontech/zerion-ai/compare/v1.3.0...v1.4.0) (2026-05-26)
 
 
