@@ -36,7 +36,7 @@ One skill, [`zerion`](./skills/zerion/SKILL.md), under [`./skills/zerion/`](./sk
 | [`analyze.md`](./skills/zerion/capabilities/analyze.md) | Portfolio, positions, history, PnL, token search, watchlist (read-only; supports x402 / MPP) |
 | [`trading.md`](./skills/zerion/capabilities/trading.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
 | [`sign.md`](./skills/zerion/capabilities/sign.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
-| [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, list, fund, backup, delete, sync |
+| [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, list, fund, backup, export-key, delete, sync |
 | [`agent-management.md`](./skills/zerion/capabilities/agent-management.md) | Agent tokens + policies (the autonomous-trading primitives) |
 | [`swap-0x.md`](./skills/zerion/capabilities/swap-0x.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains |
 
@@ -138,7 +138,7 @@ The agent reaches for the `zerion` skill, which routes by task to the right nest
 
 Zerion CLI splits into two surfaces, by design.
 
-- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see [`capabilities/agent-management.md`](./skills/zerion/capabilities/agent-management.md).
+- **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, `export-key`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see [`capabilities/agent-management.md`](./skills/zerion/capabilities/agent-management.md).
 - **Analysis, signing, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `sign-message`, `sign-typed-data`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, signing and trading fire immediately — the token authorizes operations on behalf of the wallet without a passphrase prompt.
 
 Setup gestures (`init`, `setup skills`, `config set/unset/list`, `watch` add/remove) are one-time configuration steps you run yourself before automation takes over.
@@ -251,6 +251,7 @@ Encrypted local wallets. EVM + Solana supported. Passphrase required for all des
 | `zerion wallet list` | List all wallets | `zerion wallet list` |
 | `zerion wallet fund` | Show deposit addresses for funding | `zerion wallet fund --wallet trading-bot` |
 | `zerion wallet backup --wallet <name>` | Export recovery phrase | `zerion wallet backup --wallet trading-bot` |
+| `zerion wallet export-key --wallet <name> [--chain evm\|solana\|all] [--index N]` | Export raw private key(s) derived from mnemonic — EVM (0x hex) and/or Solana (base58 Phantom format + 32-byte ed25519 seed). Output is stderr-only. | `zerion wallet export-key --wallet trading-bot --chain evm` |
 | `zerion wallet delete <name>` | Permanently delete a wallet (requires passphrase) | `zerion wallet delete trading-bot` |
 | `zerion wallet sync --wallet <name>` | Sync wallet to Zerion app via QR code | `zerion wallet sync --wallet trading-bot` |
 | `zerion wallet sync --all` | Sync all wallets to Zerion app | `zerion wallet sync --all` |

@@ -74,7 +74,7 @@ Before executing any capability below, **Read the matching file** for the full c
 | Wallet analysis: portfolio, positions, history, PnL, watchlist | `capabilities/analyze.md` |
 | On-chain trading: swap, bridge, send | `capabilities/trading.md` |
 | Off-chain signing: EIP-191 messages, EIP-712 typed data | `capabilities/sign.md` |
-| Wallet management: create, import, list, fund, backup, delete | `capabilities/wallet.md` |
+| Wallet management: create, import, list, fund, backup, export-key, delete | `capabilities/wallet.md` |
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
 | 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
 

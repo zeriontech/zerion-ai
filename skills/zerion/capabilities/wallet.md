@@ -19,6 +19,7 @@ Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authenticat
 - "Import my wallet from a private key / mnemonic"
 - "Show my wallets" / "list deposit addresses"
 - "Back up my recovery phrase"
+- "Export the raw private key" / "give me the 0x hex key" / "give me the Phantom-format secret"
 - "Delete this wallet"
 - "Sync my wallet to the Zerion mobile app"
 
@@ -43,7 +44,7 @@ A wallet imported from a single private key holds only one chain's account:
 | Operation | Type | Notes |
 |-----------|------|-------|
 | `wallet list`, `wallet fund` | **Agent** | Read-only. Safe to invoke autonomously. |
-| `wallet create`, `wallet import`, `wallet backup`, `wallet delete`, `wallet sync` | **Manual** | Require passphrase or interactive input. Humans must run these directly — agents must not call them. |
+| `wallet create`, `wallet import`, `wallet backup`, `wallet export-key`, `wallet delete`, `wallet sync` | **Manual** | Require passphrase or interactive input. Humans must run these directly — agents must not call them. |
 
 ## Read-only — agents may invoke freely
 
@@ -69,6 +70,13 @@ zerion wallet import --name <name> --mnemonic
 
 # Export the recovery phrase (passphrase required)
 zerion wallet backup --wallet <name>
+
+# Export raw private key(s) derived from the mnemonic (passphrase required)
+# Output goes to stderr only — same safety stance as `wallet backup`.
+zerion wallet export-key --wallet <name>                       # both chains, derivation index 0
+zerion wallet export-key --wallet <name> --chain evm           # EVM only — m/44'/60'/0'/0/0, 0x hex
+zerion wallet export-key --wallet <name> --chain solana        # Solana only — m/44'/501'/0'/0', base58 (Phantom format) + 32-byte ed25519 seed
+zerion wallet export-key --wallet <name> --chain evm --index 1 # different derivation index
 
 # Permanently delete (passphrase + confirmation)
 zerion wallet delete <name>
