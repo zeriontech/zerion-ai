@@ -5,10 +5,11 @@
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import * as ows from "./keystore.js";
-import { getConfigValue } from "../config.js";
+import { getConfigValue, getWalletOrigin } from "../config.js";
 import { isSolana } from "../chain/registry.js";
 import { printError } from "../common/output.js";
 import { resolveWatchAddress } from "./watchlist.js";
+import { WALLET_ORIGIN } from "../common/constants.js";
 
 const ENS_TIMEOUT_MS = 10_000;
 const ENS_RETRIES = 2;
@@ -154,6 +155,31 @@ export async function resolveDestination({ toAddressOrEns, toWalletName, fallbac
   } catch {
     throw new Error(
       `Destination wallet "${lookupWallet}" not found. List wallets with: zerion wallet list`
+    );
+  }
+
+  // Block auto-derived receivers when the wallet was imported via a single-curve
+  // private key. OWS still generates a random key for the other curve so the
+  // wallet exposes an address there, but that key is not recoverable from the
+  // imported secret — bridging funds to it locks them to this CLI vault. Pass
+  // --to-address <addr> to send to a wallet you actually control.
+  const origin = getWalletOrigin(lookupWallet);
+  if (wantsSolana && origin === WALLET_ORIGIN.EVM_KEY) {
+    throw new Error(
+      `Wallet "${lookupWallet}" was imported from an EVM private key, so its Solana ` +
+      `address is backed by a random key that is not recoverable from your imported secret. ` +
+      `Bridging to it would lock funds to this CLI vault.\n\n` +
+      `Pass --to-address <solana-pubkey> to send to a Solana wallet you control, ` +
+      `or --to-wallet <name> for a wallet imported via mnemonic or Solana private key.`
+    );
+  }
+  if (!wantsSolana && origin === WALLET_ORIGIN.SOL_KEY) {
+    throw new Error(
+      `Wallet "${lookupWallet}" was imported from a Solana private key, so its EVM ` +
+      `address is backed by a random key that is not recoverable from your imported secret. ` +
+      `Bridging to it would lock funds to this CLI vault.\n\n` +
+      `Pass --to-address <0x…/ENS> to send to an EVM wallet you control, ` +
+      `or --to-wallet <name> for a wallet imported via mnemonic or EVM private key.`
     );
   }
 
