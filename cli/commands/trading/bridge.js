@@ -1,6 +1,9 @@
-import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap } from "../../utils/trading/swap.js";
+import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap, executeViaWebApp } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
+import { reportHandoff } from "../../utils/web-app/handoff.js";
+import { decideSigningRoute } from "../../utils/trading/signing-route.js";
+import { bundleSellUsd } from "../../utils/trading/valuation.js";
 import { print, printError } from "../../utils/common/output.js";
 import { formatBridgeOffers } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
@@ -195,6 +198,7 @@ export default async function bridge(args, flags) {
   }
 
   try {
+    // Balance precondition gate — runs regardless of signing route.
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance`, {
         suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,
@@ -220,18 +224,26 @@ export default async function bridge(args, flags) {
       },
     };
 
-    const passphrase = await requireAgentToken("for trading", walletName);
     const timeout = parseTimeout(flags.timeout);
-    const result = await executeSwap(quote, walletName, passphrase, { timeout });
 
+    // Sell-side USD value drives routing (bridge = inputAmount × price(from)).
+    const usdValue = await bundleSellUsd({ fungibleId: quote.from.fungibleId, amount });
+    const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
+    process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    if (route === "web-app") {
+      const result = await executeViaWebApp(quote, { address, timeout, isBridge: true });
+      reportHandoff(quoteSummary, result);
+      return;
+    }
+
+    // Local route — unlock the keystore, sign/broadcast, poll bridge delivery.
+    const passphrase = await requireAgentToken("for trading", walletName);
+    const result = await executeSwap(quote, walletName, passphrase, { timeout });
     print({
       ...quoteSummary,
-      tx: {
-        hash: result.hash,
-        status: result.status,
-        blockNumber: result.blockNumber,
-        gasUsed: result.gasUsed,
-      },
+      signedVia: "local",
+      tx: { hash: result.hash, status: result.status, blockNumber: result.blockNumber, gasUsed: result.gasUsed },
       bridgeDelivery: result.bridgeDelivery,
       executed: true,
     });

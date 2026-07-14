@@ -4,14 +4,17 @@ import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutableP
 import * as api from "../../utils/api/client.js";
 import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../utils/trading/transaction.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
+import { toTransactionEVM, toSolanaTransaction, signViaWebApp, reportHandoff } from "../../utils/web-app/handoff.js";
+import { decideSigningRoute } from "../../utils/trading/signing-route.js";
+import { bundleSellUsd } from "../../utils/trading/valuation.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
-import { getEvmAddress } from "../../utils/wallet/keystore.js";
 import { NATIVE_ASSET_ADDRESS } from "../../utils/common/constants.js";
 import { formatSwapQuote } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
 import { isSolana } from "../../utils/chain/registry.js";
 import { sendSolanaNative } from "../../utils/chain/solana-send.js";
+import { buildUnsignedSolanaTransfer, solanaReceiptAdapter } from "../../utils/chain/solana-handoff.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -114,18 +117,18 @@ export default async function send(args, flags) {
       },
     };
 
-    // Agent token required — no interactive passphrase for trading
-    const passphrase = await requireAgentToken("for trading", walletName);
-
     const client = await getPublicClient(chain);
-    const walletAddress = getEvmAddress(walletName);
+    // resolveWallet already returned the wallet's EVM address; use it directly
+    // so read-only wallets (no keystore entry) resolve too.
+    const walletAddress = address;
 
     const [nonce, feeData] = await Promise.all([
       client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
       client.estimateFeesPerGas(),
     ]);
 
-    // Balance check: prevent broadcasting doomed transactions (include gas cost for native)
+    // Native balance gate — must cover amount + estimated gas. Runs regardless
+    // of signing route (defense in depth ahead of the human review).
     const balance = await client.getBalance({ address: walletAddress });
     const estimatedGasCost = 21000n * (feeData.maxFeePerGas || 0n);
     if (isNative && balance < amountParsed + estimatedGasCost) {
@@ -139,6 +142,8 @@ export default async function send(args, flags) {
     const baseTx = {
       type: "eip1559",
       chainId: client.chain.id,
+      // Fees are set for the local sign path; toTransactionEVM drops them for
+      // the web-app handoff (the connected wallet re-estimates at sign time).
       maxFeePerGas: feeData.maxFeePerGas,
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
       nonce,
@@ -158,7 +163,7 @@ export default async function send(args, flags) {
         process.exit(1);
       }
 
-      // ERC-20 balance check before broadcast
+      // ERC-20 balance gate.
       try {
         const tokenBalance = await client.readContract({
           address: tokenAddress,
@@ -187,19 +192,37 @@ export default async function send(args, flags) {
       tx = { ...baseTx, to: tokenAddress, value: 0n, data, gas };
     }
 
-    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data });
-    const signedTxHex = await signAndSerialize(tx, chain, walletName, passphrase);
-    const timeout = parseTimeout(flags.timeout);
-    const result = await broadcastAndWait(client, signedTxHex, { timeout });
+    // Policy pre-filter — runs on BOTH signing routes, before a link is formed
+    // or a tx is signed.
+    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data, chain });
 
+    const timeout = parseTimeout(flags.timeout);
+
+    // Sell-side USD value drives the routing decision (send = amount × price).
+    const usdValue = await bundleSellUsd({ fungibleId: resolved.fungibleId, amount });
+    const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
+    process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    if (route === "web-app") {
+      const evm = toTransactionEVM(tx, { chainIdNum: client.chain.id, from: walletAddress });
+      const result = await signViaWebApp({
+        address: walletAddress,
+        transactions: [{ evm, label: `Send ${amount} ${resolved.symbol}` }],
+        timeout,
+        client,
+      });
+      reportHandoff(summary, result);
+      return;
+    }
+
+    // Local route — unlock the keystore, sign, broadcast, wait for receipt.
+    const passphrase = await requireAgentToken("for trading", walletName);
+    const signedTxHex = await signAndSerialize(tx, chain, walletName, passphrase);
+    const result = await broadcastAndWait(client, signedTxHex, { timeout });
     print({
       ...summary,
-      tx: {
-        hash: result.hash,
-        status: result.status,
-        blockNumber: result.blockNumber,
-        gasUsed: result.gasUsed,
-      },
+      signedVia: "local",
+      tx: { hash: result.hash, status: result.status, blockNumber: result.blockNumber, gasUsed: result.gasUsed },
       executed: true,
     }, formatSwapQuote);
   } catch (err) {
@@ -227,7 +250,48 @@ async function sendOnSolana({ token, amount, to, flags }) {
     process.exit(1);
   }
 
+  const summary = {
+    send: {
+      token: "SOL",
+      amount,
+      from: address,
+      to,
+      chain: "solana",
+      type: "native",
+    },
+  };
+
   try {
+    const timeout = parseTimeout(flags.timeout);
+
+    // Sell-side USD value drives routing (send = amount × price(SOL)). Resolve
+    // SOL's fungible id best-effort; if it's unavailable the router fail-closes
+    // to review when a threshold is set.
+    let fungibleId = null;
+    try {
+      fungibleId = (await resolveToken("SOL", "solana")).fungibleId;
+    } catch {
+      // no id → usdValue null → router fail-closes under a threshold
+    }
+    const usdValue = await bundleSellUsd({ fungibleId, amount });
+    const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
+    process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    if (route === "web-app") {
+      // Build the unsigned transfer (balance-gated) and hand it to the web app;
+      // the connected Solana wallet signs and broadcasts.
+      const { raw } = await buildUnsignedSolanaTransfer({ from: address, to, amountSol: amount });
+      const result = await signViaWebApp({
+        address,
+        transactions: [{ solana: toSolanaTransaction(raw), label: `Send ${amount} SOL` }],
+        timeout,
+        client: solanaReceiptAdapter(),
+      });
+      reportHandoff(summary, result);
+      return;
+    }
+
+    // Local route — unlock the keystore, sign, broadcast, confirm.
     const passphrase = await requireAgentToken("for trading", walletName);
     const result = await sendSolanaNative({
       from: address,
@@ -238,14 +302,8 @@ async function sendOnSolana({ token, amount, to, flags }) {
     });
 
     print({
-      send: {
-        token: "SOL",
-        amount,
-        from: address,
-        to,
-        chain: "solana",
-        type: "native",
-      },
+      ...summary,
+      signedVia: "local",
       tx: {
         hash: result.hash,
         status: result.status,

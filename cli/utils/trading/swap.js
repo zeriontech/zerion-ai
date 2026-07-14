@@ -19,10 +19,12 @@ import {
   getPublicClient,
 } from "./transaction.js";
 import { signAndBroadcastSolana } from "../chain/solana.js";
+import { solanaReceiptAdapter } from "../chain/solana-handoff.js";
 import { isSolana } from "../chain/registry.js";
 import { getConfigValue } from "../config.js";
 import { DEFAULT_SLIPPAGE } from "../common/constants.js";
 import { enforceExecutablePolicies } from "./guards.js";
+import { toTransactionEVM, toSolanaTransaction, signViaWebApp } from "../web-app/handoff.js";
 
 const ERC20_ALLOWANCE_ABI = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
@@ -338,6 +340,104 @@ export async function executeSwap(quote, walletName, passphrase, { timeout, appr
     isCrossChain,
     approvalNonceOverride,
   });
+}
+
+/**
+ * Web-app handoff variant of executeSwap — builds a fully-formed EVM bundle
+ * (optional approve + swap) and hands it to the Zerion web app for signing
+ * instead of signing/broadcasting locally. Same allowance-skip behavior as
+ * executeSwap; drops broadcast, receipt wait, and bridge-delivery polling
+ * (the connected wallet + web app own those now).
+ *
+ * @param {object} quote
+ * @param {object} options
+ * @param {string} options.address - the CLI's resolved signer address
+ * @param {number} [options.timeout] - callback wait timeout in seconds
+ * @param {boolean} [options.isBridge] - label the swap tx as a bridge
+ * @returns {Promise<object>} the signViaWebApp result ({ status, hashes?, ... })
+ */
+export async function executeViaWebApp(quote, { address, timeout, isBridge = false } = {}) {
+  // API blocking gate — runs on the handoff route too, before a link is formed.
+  if (quote.blocking) {
+    const err = new Error(
+      `Quote not executable: ${quote.blocking.message || quote.blocking.code}` +
+      (quote.blocking.hint ? ` (hint: ${quote.blocking.hint})` : "")
+    );
+    err.code = quote.blocking.code || "quote_blocked";
+    throw err;
+  }
+
+  const zerionChainId = quote.fromChain;
+
+  // Solana: hand off the API's unsigned base64 tx. The connected wallet signs
+  // and broadcasts; we verify the returned signature on-chain via the Solana
+  // receipt adapter. Policy enforcement mirrors the local Solana path
+  // (executeSolanaSwap), which does not decode the opaque raw tx to to/value/data.
+  if (isSolana(zerionChainId)) {
+    const raw = quote.transactionSwapSolana?.raw;
+    if (!raw) {
+      throw new Error("Quote did not include a Solana transaction");
+    }
+    const from = quote.transactionSwapSolana.from || address;
+    const transactions = [{
+      solana: toSolanaTransaction(raw),
+      label: `${isBridge ? "Bridge" : "Swap"} ${quote.from.symbol} → ${quote.to.symbol}`,
+    }];
+    return signViaWebApp({ address: from, transactions, timeout, client: solanaReceiptAdapter() });
+  }
+
+  if (!quote.transactionSwap) {
+    throw new Error("Quote did not include an EVM transaction");
+  }
+
+  const client = await getPublicClient(zerionChainId);
+  const chainIdNum = client.chain.id;
+  const from = quote.transactionSwap.from || address;
+
+  // One pending-nonce read for the whole bundle, assigned sequentially.
+  let nonce = await client.getTransactionCount({ address: from, blockTag: "pending" });
+
+  const transactions = [];
+
+  // Approval — include only if the on-chain allowance is insufficient.
+  if (quote.transactionApprove) {
+    const approveTx = quote.transactionApprove;
+    const alreadyApproved = await hasSufficientAllowance({
+      zerionChainId,
+      approveTx,
+      owner: approveTx.from,
+    });
+    if (alreadyApproved) {
+      process.stderr.write(`Existing allowance covers this swap — skipping approval.\n`);
+    } else {
+      // Policy pre-filter — runs on the handoff route too, before the link forms.
+      await enforceExecutablePolicies({
+        to: approveTx.to,
+        value: approveTx.value || "0",
+        data: approveTx.data,
+        chain: zerionChainId,
+      });
+      transactions.push({
+        evm: toTransactionEVM(approveTx, { chainIdNum, from, nonce }),
+        label: `Approve ${quote.from.symbol}`,
+      });
+      nonce += 1;
+    }
+  }
+
+  const swapTx = quote.transactionSwap;
+  await enforceExecutablePolicies({
+    to: swapTx.to,
+    value: swapTx.value || "0",
+    data: swapTx.data,
+    chain: zerionChainId,
+  });
+  transactions.push({
+    evm: toTransactionEVM(swapTx, { chainIdNum, from, nonce }),
+    label: `${isBridge ? "Bridge" : "Swap"} ${quote.from.symbol} → ${quote.to.symbol}`,
+  });
+
+  return signViaWebApp({ address: from, transactions, timeout, client });
 }
 
 async function executeSolanaSwap(quote, walletName, passphrase) {

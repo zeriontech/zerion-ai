@@ -1,8 +1,11 @@
 import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
-import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../../utils/config.js";
+import { getConfigValue, getWalletOrigin, getWalletAddresses, getReviewThreshold } from "../../utils/config.js";
+import { listReadonly } from "../../utils/wallet/readonly.js";
 import { formatWalletList } from "../../utils/common/format.js";
 import { fromCaip2 } from "../../utils/chain/registry.js";
+
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 
 /**
  * Find the newest agent token for a wallet and resolve policy details.
@@ -43,7 +46,28 @@ function summarizePolicy(policy) {
 
 export default async function walletList(_args, flags) {
   try {
-    const allWallets = ows.listWallets();
+    const keystoreWallets = ows.listWallets().map((w) => ({
+      name: w.name,
+      ...getWalletAddresses(w, getWalletOrigin(w.name)),
+      type: "local",
+      policies: getActivePolicies(w.name),
+    }));
+
+    // Read-only "my wallets" — address only, no key material. They sign via the
+    // web-app handoff, so they carry no policies. The stored address is either
+    // an EVM 0x or a base58 Solana pubkey; surface it under the matching field.
+    const readonlyWallets = listReadonly().map((w) => ({
+      name: w.name,
+      ...(SOL_ADDR_RE.test(w.address) ? { solAddress: w.address } : { evmAddress: w.address }),
+      type: "read-only",
+      policies: [],
+    }));
+
+    const allWallets = [...keystoreWallets, ...readonlyWallets].map((w) => {
+      const threshold = getReviewThreshold(w.name);
+      return threshold != null ? { ...w, reviewThresholdUsd: threshold } : w;
+    });
+
     const defaultWallet = getConfigValue("defaultWallet");
 
     const limit = parseInt(flags.limit, 10) || 20;
@@ -56,7 +80,7 @@ export default async function walletList(_args, flags) {
       filtered = allWallets.filter(
         (w) =>
           w.name.toLowerCase().includes(q) ||
-          w.evmAddress.toLowerCase().includes(q) ||
+          (w.evmAddress && w.evmAddress.toLowerCase().includes(q)) ||
           (w.solAddress && w.solAddress.toLowerCase().includes(q))
       );
     }
@@ -65,10 +89,8 @@ export default async function walletList(_args, flags) {
 
     const data = {
       wallets: paged.map((w) => ({
-        name: w.name,
-        ...getWalletAddresses(w, getWalletOrigin(w.name)),
+        ...w,
         isDefault: w.name === defaultWallet,
-        policies: getActivePolicies(w.name),
       })),
       total: filtered.length,
       count: paged.length,

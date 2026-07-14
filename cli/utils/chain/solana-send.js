@@ -102,13 +102,13 @@ export async function sendSolanaNative({ from, to, amountSol, walletName, passph
   return { hash, status: "success", chain: "solana" };
 }
 
-function solToLamports(amountStr) {
+export function solToLamports(amountStr) {
   const [whole, frac = ""] = amountStr.split(".");
   const padded = (frac + "000000000").slice(0, 9);
   return BigInt(whole) * LAMPORTS_PER_SOL + BigInt(padded || "0");
 }
 
-function lamportsToSol(lamports) {
+export function lamportsToSol(lamports) {
   const whole = lamports / LAMPORTS_PER_SOL;
   const frac = lamports % LAMPORTS_PER_SOL;
   const fracStr = frac.toString().padStart(9, "0").replace(/0+$/, "");

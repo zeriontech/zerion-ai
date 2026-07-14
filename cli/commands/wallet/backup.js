@@ -2,6 +2,7 @@ import * as ows from "../../utils/wallet/keystore.js";
 import { printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { readPassphrase } from "../../utils/common/prompt.js";
+import { isReadonlyWallet } from "../../utils/wallet/readonly.js";
 
 export default async function walletBackup(args, flags) {
   const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");
@@ -10,6 +11,14 @@ export default async function walletBackup(args, flags) {
     printError("no_wallet", "No wallet specified", {
       suggestion: "Use --wallet <name> or set default: zerion config set defaultWallet <name>",
     });
+    process.exit(1);
+  }
+
+  if (isReadonlyWallet(walletName)) {
+    printError("readonly_no_keys",
+      `Read-only wallet "${walletName}" has no recovery phrase — it holds no key material.`,
+      { suggestion: "Back up the original wallet wherever its keys actually live." }
+    );
     process.exit(1);
   }
 

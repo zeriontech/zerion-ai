@@ -116,10 +116,24 @@ export async function enforceExecutablePolicies(txInfo) {
     for (const script of scripts) {
       const resolved = resolve(script);
       if (!resolved.startsWith(POLICIES_DIR)) {
-        printError("policy_path_violation", `Policy script outside allowed directory: ${script}`, {
-          policy: policy.name || pid,
-        });
-        process.exit(1);
+        // Debug-only escape hatch: allow running a policy script from outside
+        // the trusted policies directory. Env-var only (never persisted), and
+        // loud on every run so it can't be left on by accident in production.
+        if (process.env.ZERION_UNSAFE_POLICY_PATHS === "1") {
+          process.stderr.write(
+            `\n⚠️  ZERION_UNSAFE_POLICY_PATHS=1 — skipping the policy-script path check.\n` +
+            `   Running "${script}" from OUTSIDE the trusted policies directory.\n` +
+            `   Debug only. Never set this in production.\n\n`
+          );
+        } else {
+          printError("policy_path_violation", `Policy script outside allowed directory: ${script}`, {
+            policy: policy.name || pid,
+            suggestion:
+              "Move the script under the CLI's policies/ directory, or set " +
+              "ZERION_UNSAFE_POLICY_PATHS=1 to bypass this check while debugging.",
+          });
+          process.exit(1);
+        }
       }
       try {
         const mod = await import(pathToFileURL(resolved).href);
