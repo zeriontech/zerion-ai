@@ -120,3 +120,25 @@ export function removeAgentTokensForWallet(walletName) {
   delete tokens[walletName];
   setConfigValue("agentTokens", tokens);
 }
+
+/**
+ * Per-wallet review thresholds — stored as { walletName: usdNumber } map.
+ * A transaction whose sell-side USD value exceeds the wallet's threshold routes
+ * to the web-app handoff for human review instead of auto-signing. Unset means
+ * "always auto-sign" (subject to the other routing triggers).
+ */
+export function setReviewThreshold(walletName, usd) {
+  const map = getConfigValue("reviewThresholds") || {};
+  if (usd == null) {
+    delete map[walletName];
+  } else {
+    map[walletName] = usd;
+  }
+  setConfigValue("reviewThresholds", map);
+}
+
+export function getReviewThreshold(walletName) {
+  const map = getConfigValue("reviewThresholds") || {};
+  const v = map[walletName];
+  return typeof v === "number" ? v : null;
+}

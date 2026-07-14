@@ -1,6 +1,9 @@
-import { getSwapQuote, executeSwap } from "../../utils/trading/swap.js";
+import { getSwapQuote, executeSwap, executeViaWebApp } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
+import { reportHandoff } from "../../utils/web-app/handoff.js";
+import { decideSigningRoute } from "../../utils/trading/signing-route.js";
+import { bundleSellUsd } from "../../utils/trading/valuation.js";
 import { print, printError } from "../../utils/common/output.js";
 import { formatSwapQuote } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
@@ -52,6 +55,7 @@ export default async function swap(args, flags) {
       slippage: parseSlippage(flags.slippage),
     });
 
+    // Balance precondition gate — runs regardless of signing route.
     if (quote.preconditions.enough_balance === false) {
       printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance for this swap`, {
         suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,
@@ -72,18 +76,26 @@ export default async function swap(args, flags) {
       },
     };
 
-    const passphrase = await requireAgentToken("for trading", walletName);
     const timeout = parseTimeout(flags.timeout);
-    const result = await executeSwap(quote, walletName, passphrase, { timeout });
 
+    // Sell-side USD value drives routing (swap = inputAmount × price(from)).
+    const usdValue = await bundleSellUsd({ fungibleId: quote.from.fungibleId, amount });
+    const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
+    process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    if (route === "web-app") {
+      const result = await executeViaWebApp(quote, { address, timeout });
+      reportHandoff(quoteSummary, result);
+      return;
+    }
+
+    // Local route — unlock the keystore and sign/broadcast locally.
+    const passphrase = await requireAgentToken("for trading", walletName);
+    const result = await executeSwap(quote, walletName, passphrase, { timeout });
     print({
       ...quoteSummary,
-      tx: {
-        hash: result.hash,
-        status: result.status,
-        blockNumber: result.blockNumber,
-        gasUsed: result.gasUsed,
-      },
+      signedVia: "local",
+      tx: { hash: result.hash, status: result.status, blockNumber: result.blockNumber, gasUsed: result.gasUsed },
       executed: true,
     }, formatSwapQuote);
   } catch (err) {

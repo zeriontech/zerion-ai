@@ -3,6 +3,7 @@ import { printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { readPassphrase } from "../../utils/common/prompt.js";
 import { deriveEvmKey, deriveSolanaKey } from "../../utils/wallet/derive-keys.js";
+import { isReadonlyWallet } from "../../utils/wallet/readonly.js";
 
 /**
  * zerion wallet export-key --wallet <name> [--chain evm|solana|all] [--index N]
@@ -19,6 +20,14 @@ export default async function walletExportKey(args, flags) {
     printError("no_wallet", "No wallet specified", {
       suggestion: "Use --wallet <name> or set default: zerion config set defaultWallet <name>",
     });
+    process.exit(1);
+  }
+
+  if (isReadonlyWallet(walletName)) {
+    printError("readonly_no_keys",
+      `Read-only wallet "${walletName}" has no private key to export — it holds no key material.`,
+      { suggestion: "Export keys from the original wallet wherever its keys actually live." }
+    );
     process.exit(1);
   }
 

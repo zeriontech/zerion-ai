@@ -9,6 +9,7 @@ import { getConfigValue } from "../config.js";
 import { isSolana } from "../chain/registry.js";
 import { printError } from "../common/output.js";
 import { resolveWatchAddress } from "./watchlist.js";
+import { getReadonly } from "./readonly.js";
 
 const ENS_TIMEOUT_MS = 10_000;
 const ENS_RETRIES = 2;
@@ -83,6 +84,24 @@ export function resolveWallet(flags, args = []) {
 
   // Determine chain to pick the right address type
   const chain = flags.chain || flags["from-chain"] || getConfigValue("defaultChain") || "ethereum";
+
+  // Read-only "my wallet": no key material, address-only. Signing always routes
+  // to the web-app handoff. The stored address's ecosystem (EVM 0x vs Solana
+  // base58) must match the requested chain — refuse a mismatch rather than
+  // resolving an address the connected wallet can't sign for.
+  const ro = getReadonly(walletName);
+  if (ro) {
+    const roIsSolana = SOL_ADDR_RE.test(ro.address);
+    if (isSolana(chain) !== roIsSolana) {
+      printError("readonly_chain_mismatch",
+        `Read-only wallet "${walletName}" is a ${roIsSolana ? "Solana" : "EVM"} address; ` +
+        `it can't sign on ${isSolana(chain) ? "Solana" : `EVM chain "${chain}"`}.`,
+        { suggestion: roIsSolana ? "Use --chain solana." : "Use an EVM --chain." }
+      );
+      process.exit(1);
+    }
+    return { walletName, address: ro.address, readOnly: true };
+  }
 
   try {
     let address;
