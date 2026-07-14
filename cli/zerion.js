@@ -106,6 +106,11 @@ registerSingle("setup", setupCmd);
 import initCmd from "./commands/init.js";
 registerSingle("init", initCmd);
 
+// --- Login (browser / API-key authentication) ---
+
+import loginCmd from "./commands/login.js";
+registerSingle("login", loginCmd);
+
 // --- Dispatch ---
 
 try {

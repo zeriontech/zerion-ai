@@ -153,18 +153,22 @@ Three options. The CLI auto-detects which is active.
 
 Get a key at **[dashboard.zerion.io](https://dashboard.zerion.io)** — it's free and takes a minute. Keys begin with `zk_`.
 
+The fastest way is **browser login** — like `claude` or `gh auth login`, it opens the dashboard, you approve, and the key is captured over a local loopback redirect and saved to config. The key never leaves your machine.
+
 ```bash
-export ZERION_API_KEY="zk_..."
+zerion login              # pick browser login, paste a key, or pay-per-call
+zerion login --browser    # go straight to browser authentication
+```
+
+Or set / persist a key manually:
+
+```bash
+export ZERION_API_KEY="zk_..."     # per-session
+zerion config set apiKey zk_...    # persisted to ~/.zerion/config.json
 ```
 
 - HTTP Basic Auth
 - Required for analysis and trading commands (analysis can also use x402 / MPP pay-per-call instead — see options B and C)
-
-You can also persist it via config:
-
-```bash
-zerion config set apiKey zk_...
-```
 
 ### B) x402 pay-per-call
 
@@ -314,7 +318,9 @@ Track wallets by name without exposing addresses in commands.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion init` | One-shot onboarding — install CLI globally, configure API key, install agent skills | `zerion init` |
+| `zerion login` | Authenticate — browser (dashboard) login, paste an API key, or pay-per-call | `zerion login` |
+| `zerion login --browser` | Browser auth: opens dashboard.zerion.io, captures the key via loopback | `zerion login --browser` |
+| `zerion init` | One-shot onboarding — install CLI globally, authenticate, install agent skills | `zerion init` |
 | `zerion init -y --browser` | Non-interactive init that opens dashboard.zerion.io for the API key | `npx -y zerion-cli init -y --browser` |
 | `zerion setup skills` | Install Zerion agent skills into detected coding agents | `zerion setup skills` |
 | `zerion setup skills --agent claude-code` | Install into a specific agent | `zerion setup skills --agent claude-code` |

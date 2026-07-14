@@ -15,18 +15,10 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import * as ows from "./keystore.js";
 import { allChainNames, toCaip2, fromCaip2 } from "./keystore.js";
+import { selectOne, BACK, BOLD, RESET, WHITE, GREEN, GRAY } from "../common/select.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const POLICIES_DIR = join(__dirname, "..", "..", "policies");
-
-// ANSI — bright variants for dark terminal contrast
-const BOLD = "\x1b[1m";
-const RESET = "\x1b[0m";
-const WHITE = "\x1b[97m";
-const GREEN = "\x1b[92m";
-const GRAY = "\x1b[90m";
-
-const BACK = Symbol("back");
 
 const EXPIRY_OPTIONS = [
   { label: "7 days",    days: 7 },
@@ -50,11 +42,11 @@ export async function pickPolicyInteractive(walletName) {
 
   while (true) {
     // Step 1: Pick tier
-    const tier = await pickOne("Select policy tier:", [
+    const tier = await selectOne("Select policy tier:", [
       "Standard  — deny transfers + expiry  (recommended)",
       "Strict    — deny transfers + expiry + restrict chains",
       "Custom    — use an existing policy",
-    ], 0);
+    ], { defaultIndex: 0 });
 
     if (tier === BACK) continue;
 
@@ -68,20 +60,20 @@ export async function pickPolicyInteractive(walletName) {
         );
         continue;
       }
-      const choice = await pickOne(
+      const choice = await selectOne(
         "Select policy:",
         policies.map((p) => `${p.name || p.id}  ${formatPolicyDetails(p)}`),
-        0
+        { defaultIndex: 0 }
       );
       if (choice === BACK) continue;
       return policies[choice].id;
     }
 
     // Step 2: Pick expiry
-    const expiryIdx = await pickOne("Select token expiry:", EXPIRY_OPTIONS.map((o, i) => {
+    const expiryIdx = await selectOne("Select token expiry:", EXPIRY_OPTIONS.map((o, i) => {
       const tag = i === 0 ? "  (recommended)" : "";
       return `${o.label}${tag}`;
-    }), 0);
+    }), { defaultIndex: 0 });
 
     if (expiryIdx === BACK) continue;
 
@@ -206,64 +198,6 @@ function findMatchingPolicy(expiryDays, chainNames) {
   }
 
   return null;
-}
-
-// --- Interactive single-select (↑/↓ navigate, Enter confirm, Esc back) ---
-
-function pickOne(title, items, defaultIndex) {
-  let cursor = defaultIndex;
-  // title + items + hint = exact line count for re-draw
-  const menuLines = items.length + 2;
-
-  function render(clear) {
-    if (clear) process.stderr.write(`\x1b[${menuLines}A\x1b[J`);
-    process.stderr.write(`${WHITE}${BOLD}${title}${RESET}\n`);
-    for (let i = 0; i < items.length; i++) {
-      if (i === cursor) {
-        process.stderr.write(`  ${GREEN}>${RESET} ${WHITE}${BOLD}${items[i]}${RESET}\n`);
-      } else {
-        process.stderr.write(`    ${GRAY}${items[i]}${RESET}\n`);
-      }
-    }
-    process.stderr.write(`${GRAY}  ↑/↓ navigate · Enter confirm · Esc back${RESET}\n`);
-  }
-
-  process.stderr.write("\n"); // spacing before first render only
-  render(false);
-
-  return new Promise((resolve) => {
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
-
-    const onData = (key) => {
-      const done = (val) => {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener("data", onData);
-        process.stderr.write(`\x1b[${menuLines}A\x1b[J`);
-        resolve(val);
-      };
-      if (key === "\r" || key === "\n") {
-        done(cursor);
-      } else if (key === "\x1b" && key.length === 1) {
-        done(BACK);
-      } else if (key === "\x1b[A" || key === "k") {
-        cursor = (cursor - 1 + items.length) % items.length;
-        render(true);
-      } else if (key === "\x1b[B" || key === "j") {
-        cursor = (cursor + 1) % items.length;
-        render(true);
-      } else if (key === "\x03") {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stderr.write("\n");
-        process.exit(130);
-      }
-    };
-
-    process.stdin.on("data", onData);
-  });
 }
 
 // --- Interactive chain checklist (Space toggle, Enter confirm, Esc back) ---

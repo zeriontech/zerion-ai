@@ -111,7 +111,8 @@ function printUsage() {
       "--allowlist <addresses>": "Only allow interaction with listed addresses",
     },
     env: {
-      "ZERION_API_KEY": "API key (get at dashboard.zerion.io)",
+      "ZERION_API_KEY": "API key (get at dashboard.zerion.io, or run `zerion login`)",
+      "ZERION_DASHBOARD_URL": "Override the dashboard base URL for `zerion login` / `init` (default: https://dashboard.zerion.io)",
       "WALLET_PRIVATE_KEY": "Private key for pay-per-call: 0x-hex → x402 on Base; base58 → x402 on Solana; 0x-hex → also works for MPP",
       "EVM_PRIVATE_KEY": "EVM private key for x402 on Base (overrides WALLET_PRIVATE_KEY for EVM)",
       "SOLANA_PRIVATE_KEY": "Solana private key for x402 on Solana (overrides WALLET_PRIVATE_KEY for Solana)",
@@ -129,7 +130,9 @@ function printUsage() {
       "slippage": "Default slippage % for swaps (default: 2)",
     },
     setup: {
-      "init": "One-shot onboarding: install CLI globally, configure API key, install agent skills",
+      "login": "Authenticate — browser (dashboard) login, paste an API key, or pay-per-call",
+      "login --browser": "Browser authentication: opens dashboard.zerion.io, captures the key via loopback",
+      "init": "One-shot onboarding: install CLI globally, authenticate, install agent skills",
       "init -y --browser": "Non-interactive init that opens dashboard.zerion.io for the API key",
       "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-ai` (45+ hosts)",
     },

@@ -3,19 +3,20 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { print, printError } from "../utils/common/output.js";
-import { readSecret } from "../utils/common/prompt.js";
-import { getApiKey, setConfigValue } from "../utils/config.js";
+import { openBrowser } from "../utils/common/browser.js";
+import { DASHBOARD_URL } from "../utils/common/constants.js";
+import { getApiKey } from "../utils/config.js";
+import { runInteractiveAuth } from "../utils/api/interactive-auth.js";
 
 const ZERION_AGENT_REPO = "zeriontech/zerion-ai";
-const DASHBOARD_URL = "https://dashboard.zerion.io";
 
 const HELP = {
   usage: "zerion init [options]",
   description:
-    "One-shot onboarding: install the CLI globally, configure an API key, and install Zerion agent skills into detected coding agents. By default the skills step is interactive — pick which skills you want.",
+    "One-shot onboarding: install the CLI globally, authenticate (browser login, paste an API key, or pay-per-call), and install Zerion agent skills into detected coding agents. By default the auth and skills steps are interactive.",
   flags: {
     "--yes, -y": "Non-interactive — skip prompts and install ALL skills (otherwise user picks)",
-    "--browser": "Open dashboard.zerion.io in the default browser during auth",
+    "--browser": "With --yes: open dashboard.zerion.io to grab an API key (interactive runs offer browser login directly)",
     "--no-install": "Skip the global `npm install -g zerion-cli` step",
     "--no-auth": "Skip the API key configuration step",
     "--no-skills": "Skip the agent skills install step",
@@ -60,17 +61,6 @@ function detectAgent() {
   return null;
 }
 
-function openBrowser(url) {
-  const cmd =
-    process.platform === "darwin"
-      ? "open"
-      : process.platform === "win32"
-        ? "start"
-        : "xdg-open";
-  const args = process.platform === "win32" ? ["", url] : [url];
-  spawnSync(cmd, args, { stdio: "ignore", shell: process.platform === "win32" });
-}
-
 function ensureGlobalInstall() {
   // Two skip conditions:
   //  1. Running from a global install (not npx temp dir).
@@ -98,6 +88,8 @@ async function ensureApiKey({ yes, browser }) {
   if (yes) {
     log(`  ! No API key configured. Get one at ${DASHBOARD_URL} and run:`);
     log(`    zerion config set apiKey <your-key>`);
+    log(`    (or run 'zerion login' for browser authentication)`);
+    if (browser) openBrowser(DASHBOARD_URL);
     return { ok: true, skipped: true, reason: "non_interactive" };
   }
 
@@ -107,23 +99,8 @@ async function ensureApiKey({ yes, browser }) {
     return { ok: true, skipped: true, reason: "non_tty" };
   }
 
-  log(`  Get an API key at ${DASHBOARD_URL}`);
-  if (browser) {
-    log(`  Opening browser...`);
-    openBrowser(DASHBOARD_URL);
-  }
-
-  const key = await readSecret("  Paste your API key (or press Enter to skip): ", { mask: true });
-  if (!key) {
-    log("  ! Skipped — set later with: zerion config set apiKey <your-key>");
-    return { ok: true, skipped: true, reason: "user_skipped" };
-  }
-  if (!key.startsWith("zk_")) {
-    log(`  ! Warning: keys typically start with "zk_". Saving anyway.`);
-  }
-  setConfigValue("apiKey", key);
-  log("  ✓ API key saved to config");
-  return { ok: true, skipped: false };
+  // Interactive: browser login (default), paste a key, or pay-per-call.
+  return runInteractiveAuth({ log, open: true });
 }
 
 function installSkills({ agent, yes }) {

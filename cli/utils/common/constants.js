@@ -1,6 +1,10 @@
 import { homedir } from "node:os";
 
 export const API_BASE = process.env.ZERION_API_BASE || "https://api.zerion.io/v1";
+// Developer dashboard — hosts the OAuth-style authorize flow (`zerion login`,
+// `zerion init`). Overridable so the browser flow can be pointed at a staging
+// or local dashboard during QA.
+export const DASHBOARD_URL = process.env.ZERION_DASHBOARD_URL || "https://dashboard.zerion.io";
 export const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
 export const CONFIG_DIR = `${HOME}/.zerion`;
 export const CONFIG_PATH = `${CONFIG_DIR}/config.json`;
