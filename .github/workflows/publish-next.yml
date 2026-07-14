@@ -1,0 +1,43 @@
+name: Publish next
+
+on:
+  push:
+    branches: [main]
+  # Allows publishing a prerelease from any branch via the Actions UI
+  workflow_dispatch: {}
+
+# Serialize runs so a slow older build can't move the `next` tag past a newer one
+concurrency:
+  group: publish-next
+  cancel-in-progress: false
+
+jobs:
+  publish-next:
+    # Skip release-please's own release commits — those publish `latest` via release-please.yml
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(main): release') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Set prerelease version
+        # Bump patch so the prerelease sorts above the current stable release,
+        # e.g. 1.5.0 -> 1.5.1-next.20260714093000.g325093a
+        run: |
+          BASE=$(node -p "const v = require('./package.json').version.split('.'); v[2] = Number(v[2]) + 1; v.join('.')")
+          npm version --no-git-tag-version "${BASE}-next.$(date -u +%Y%m%d%H%M%S).g${GITHUB_SHA::7}"
+
+      - run: npm publish --provenance --tag next
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
