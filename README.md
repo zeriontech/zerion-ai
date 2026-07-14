@@ -442,6 +442,33 @@ To force a specific version, add `Release-As: 2.0.0` in a commit message body.
 - `.release-please-manifest.json` tracks the current version
 - `.github/workflows/release-please.yml` handles release PR creation and npm publish
 - `.github/workflows/test.yml` runs tests on PRs and pushes to main
+- `.github/workflows/publish-next.yml` publishes prereleases to the `next` dist-tag (see below)
+
+### Prerelease channel (`@next`)
+
+Every push to `main` (except release commits) publishes a prerelease to npm under the `next` dist-tag, e.g. `1.5.1-next.20260714093000.g325093a`. Regular users are unaffected: `npm install zerion-cli` keeps resolving the `latest` tag, which only moves when a release-please release PR is merged.
+
+To try the latest merged-but-unreleased work:
+
+```bash
+npx zerion-cli@next --help
+# or
+npm install -g zerion-cli@next
+```
+
+To test an unmerged branch, install straight from git — no publish needed:
+
+```bash
+npm install -g github:zeriontech/zerion-ai#<branch>
+```
+
+A prerelease can also be published from any branch manually via the **Publish next** workflow in the Actions tab (`workflow_dispatch`).
+
+If a `next` build turns out broken, point the tag back at a known-good version:
+
+```bash
+npm dist-tag add zerion-cli@<version> next
+```
 
 ## Resources
 
