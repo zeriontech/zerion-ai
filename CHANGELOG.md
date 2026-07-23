@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/zeriontech/zerion-ai/compare/v1.5.0...v1.6.0) (2026-07-23)
+
+
+### Features
+
+* **wallet:** oauth login flow via dashboard.zerion.io ([c1a1cf4](https://github.com/zeriontech/zerion-ai/commit/c1a1cf47d7a31520cb9fedf4522c816522fbfb1f))
+* **wallet:** web app handoff for signing ([#96](https://github.com/zeriontech/zerion-ai/issues/96)) ([316fe1c](https://github.com/zeriontech/zerion-ai/commit/316fe1ca507b7469442918a247943db7153094d6))
+
+
+### Bug Fixes
+
+* fix next tag release tests guard ([#99](https://github.com/zeriontech/zerion-ai/issues/99)) ([a55957e](https://github.com/zeriontech/zerion-ai/commit/a55957e056191eae29117286d12a5526d0e39bc2))
+* **skills:** restore moonpay partner docs emptied by skill consolidation ([#91](https://github.com/zeriontech/zerion-ai/issues/91)) ([325093a](https://github.com/zeriontech/zerion-ai/commit/325093a0b79c32219a452d3a96648c16a922dfa6))
+
 ## [1.5.0](https://github.com/zeriontech/zerion-ai/compare/v1.4.0...v1.5.0) (2026-06-03)
 
 
