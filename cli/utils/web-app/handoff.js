@@ -103,6 +103,12 @@ export function encodePayload(payload) {
  * @param {string} opts.from - the CLI's resolved signer address
  * @param {bigint|number|string} [opts.nonce] - overrides tx.nonce when given
  * @returns {object} TransactionEVM
+ *
+ * Nonce handling: the direct single-command handoff sets `nonce` (from the tx
+ * or an override). A **prepared group** / **transaction bundle** is nonce-free —
+ * when neither the tx nor an override carries a nonce, the `nonce` field is
+ * **omitted** entirely so the web app assigns it (which is what makes
+ * cross-chain bundles and per-tx rejection work; ADR-0003).
  */
 export function toTransactionEVM(tx, { chainIdNum, from, nonce } = {}) {
   if (tx.from && from && tx.from.toLowerCase() !== from.toLowerCase()) {
@@ -111,11 +117,10 @@ export function toTransactionEVM(tx, { chainIdNum, from, nonce } = {}) {
     );
   }
   const nonceValue = nonce != null ? nonce : tx.nonce;
-  return {
+  const evm = {
     type: normalizeTxType(tx.type),
     from,
     to: tx.to,
-    nonce: toHexQuantity(nonceValue),
     chainId: toHexQuantity(chainIdNum),
     gas: toHexQuantity(tx.gas),
     value: toHexQuantity(tx.value ?? 0),
@@ -126,6 +131,9 @@ export function toTransactionEVM(tx, { chainIdNum, from, nonce } = {}) {
     maxPriorityFee: null,
     customData: null,
   };
+  // Omit `nonce` when nonce-free (prepared group / bundle); include it otherwise.
+  if (nonceValue != null) evm.nonce = toHexQuantity(nonceValue);
+  return evm;
 }
 
 /**
@@ -148,16 +156,26 @@ export function toSolanaTransaction(raw) {
 }
 
 /**
- * Build the full web-app link. `transactions` is an array of
- * { evm: TransactionEVM, label?: string } OR { solana: { raw }, label? }
- * (1–N entries, all same chain/ecosystem).
+ * Build the full web-app `/cli/transaction` link. The payload is one of the two
+ * wire shapes the web app validates (the web app owns the link contract):
+ *   • **v1** — a single, fully-formed Transaction Bundle (nonce required per EVM
+ *       tx):        { version: 1, transactions: Entry[] }
+ *   • **v2** — a Transaction Queue of independent groups (nonce optional; the
+ *       web app assigns the pending nonce per group, ADR-0004):
+ *                   { version: 2, groups: Entry[][] }
+ * An Entry is { evm: TransactionEVM, label? } OR { solana: { raw }, label? }.
+ * Each group is single-chain; a v2 queue may span chains for one signer
+ * `address`. `version` selects the shape and which of `transactions` / `groups`
+ * is read.
  *
- * `token` is a one-time nonce baked into the payload. The web app must echo it
- * in every callback POST so we can reject forged/stale callbacks from other
- * local processes (trust-but-verify, ADR-0002).
+ * `token` is a one-time nonce baked into the payload. When the web app echoes
+ * it in every callback POST we reject forged/stale callbacks from other local
+ * processes (trust-but-verify, ADR-0002); the web app ignores it for now, so
+ * it's verified when present and accepted silently when absent.
  */
-export function buildTransactionLink({ base, address, transactions, port, token }) {
-  const payload = { version: 1, transactions };
+export function buildTransactionLink({ base, address, version, transactions, groups, port, token }) {
+  const payload =
+    version === 1 ? { version: 1, transactions } : { version: 2, groups };
   if (port != null) payload.port = port;
   if (token != null) payload.token = token;
   const fragment = encodePayload(payload);
@@ -295,9 +313,8 @@ export function openBrowser(url) {
  */
 function runCallbackSession({ buildUrl, intro, timeout, onListening, onEvent }) {
   return new Promise((resolve) => {
-    // One-time nonce the web app must echo in every callback POST (ADR-0002).
+    // One-time nonce the web app echoes in every callback POST (ADR-0002).
     const token = randomBytes(16).toString("hex");
-    let warnedNoToken = false;
     let settled = false;
     let timer;
 
@@ -330,18 +347,12 @@ function runCallbackSession({ buildUrl, intro, timeout, onListening, onEvent }) 
           return; // ignore malformed callbacks; keep waiting
         }
         // Trust-but-verify: reject callbacks whose one-time token doesn't match
-        // ours — a forged POST from another local process can't guess it. During
-        // the web-app rollout a callback with NO token is still accepted (warn
-        // once) so we don't break clients that predate the echo.
+        // ours — a forged POST from another local process can't guess it. The
+        // web app does not echo `token` yet (it ignores the field), so a
+        // callback without one is accepted silently; the guard activates
+        // automatically the moment the web app starts echoing it (ADR-0002).
         if (msg.token != null && msg.token !== token) {
           return; // forged / stale — ignore, keep waiting
-        }
-        if (msg.token == null && !warnedNoToken) {
-          warnedNoToken = true;
-          process.stderr.write(
-            "Warning: callback did not echo the one-time token — accepting for now. " +
-            "The web app should echo `token` in every callback POST.\n"
-          );
         }
         onEvent(msg, finish);
       });
@@ -406,14 +417,51 @@ async function verifyHashes(client, hashes) {
 }
 
 /**
- * Transaction handoff: build + open the /cli/transaction link and wait for the
- * signing result.
+ * Map a v2 `summary` callback's groups into the CLI's per-group result shape.
+ * The web app reports each group's `outcome` ∈ completed|skipped|failed plus its
+ * `hashes` (ADR-0004). A skipped group is a user cancel, surfaced as the CLI's
+ * existing per-group `rejected` status so downstream reporting is unchanged.
+ * The summary carries no error text, so it's merged from the streamed
+ * group-failed events (`errorByGroup`, keyed by group index).
+ *
+ * @returns {Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string }>}
+ */
+function normalizeSummaryGroups(msg, errorByGroup) {
+  const groups = Array.isArray(msg.groups) ? msg.groups : [];
+  return groups.map((g) => {
+    const status = g.outcome === "skipped" ? "rejected" : g.outcome || "completed";
+    const out = { status };
+    if (g.hashes && g.hashes.length) out.hashes = g.hashes;
+    const error = errorByGroup.get(g.group);
+    if (error) out.error = error;
+    return out;
+  });
+}
+
+/**
+ * Roll per-group results up to the bundle's terminal status: all completed →
+ * "completed"; all rejected → "rejected"; some completed → "partial"; else
+ * "failed".
+ */
+function summarizeBundleStatus(results) {
+  if (results.length === 0) return "failed";
+  if (results.every((r) => r.status === "completed")) return "completed";
+  if (results.every((r) => r.status === "rejected")) return "rejected";
+  if (results.some((r) => r.status === "completed")) return "partial";
+  return "failed";
+}
+
+/**
+ * Single-command transaction handoff: build + open the /cli/transaction link
+ * (payload v2, one group) and wait for the signing result. Keeps the flat
+ * result shape and full ADR-0002 on-chain verification (single-command paths
+ * are single-chain, so one injected `client` can verify every hash).
  *
  * @param {object} args
  * @param {string} args.address - signer address (search param + every `from`)
- * @param {Array<{evm:object,label?:string}>} args.transactions - the bundle
+ * @param {Array<{evm:object,label?:string}>} args.transactions - the group's txs
  * @param {number} [args.timeout=300] - wait timeout in seconds
- * @param {object} [args.client] - viem public client for the bundle's chain. When
+ * @param {object} [args.client] - viem public client for the group's chain. When
  *   provided, `completed` hashes are verified on-chain before we report success.
  * @param {(info:{port:number,url:string}) => void} [args.onListening] - called
  *   once the listener is up and the link is built (observability / testing)
@@ -427,8 +475,10 @@ async function verifyHashes(client, hashes) {
 export function signViaWebApp({ address, transactions, timeout = 300, client, onListening }) {
   const total = transactions.length;
   return runCallbackSession({
+    // Single command → v1: one fully-formed group (nonce present), sent as the
+    // flat `transactions` array the web app's v1 decoder reads.
     buildUrl: ({ port, token }) =>
-      buildTransactionLink({ base: getWebAppBase(), address, transactions, port, token }),
+      buildTransactionLink({ base: getWebAppBase(), address, version: 1, transactions, port, token }),
     intro: "Review & sign this transaction in the Zerion web app:",
     timeout,
     onListening,
@@ -463,6 +513,92 @@ export function signViaWebApp({ address, transactions, timeout = 300, client, on
             failedIndex: msg.failedIndex,
             hashes: msg.hashes || [],
             error: msg.error,
+          });
+          break;
+        default:
+          break; // unknown event — ignore
+      }
+    },
+  });
+}
+
+/**
+ * Bundle transaction handoff: build + open ONE /cli/transaction link carrying
+ * N groups (payload v2) and wait for the web app's per-group stream and its
+ * single latched `summary` terminal. As each group resolves the web app streams
+ * `group-completed` / `group-skipped` / `group-failed` (progress we print), then
+ * emits one `summary` listing every group's outcome — that's the terminal we
+ * resolve on. A bundle may span chains for one signer address, so on-chain hash
+ * verification is **relaxed** (ADR-0004): we trust the web app's per-group
+ * outcome and print a stderr note rather than re-fetching receipts (one client
+ * can't cover every chain). The one-time-token anti-forgery check still applies.
+ *
+ * @param {object} args
+ * @param {string} args.address - signer address (same for every group)
+ * @param {Array<Array<{evm?:object,solana?:object,label?:string}>>} args.groups
+ * @param {number} [args.timeout=300]
+ * @param {(info:{port:number,url:string}) => void} [args.onListening]
+ * @returns {Promise<{
+ *   status: 'completed'|'partial'|'failed'|'rejected'|'timeout'|'aborted',
+ *   groups?: Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string }>,
+ * }>}
+ */
+export function signBundleViaWebApp({ address, groups, timeout = 300, onListening }) {
+  const totalGroups = groups.length;
+  let noted = false;
+  const note = () => {
+    if (noted) return;
+    noted = true;
+    process.stderr.write(
+      "Note: trusting the web app's per-group status — on-chain verification is " +
+      "relaxed for bundles (they may span chains a single client can't cover, ADR-0004).\n"
+    );
+  };
+  // `group-failed` carries the human error text but the final `summary` does
+  // not, so stash errors as they stream (keyed by group index) and merge them
+  // into the summary's per-group results.
+  const errorByGroup = new Map();
+  return runCallbackSession({
+    buildUrl: ({ port, token }) =>
+      buildTransactionLink({ base: getWebAppBase(), address, version: 2, groups, port, token }),
+    intro: `Review & sign these ${totalGroups} grouped actions in the Zerion web app:`,
+    timeout,
+    onListening,
+    onEvent: async (msg, finish) => {
+      switch (msg.event) {
+        case "signed":
+          process.stderr.write(
+            `Signed group ${(msg.group ?? 0) + 1}/${totalGroups}` +
+            (msg.index != null ? ` tx ${msg.index + 1}` : "") +
+            `: ${msg.hash}\n`
+          );
+          break; // progress only — the terminal is the final `summary`
+        case "group-completed":
+          process.stderr.write(`Group ${(msg.group ?? 0) + 1}/${totalGroups} completed.\n`);
+          break; // per-group progress
+        case "group-skipped":
+          process.stderr.write(`Group ${(msg.group ?? 0) + 1}/${totalGroups} skipped.\n`);
+          break; // per-group progress
+        case "group-failed":
+          if (msg.error) errorByGroup.set(msg.group, msg.error);
+          process.stderr.write(
+            `Group ${(msg.group ?? 0) + 1}/${totalGroups} failed` +
+            (msg.error ? `: ${msg.error}` : "") + "\n"
+          );
+          break; // per-group progress
+        case "summary": {
+          note();
+          const results = normalizeSummaryGroups(msg, errorByGroup);
+          finish({ status: summarizeBundleStatus(results), groups: results });
+          break;
+        }
+        case "rejected":
+          finish({ status: "rejected", groups: groups.map(() => ({ status: "rejected" })) });
+          break;
+        case "failed":
+          finish({
+            status: "failed",
+            groups: groups.map(() => ({ status: "failed", error: msg.error })),
           });
           break;
         default:

@@ -241,6 +241,8 @@ Requires an API key (or agent token for unattended use).
 | `zerion bridge … --to-address <addr>` | Bridge to a raw destination address | `zerion bridge ethereum USDC 5 solana USDC --to-address 8xLdox… --cheapest` |
 | `zerion send <token> <amount> --to <address> [--chain <chain>]` | Send tokens (chain auto-detected from address format) | `zerion send usdc 50 --to 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --chain base` |
 | `zerion send SOL <amount> --to <solana-pubkey>` | Send native SOL on Solana | `zerion send SOL 0.1 --to 2Nsnn…` |
+| `zerion <send\|swap\|bridge\|consolidate> … --prepare` | Build + gate a command but print a prepared-group envelope (JSON) instead of executing — for `zerion bundle` | `zerion swap base 100 USDC ETH --prepare` |
+| `zerion bundle --group <envelope> [--group …]` | Sign several prepared groups together — one web-app handoff when any group needs review, else locally. Same signer address (chains may differ); per-group results; always exits 0 | `zerion bundle --group "$(zerion swap base 100 USDC ETH --prepare)" --group "$(zerion send USDC 20 --to 0xBob --chain base --prepare)"` |
 
 ### Wallet Management
 

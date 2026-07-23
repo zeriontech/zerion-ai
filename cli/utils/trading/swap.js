@@ -343,20 +343,23 @@ export async function executeSwap(quote, walletName, passphrase, { timeout, appr
 }
 
 /**
- * Web-app handoff variant of executeSwap — builds a fully-formed EVM bundle
- * (optional approve + swap) and hands it to the Zerion web app for signing
- * instead of signing/broadcasting locally. Same allowance-skip behavior as
- * executeSwap; drops broadcast, receipt wait, and bridge-delivery polling
- * (the connected wallet + web app own those now).
+ * Build the web-app handoff **group** for a swap/bridge quote — the shared core
+ * of both `executeViaWebApp` (direct single-command handoff) and the `--prepare`
+ * path (nonce-free prepared group). Runs the API blocking gate, the allowance
+ * skip, and `enforceExecutablePolicies` per tx; returns the fully-formed group
+ * plus the metadata a prepared-group envelope needs.
  *
  * @param {object} quote
  * @param {object} options
  * @param {string} options.address - the CLI's resolved signer address
- * @param {number} [options.timeout] - callback wait timeout in seconds
  * @param {boolean} [options.isBridge] - label the swap tx as a bridge
- * @returns {Promise<object>} the signViaWebApp result ({ status, hashes?, ... })
+ * @param {boolean} [options.assignNonces=true] - assign sequential pending
+ *   nonces (direct handoff). Pass `false` for a nonce-free prepared group / bundle
+ *   (the web app assigns nonces; ADR-0003).
+ * @returns {Promise<{ ecosystem:"evm"|"solana", chain:string, from:string,
+ *   transactions:Array, client:object, outflows:Array }>}
  */
-export async function executeViaWebApp(quote, { address, timeout, isBridge = false } = {}) {
+export async function buildSwapWebAppGroup(quote, { address, isBridge = false, assignNonces = true } = {}) {
   // API blocking gate — runs on the handoff route too, before a link is formed.
   if (quote.blocking) {
     const err = new Error(
@@ -368,6 +371,14 @@ export async function executeViaWebApp(quote, { address, timeout, isBridge = fal
   }
 
   const zerionChainId = quote.fromChain;
+  const label = `${isBridge ? "Bridge" : "Swap"} ${quote.from.symbol} → ${quote.to.symbol}`;
+  const outflows = [{
+    fungibleId: quote.from.fungibleId,
+    chain: zerionChainId,
+    symbol: quote.from.symbol,
+    amount: quote.inputAmount,
+    tokenAddress: quote.from.address || null,
+  }];
 
   // Solana: hand off the API's unsigned base64 tx. The connected wallet signs
   // and broadcasts; we verify the returned signature on-chain via the Solana
@@ -379,11 +390,8 @@ export async function executeViaWebApp(quote, { address, timeout, isBridge = fal
       throw new Error("Quote did not include a Solana transaction");
     }
     const from = quote.transactionSwapSolana.from || address;
-    const transactions = [{
-      solana: toSolanaTransaction(raw),
-      label: `${isBridge ? "Bridge" : "Swap"} ${quote.from.symbol} → ${quote.to.symbol}`,
-    }];
-    return signViaWebApp({ address: from, transactions, timeout, client: solanaReceiptAdapter() });
+    const transactions = [{ solana: toSolanaTransaction(raw), label }];
+    return { ecosystem: "solana", chain: zerionChainId, from, transactions, client: solanaReceiptAdapter(), outflows };
   }
 
   if (!quote.transactionSwap) {
@@ -394,8 +402,11 @@ export async function executeViaWebApp(quote, { address, timeout, isBridge = fal
   const chainIdNum = client.chain.id;
   const from = quote.transactionSwap.from || address;
 
-  // One pending-nonce read for the whole bundle, assigned sequentially.
-  let nonce = await client.getTransactionCount({ address: from, blockTag: "pending" });
+  // One pending-nonce read for the whole group, assigned sequentially — only on
+  // the direct-handoff path. Prepared groups / bundles stay nonce-free.
+  let nonce = assignNonces
+    ? await client.getTransactionCount({ address: from, blockTag: "pending" })
+    : null;
 
   const transactions = [];
 
@@ -418,10 +429,10 @@ export async function executeViaWebApp(quote, { address, timeout, isBridge = fal
         chain: zerionChainId,
       });
       transactions.push({
-        evm: toTransactionEVM(approveTx, { chainIdNum, from, nonce }),
+        evm: toTransactionEVM(approveTx, { chainIdNum, from, nonce: nonce ?? undefined }),
         label: `Approve ${quote.from.symbol}`,
       });
-      nonce += 1;
+      if (nonce != null) nonce += 1;
     }
   }
 
@@ -433,10 +444,33 @@ export async function executeViaWebApp(quote, { address, timeout, isBridge = fal
     chain: zerionChainId,
   });
   transactions.push({
-    evm: toTransactionEVM(swapTx, { chainIdNum, from, nonce }),
-    label: `${isBridge ? "Bridge" : "Swap"} ${quote.from.symbol} → ${quote.to.symbol}`,
+    evm: toTransactionEVM(swapTx, { chainIdNum, from, nonce: nonce ?? undefined }),
+    label,
   });
 
+  return { ecosystem: "evm", chain: zerionChainId, from, transactions, client, chainIdNum, outflows };
+}
+
+/**
+ * Web-app handoff variant of executeSwap — builds a fully-formed EVM bundle
+ * (optional approve + swap) and hands it to the Zerion web app for signing
+ * instead of signing/broadcasting locally. Same allowance-skip behavior as
+ * executeSwap; drops broadcast, receipt wait, and bridge-delivery polling
+ * (the connected wallet + web app own those now).
+ *
+ * @param {object} quote
+ * @param {object} options
+ * @param {string} options.address - the CLI's resolved signer address
+ * @param {number} [options.timeout] - callback wait timeout in seconds
+ * @param {boolean} [options.isBridge] - label the swap tx as a bridge
+ * @returns {Promise<object>} the signViaWebApp result ({ status, hashes?, ... })
+ */
+export async function executeViaWebApp(quote, { address, timeout, isBridge = false } = {}) {
+  const { from, transactions, client } = await buildSwapWebAppGroup(quote, {
+    address,
+    isBridge,
+    assignNonces: true,
+  });
   return signViaWebApp({ address: from, transactions, timeout, client });
 }
 

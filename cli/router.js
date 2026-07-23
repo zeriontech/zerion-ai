@@ -59,6 +59,8 @@ function printUsage() {
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <addr>": "Bridge to a raw destination address (chain-format must match)",
       "send <token> <amount> --to <addr> [--chain <chain>]": "Send native ETH/SOL or ERC-20 to an address (chain auto-detected from address format)",
       "consolidate <chain> <to-token>": "Sweep all wallet positions on <chain> into <to-token> (dry-run by default; --execute to broadcast; --concurrency <n> for plan-phase quote concurrency, auto-picked by API-key tier)",
+      "<send|swap|bridge|consolidate> ... --prepare": "Build + gate a command but emit a nonce-free prepared-group envelope to stdout instead of executing (for `zerion bundle`)",
+      "bundle --group <envelope> [--group <envelope> ...]": "Sign several prepared groups together in one web-app handoff (or locally when all auto-sign); same signer address, per-group results",
       "search <query>": "Search for tokens by name or symbol",
     },
     agent_tokens: {
@@ -101,6 +103,8 @@ function printUsage() {
       "--search <query>": "Filter wallets by name or address",
       "--slippage <percent>": "Slippage tolerance (default: 2%)",
       "--review": "Force this trade to the web app for human review instead of auto-signing",
+      "--prepare": "Emit a prepared-group envelope (send/swap/bridge/consolidate) for `zerion bundle` instead of executing",
+      "--group <envelope>": "A prepared-group envelope for `zerion bundle` (repeatable)",
       "--x402": "Use x402 pay-per-call on Base or Solana — analytics commands only (no API key needed)",
       "--mpp": "Use MPP pay-per-call on Tempo — analytics commands only (no API key needed)",
       "--json": "JSON output (default)",

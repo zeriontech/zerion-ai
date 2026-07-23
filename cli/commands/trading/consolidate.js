@@ -14,7 +14,10 @@
 
 import * as api from "../../utils/api/client.js";
 import { getApiKeyTier } from "../../utils/api/auth.js";
-import { executeSwap } from "../../utils/trading/swap.js";
+import { executeSwap, buildSwapWebAppGroup } from "../../utils/trading/swap.js";
+import { buildPreparedGroup, printPreparedGroup } from "../../utils/web-app/prepared-group.js";
+import { decideSigningRoute } from "../../utils/trading/signing-route.js";
+import { isSolana } from "../../utils/chain/registry.js";
 import {
   requireAgentToken,
   parseTimeout,
@@ -79,6 +82,13 @@ export default async function consolidate(args, flags) {
   }
 
   const execute = coerceBoolFlag(flags.execute, "execute");
+  const prepare = coerceBoolFlag(flags.prepare, "prepare");
+  if (execute && prepare) {
+    printError("conflicting_flags", "Pass either --execute or --prepare, not both.", {
+      suggestion: "--prepare emits a bundle envelope; --execute signs locally. Pick one.",
+    });
+    process.exit(1);
+  }
   const includeStablesFlag = coerceBoolFlag(flags["include-stables"], "include-stables");
   const excludeStablesFlag = coerceBoolFlag(flags["exclude-stables"], "exclude-stables");
   const includeNative = coerceBoolFlag(flags["include-native"], "include-native");
@@ -309,6 +319,64 @@ export default async function consolidate(args, flags) {
   // sees which mode the planner actually ran in.
   plan.apiKeyTier = tier;
   plan.concurrencySource = concurrencySource;
+
+  // --prepare: emit ONE nonce-free prepared group containing every ready row's
+  // approve+swap pairs (ADR-0005). consolidate is single-chain and EVM-only.
+  if (prepare) {
+    if (isSolana(chain)) {
+      printError("consolidate_prepare_evm_only",
+        `\`consolidate --prepare\` is EVM-only (got chain "${chain}").`,
+        { suggestion: "Prepare individual Solana swaps with `zerion swap solana … --prepare`." });
+      process.exit(1);
+    }
+    const readyRows = plan.rows.filter((r) => r.status === "ready");
+    if (readyRows.length === 0) {
+      printError("no_ready_rows", "No ready rows to prepare into a bundle group.", {
+        suggestion: "Run without --prepare to see the plan and why rows are blocked/skipped.",
+      });
+      process.exit(1);
+    }
+
+    try {
+      const transactions = [];
+      const outflows = [];
+      for (const row of readyRows) {
+        const group = await buildSwapWebAppGroup(row.quote, { address, assignNonces: false });
+        transactions.push(...group.transactions);
+        outflows.push(...group.outflows);
+      }
+
+      const usdValue = readyRows.reduce(
+        (sum, r) => sum + (Number.isFinite(r.value_usd) ? r.value_usd : 0),
+        0,
+      );
+      const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
+      process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+      printPreparedGroup(buildPreparedGroup({
+        ecosystem: "evm",
+        chain,
+        address,
+        walletName,
+        route,
+        summary: {
+          consolidate: {
+            chain,
+            toToken: targetUpper,
+            from: address,
+            rows: readyRows.length,
+            expectedOutput: plan.totals?.expected_output,
+            expectedOutputUsd: plan.totals?.expected_output_usd,
+          },
+        },
+        transactions,
+        outflows,
+      }));
+    } catch (err) {
+      handleTradingError(err, "consolidate_error");
+    }
+    return;
+  }
 
   if (!execute) {
     // Strip embedded `quote` objects from the dry-run JSON output — they're

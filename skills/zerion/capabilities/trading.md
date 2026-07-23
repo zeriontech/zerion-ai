@@ -1,7 +1,7 @@
 
 # Zerion — Trading
 
-Execute on-chain trading actions: swap, bridge, send. All commands build, sign, and broadcast a transaction in one shot using the active agent token as the signer passphrase.
+Execute on-chain trading actions: swap, bridge, send. Each command builds a fully-formed transaction and then either **signs locally** (agent token as passphrase, broadcast + confirm in one shot) or **hands off to the web app** for human review — see "Signing routes & web-app handoff" below. To queue several actions into one signing session, see `capabilities/bundle.md`.
 
 ## Setup
 
@@ -19,7 +19,37 @@ Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authenticat
 - "Bridge X to chain Y" (cross-chain)
 - "Send tokens to address" (native ETH/SOL or ERC-20)
 
-For balance checks before trading → `capabilities/analyze.md`. For setting up an agent token → `capabilities/agent-management.md`. For off-chain signing (permits, EIP-712) → `capabilities/sign.md`.
+For balance checks before trading → `capabilities/analyze.md`. For setting up an agent token → `capabilities/agent-management.md`. For off-chain signing (permits, EIP-712) → `capabilities/sign.md`. To sign several actions together → `capabilities/bundle.md`.
+
+## Signing routes & web-app handoff
+
+Every trade is signed one of two ways, decided automatically **before** any transaction is signed
+or broadcast (both routes run the same balance / `quote.blocking` / policy pre-flight):
+
+- **Local signing (default)** — the CLI signs with the agent token as passphrase, broadcasts, and
+  waits for confirmation. This is the one-shot path.
+- **Web-app handoff** — instead of signing locally, the CLI builds the transaction, encodes it into
+  a `dashboard.zerion.io` link, opens the browser (the URL is also **printed to stderr** so headless
+  / agent environments can open it manually), and waits for a localhost callback with the result.
+  A connected wallet signs in the browser; the CLI verifies the returned hash on-chain before
+  reporting success.
+
+The handoff fires when any trigger hits:
+
+| Trigger | Meaning |
+|---|---|
+| Read-only wallet | The local wallet has no key material (watch-only / imported address). |
+| Value over threshold | The trade's sell-side USD value exceeds the wallet's review threshold. |
+| `--review` | Force review regardless of value. |
+
+Applies to `swap` / `bridge` / `send` on **both EVM and Solana**, and to message signing
+(`capabilities/sign.md`). `consolidate` participates via `--prepare` + `bundle` (ADR-0005) rather
+than a direct handoff — see `partners/consolidate.md`. The CLI prints `Signing route: <route> — <reason>`
+to stderr on every trade. `--timeout` controls how long the handoff waits for the browser callback.
+
+**`--prepare`** on any of these commands runs the full build + gate pipeline but prints a nonce-free
+**prepared-group** envelope to stdout instead of executing — the input to `zerion bundle`, which
+signs several prepared groups together. Full reference: `capabilities/bundle.md`.
 
 ## Pre-flight
 
@@ -177,7 +207,9 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `--to-address <addr>` | Destination address for `bridge` (chain-format must match destination chain) |
 | `--to <addr>` | Recipient address for `send` |
 | `--slippage <pct>` | Slippage tolerance (default 2%, max 3%) |
-| `--timeout <sec>` | Confirmation timeout (default 120s) |
+| `--timeout <sec>` | Confirmation timeout (default 120s); also the web-app handoff wait |
+| `--review` | Force the web-app handoff regardless of value (`capabilities/bundle.md`) |
+| `--prepare` | Print a prepared-group envelope instead of executing — for `zerion bundle` (`capabilities/bundle.md`) |
 | `--json` / `--pretty` / `--quiet` | Output mode (JSON default) |
 
 ## Pre-trade safety checklist

@@ -5,6 +5,7 @@ import * as api from "../../utils/api/client.js";
 import { getPublicClient, broadcastAndWait, signAndSerialize } from "../../utils/trading/transaction.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
 import { toTransactionEVM, toSolanaTransaction, signViaWebApp, reportHandoff } from "../../utils/web-app/handoff.js";
+import { buildPreparedGroup, printPreparedGroup } from "../../utils/web-app/prepared-group.js";
 import { decideSigningRoute } from "../../utils/trading/signing-route.js";
 import { bundleSellUsd } from "../../utils/trading/valuation.js";
 import { print, printError } from "../../utils/common/output.js";
@@ -203,6 +204,31 @@ export default async function send(args, flags) {
     const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
     process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
 
+    // --prepare: emit a nonce-free prepared-group envelope instead of executing.
+    // Strip the locally-assigned nonce — the web app / bundle assigns it (ADR-0003).
+    if (flags.prepare) {
+      const { nonce: _omitNonce, ...noNonceTx } = tx;
+      const evm = toTransactionEVM(noNonceTx, { chainIdNum: client.chain.id, from: walletAddress });
+      printPreparedGroup(buildPreparedGroup({
+        ecosystem: "evm",
+        chain,
+        address: walletAddress,
+        walletName,
+        route,
+        summary,
+        transactions: [{ evm, label: `Send ${amount} ${resolved.symbol}` }],
+        outflows: [{
+          fungibleId: resolved.fungibleId,
+          chain,
+          symbol: resolved.symbol,
+          amount,
+          tokenAddress: isNative ? null : resolved.address,
+          native: isNative,
+        }],
+      }));
+      return;
+    }
+
     if (route === "web-app") {
       const evm = toTransactionEVM(tx, { chainIdNum: client.chain.id, from: walletAddress });
       const result = await signViaWebApp({
@@ -276,6 +302,23 @@ async function sendOnSolana({ token, amount, to, flags }) {
     const usdValue = await bundleSellUsd({ fungibleId, amount });
     const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
     process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    // --prepare: build the unsigned transfer and emit a prepared-group envelope
+    // (Solana raw txs are already nonce-free — the recent blockhash is baked in).
+    if (flags.prepare) {
+      const { raw } = await buildUnsignedSolanaTransfer({ from: address, to, amountSol: amount });
+      printPreparedGroup(buildPreparedGroup({
+        ecosystem: "solana",
+        chain: "solana",
+        address,
+        walletName,
+        route,
+        summary,
+        transactions: [{ solana: toSolanaTransaction(raw), label: `Send ${amount} SOL` }],
+        outflows: [{ fungibleId, chain: "solana", symbol: "SOL", amount, native: true }],
+      }));
+      return;
+    }
 
     if (route === "web-app") {
       // Build the unsigned transfer (balance-gated) and hand it to the web app;

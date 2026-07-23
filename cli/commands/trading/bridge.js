@@ -1,7 +1,8 @@
-import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap, executeViaWebApp } from "../../utils/trading/swap.js";
+import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap, executeViaWebApp, buildSwapWebAppGroup } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { reportHandoff } from "../../utils/web-app/handoff.js";
+import { buildPreparedGroup, printPreparedGroup } from "../../utils/web-app/prepared-group.js";
 import { decideSigningRoute } from "../../utils/trading/signing-route.js";
 import { bundleSellUsd } from "../../utils/trading/valuation.js";
 import { print, printError } from "../../utils/common/output.js";
@@ -230,6 +231,22 @@ export default async function bridge(args, flags) {
     const usdValue = await bundleSellUsd({ fungibleId: quote.from.fungibleId, amount });
     const { route, reason } = decideSigningRoute({ walletName, force: flags.review, usdValue });
     process.stderr.write(`Signing route: ${route} — ${reason}.\n`);
+
+    // --prepare: emit a nonce-free prepared-group envelope instead of executing.
+    if (flags.prepare) {
+      const group = await buildSwapWebAppGroup(quote, { address, isBridge: true, assignNonces: false });
+      printPreparedGroup(buildPreparedGroup({
+        ecosystem: group.ecosystem,
+        chain: group.chain,
+        address: group.from,
+        walletName,
+        route,
+        summary: quoteSummary,
+        transactions: group.transactions,
+        outflows: group.outflows,
+      }));
+      return;
+    }
 
     if (route === "web-app") {
       const result = await executeViaWebApp(quote, { address, timeout, isBridge: true });
