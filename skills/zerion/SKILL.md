@@ -1,6 +1,6 @@
 ---
 name: zerion
-description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
+description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, provider migration (move a codebase off Zapper, Dune SIM, DeBank, Allium, or OneBalance onto Zerion API), and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai). Use this skill for any crypto wallet, DeFi, or on-chain task, or when migrating off another wallet-data provider. Deep docs load on demand from `capabilities/` and `partners/`."
 license: MIT
 allowed-tools: Bash, Read
 ---
@@ -77,6 +77,7 @@ Before executing any capability below, **Read the matching file** for the full c
 | Wallet management: create, import, list, fund, backup, export-key, delete | `capabilities/wallet.md` |
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
 | 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
+| Migrate a codebase from another provider (Zapper, Dune SIM, DeBank, Allium, OneBalance, …) | `capabilities/migrate.md` |
 
 **Pairing rules:**
 - Trading + signing require an agent token → see `capabilities/agent-management.md` first if user has none.

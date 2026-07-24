@@ -39,6 +39,7 @@ One skill, [`zerion`](./skills/zerion/SKILL.md), under [`./skills/zerion/`](./sk
 | [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, list, fund, backup, export-key, delete, sync |
 | [`agent-management.md`](./skills/zerion/capabilities/agent-management.md) | Agent tokens + policies (the autonomous-trading primitives) |
 | [`swap-0x.md`](./skills/zerion/capabilities/swap-0x.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains |
+| [`migrate.md`](./skills/zerion/capabilities/migrate.md) | Migrate a codebase from another provider (Zapper, Dune SIM, DeBank, Allium, OneBalance) using the live guides at developers.zerion.io |
 
 ### Partner integrations (`skills/zerion/partners/`)
 
