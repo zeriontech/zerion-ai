@@ -24,6 +24,15 @@ Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authenticat
 
 For on-chain transactions (swap/bridge/send) → `capabilities/trading.md`.
 
+## Signing route
+
+Message signing follows the same route model as trading (`capabilities/trading.md` § "Signing routes
+& web-app handoff"), minus the value threshold — a message has no sell-side value. A **read-only
+wallet** or the **`--review`** flag hands the message off to the web app (a connected wallet signs
+in the browser; the returned signature is verified against the signer address); everything else signs
+locally. On the handoff path **no agent token is required**. Messages are signed one at a time —
+they are **not** bundleable (see `capabilities/bundle.md`).
+
 ## Sign a message
 
 ```bash

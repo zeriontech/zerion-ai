@@ -13,6 +13,12 @@ npm install -g zerion-cli
 
 Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication). **Trading needs an API key + agent token** (pay-per-call does NOT apply).
 
+The direct `--execute` path signs **locally** and therefore needs a wallet with key material. To
+sweep a **read-only / watch-only wallet**, or to route a large sweep through **human review**, use
+`--prepare` + `zerion bundle` instead: `consolidate --prepare` emits one prepared group that the
+`bundle` command hands off to the web app as a single review (ADR-0005 — this reverses consolidate's
+earlier "refuse to hand off" behavior). See `capabilities/bundle.md`.
+
 ## When to use
 
 - "Consolidate all tokens on Base into USDC"
@@ -38,7 +44,8 @@ Anything else fails with `target_token_not_found` and the error names the curate
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--execute` | _(off)_ | Broadcast the ready rows. Without this, the command prints a plan only. |
+| `--execute` | _(off)_ | Broadcast the ready rows locally. Without this (and without `--prepare`), the command prints a plan only. |
+| `--prepare` | _(off)_ | Print a **prepared-group** envelope (all ready approve+swap pairs as ONE group) instead of executing — for `zerion bundle`. EVM-only. Mutually exclusive with `--execute`. See `capabilities/bundle.md`. |
 | `--min-value <usd>` | `1` | Skip positions below this USD value (marked `skipped: dust`). |
 | `--max-value <usd>` | _(no cap)_ | Skip positions above this USD value (marked `skipped: above_max`). Pair with `--min-value` to sweep only a band — useful for "clear dust, keep main bags". |
 | `--max-loss <pct>` | `5` | Reject quotes losing more than this fraction vs current value. Dual form: values > 1 treated as percent (`5` → 5%), values ≤ 1 as fraction (`0.05` → 5%). |
@@ -201,7 +208,9 @@ By default the plan **excludes**:
 | `invalid_max_loss` | `--max-loss` is NaN, negative, or > 100 | Use percent (`5`) or fraction (`0.05`); see Dual form above |
 | `invalid_gas_reserve` | `--gas-reserve` is NaN or negative | Pass a non-negative native-units number |
 | `invalid_concurrency` | `--concurrency` is NaN, non-integer, < 1, or > 10 | Pass an integer in `1..10`, e.g. `--concurrency 5` |
-| `conflicting_flags` | `--gas-reserve` without `--include-native`, `--include-stables` with `--exclude-stables`, or `--max-value < --min-value` | Pass `--include-native` to opt in, pick one stables flag, or widen the band |
+| `conflicting_flags` | `--gas-reserve` without `--include-native`, `--include-stables` with `--exclude-stables`, `--max-value < --min-value`, or `--execute` together with `--prepare` | Pass `--include-native` to opt in, pick one stables flag, widen the band, or pick one of `--execute` / `--prepare` |
+| `consolidate_prepare_evm_only` | `--prepare` used on a Solana consolidate | Prepare individual Solana swaps: `zerion swap solana … --prepare` |
+| `no_ready_rows` | `--prepare` with no ready rows to bundle | Run without `--prepare` to see why rows are blocked/skipped |
 | `invalid_flag_value` | Bare boolean flag got a non-positional consumed as value | Pass the boolean flag last, or use `--flag=true` / `--no-flag` |
 | `invalid_slippage` | `--slippage` not in 0–100 | `--slippage 2` |
 | `no_agent_token` | Trading needs an agent token | See `capabilities/agent-management.md` |

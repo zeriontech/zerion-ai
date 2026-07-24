@@ -65,6 +65,7 @@ import swap from "./commands/trading/swap.js";
 import bridge from "./commands/trading/bridge.js";
 import send from "./commands/trading/send.js";
 import consolidate from "./commands/trading/consolidate.js";
+import bundleCmd from "./commands/trading/bundle.js";
 import swapTokens from "./commands/trading/list-tokens.js";
 import search from "./commands/trading/search.js";
 import chainsCmd from "./commands/trading/chains.js";
@@ -73,6 +74,7 @@ register("swap", "tokens", swapTokens);
 registerSingle("bridge", bridge);
 registerSingle("send", send);
 registerSingle("consolidate", consolidate);
+registerSingle("bundle", bundleCmd);
 registerSingle("search", search);
 registerSingle("chains", chainsCmd);
 

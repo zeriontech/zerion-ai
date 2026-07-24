@@ -73,6 +73,7 @@ Before executing any capability below, **Read the matching file** for the full c
 |------|------|
 | Wallet analysis: portfolio, positions, history, PnL, watchlist | `capabilities/analyze.md` |
 | On-chain trading: swap, bridge, send | `capabilities/trading.md` |
+| Bundle several actions into one signing session (`--prepare` + `bundle`) | `capabilities/bundle.md` |
 | Off-chain signing: EIP-191 messages, EIP-712 typed data | `capabilities/sign.md` |
 | Wallet management: create, import, list, fund, backup, export-key, delete | `capabilities/wallet.md` |
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |

@@ -95,6 +95,15 @@ describe("toTransactionEVM", () => {
     assert.equal(evm.nonce, "0x0");
   });
 
+  it("omits nonce entirely when nonce-free (prepared group / bundle)", () => {
+    const evm = toTransactionEVM(
+      { type: "0x2", to: "0xRouter", value: "0x0", gas: "0x30000", data: "0x" },
+      { chainIdNum: 8453, from }
+    );
+    assert.ok(!("nonce" in evm), "nonce-free entries must omit the nonce key");
+    assert.equal(evm.maxFee, null);
+  });
+
   it("throws when tx.from disagrees with the signer address", () => {
     assert.throws(
       () =>
@@ -126,27 +135,19 @@ describe("toSolanaTransaction", () => {
   });
 });
 
-describe("buildTransactionLink (Solana entry)", () => {
-  it("carries a solana entry through the payload with a base58 address", () => {
-    const address = "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK";
-    const transactions = [{ solana: toSolanaTransaction("cmF3dHg="), label: "Swap SOL → USDC" }];
-    const url = buildTransactionLink({ base: "https://app.zerion.io", address, transactions, port: 5000 });
-    const parsed = new URL(url);
-    assert.equal(parsed.pathname, CLI_TRANSACTION_PATH);
-    assert.equal(parsed.searchParams.get("address"), address);
-    const payload = decodePayload(parsed.hash.replace(/^#tx=/, ""));
-    assert.deepEqual(payload.transactions, transactions);
-  });
-});
-
-describe("buildTransactionLink", () => {
+describe("buildTransactionLink (v1 single group)", () => {
   const address = "0x52Fb91492000F2a900a6b75B37D588AB37378e59";
-  const transactions = [{ evm: { to: "0xabc" }, label: "Send" }];
+  // v1 payload.transactions is a FLAT list of entries — one fully-formed group.
+  const transactions = [
+    { evm: { to: "0xspender", nonce: "0x1" }, label: "Approve" },
+    { evm: { to: "0xrouter", nonce: "0x2" }, label: "Swap" },
+  ];
 
-  it("puts address in the query and the payload in the fragment", () => {
+  it("emits version 1 with a flat `transactions` array, address in the query", () => {
     const url = buildTransactionLink({
       base: "https://app.zerion.io",
       address,
+      version: 1,
       transactions,
       port: 5000,
     });
@@ -155,17 +156,72 @@ describe("buildTransactionLink", () => {
     assert.equal(parsed.pathname, CLI_TRANSACTION_PATH);
     assert.equal(parsed.searchParams.get("address"), address);
 
-    const token = parsed.hash.replace(/^#tx=/, "");
-    const payload = decodePayload(token);
+    const payload = decodePayload(parsed.hash.replace(/^#tx=/, ""));
     assert.equal(payload.version, 1);
     assert.equal(payload.port, 5000);
     assert.deepEqual(payload.transactions, transactions);
+    assert.ok(!("groups" in payload), "v1 must not carry a `groups` field");
   });
 
   it("omits port from the payload when not provided", () => {
-    const url = buildTransactionLink({ base: "https://app.zerion.io", address, transactions });
+    const url = buildTransactionLink({ base: "https://app.zerion.io", address, version: 1, transactions });
     const payload = decodePayload(new URL(url).hash.replace(/^#tx=/, ""));
     assert.ok(!("port" in payload));
+  });
+});
+
+describe("buildTransactionLink (v2 grouped queue)", () => {
+  const address = "0x52Fb91492000F2a900a6b75B37D588AB37378e59";
+  // v2 payload.groups is an array of GROUPS, each a list of entries.
+  const groups = [[{ evm: { to: "0xabc" }, label: "Send" }]];
+
+  it("emits version 2 with a `groups` array, address in the query", () => {
+    const url = buildTransactionLink({
+      base: "https://app.zerion.io",
+      address,
+      version: 2,
+      groups,
+      port: 5000,
+    });
+    const parsed = new URL(url);
+    assert.equal(parsed.origin, "https://app.zerion.io");
+    assert.equal(parsed.pathname, CLI_TRANSACTION_PATH);
+    assert.equal(parsed.searchParams.get("address"), address);
+
+    const payload = decodePayload(parsed.hash.replace(/^#tx=/, ""));
+    assert.equal(payload.version, 2);
+    assert.equal(payload.port, 5000);
+    assert.deepEqual(payload.groups, groups);
+    assert.ok(!("transactions" in payload), "v2 must not carry a `transactions` field");
+  });
+
+  it("carries a cross-chain multi-group queue (per-group chainId)", () => {
+    const queue = [
+      [{ evm: { to: "0xa", chainId: "0x2105" }, label: "Swap" }],
+      [{ evm: { to: "0xb", chainId: "0xa4b1" }, label: "Send" }],
+    ];
+    const url = buildTransactionLink({ base: "https://app.zerion.io", address, version: 2, groups: queue });
+    const payload = decodePayload(new URL(url).hash.replace(/^#tx=/, ""));
+    assert.equal(payload.groups.length, 2);
+    assert.deepEqual(payload.groups, queue);
+  });
+
+  it("carries a Solana group with a base58 address", () => {
+    const solAddress = "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK";
+    const solGroups = [[{ solana: toSolanaTransaction("cmF3dHg="), label: "Swap SOL → USDC" }]];
+    const url = buildTransactionLink({
+      base: "https://app.zerion.io",
+      address: solAddress,
+      version: 2,
+      groups: solGroups,
+      port: 5000,
+    });
+    const parsed = new URL(url);
+    assert.equal(parsed.pathname, CLI_TRANSACTION_PATH);
+    assert.equal(parsed.searchParams.get("address"), solAddress);
+    const payload = decodePayload(parsed.hash.replace(/^#tx=/, ""));
+    assert.equal(payload.version, 2);
+    assert.deepEqual(payload.groups, solGroups);
   });
 });
 

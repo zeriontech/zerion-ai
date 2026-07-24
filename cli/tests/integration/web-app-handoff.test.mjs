@@ -10,7 +10,7 @@ import { inflateRawSync } from "node:zlib";
 
 process.env.ZERION_NO_BROWSER = "1";
 
-const { signViaWebApp, signMessageViaWebApp } = await import("#zerion/utils/web-app/handoff.js");
+const { signViaWebApp, signBundleViaWebApp, signMessageViaWebApp } = await import("#zerion/utils/web-app/handoff.js");
 const { solanaReceiptAdapter, solanaMessageVerifier } = await import("#zerion/utils/chain/solana-handoff.js");
 const { ed25519 } = await import("@noble/curves/ed25519");
 const { PublicKey } = await import("@solana/web3.js");
@@ -119,6 +119,112 @@ describe("signViaWebApp", () => {
     assert.ok(link, "expected a printed link");
     await postEvent(port, { event: "completed", hashes: [] });
     await pending;
+  });
+});
+
+describe("signBundleViaWebApp (v2 grouped)", () => {
+  const GROUPS = [
+    [{ evm: { to: "0xA", value: "0x0" }, label: "Swap" }],
+    [{ evm: { to: "0xB", value: "0x0" }, label: "Send" }],
+  ];
+
+  it("carries all groups into one v2 payload (groups field)", async () => {
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 10 });
+    const port = await waitForPort();
+    // The printed link's payload must be v2 with both groups under `groups`.
+    const line = stderrChunks.find((c) => c.includes("/cli/transaction?"));
+    const url = new URL(line.trim().split("\n").find((l) => l.includes("/cli/transaction?")));
+    const payload = JSON.parse(inflateRawSync(Buffer.from(url.hash.replace(/^#tx=/, ""), "base64url")).toString());
+    assert.equal(payload.version, 2);
+    assert.ok(!("transactions" in payload), "v2 must not carry a `transactions` field");
+    assert.equal(payload.groups.length, 2);
+    await postEvent(port, {
+      event: "summary",
+      groups: [
+        { group: 0, outcome: "completed", hashes: ["0xa"] },
+        { group: 1, outcome: "completed", hashes: ["0xb"] },
+      ],
+    });
+    await pending;
+  });
+
+  it("streams per-group terminals and resolves on the final summary", async () => {
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 10 });
+    const port = await waitForPort();
+    await postEvent(port, { event: "signed", group: 0, index: 0, hash: "0xa" });
+    await postEvent(port, { event: "group-completed", group: 0, hashes: ["0xa"] });
+    // A skipped group maps to the CLI's per-group `rejected` status.
+    await postEvent(port, { event: "group-skipped", group: 1 });
+    await postEvent(port, {
+      event: "summary",
+      groups: [
+        { group: 0, outcome: "completed", hashes: ["0xa"] },
+        { group: 1, outcome: "skipped", hashes: [] },
+      ],
+    });
+    const result = await pending;
+    assert.equal(result.status, "partial");
+    assert.equal(result.groups.length, 2);
+    assert.deepEqual(result.groups[0], { status: "completed", hashes: ["0xa"] });
+    assert.deepEqual(result.groups[1], { status: "rejected" });
+  });
+
+  it("merges the group-failed error text into the summary result", async () => {
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 10 });
+    const port = await waitForPort();
+    await postEvent(port, { event: "group-completed", group: 0, hashes: ["0xa"] });
+    await postEvent(port, {
+      event: "group-failed",
+      group: 1,
+      failedIndex: 0,
+      hashes: ["0xb"],
+      error: "reverted on chain",
+    });
+    await postEvent(port, {
+      event: "summary",
+      groups: [
+        { group: 0, outcome: "completed", hashes: ["0xa"] },
+        { group: 1, outcome: "failed", hashes: ["0xb"] },
+      ],
+    });
+    const result = await pending;
+    assert.equal(result.status, "partial");
+    assert.deepEqual(result.groups[0], { status: "completed", hashes: ["0xa"] });
+    assert.deepEqual(result.groups[1], {
+      status: "failed",
+      hashes: ["0xb"],
+      error: "reverted on chain",
+    });
+  });
+
+  it("marks completed when every group completes and does NOT verify on-chain (relaxed)", async () => {
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 10 });
+    const port = await waitForPort();
+    await postEvent(port, {
+      event: "summary",
+      groups: [
+        { group: 0, outcome: "completed", hashes: ["0xa"] },
+        { group: 1, outcome: "completed", hashes: ["0xb"] },
+      ],
+    });
+    const result = await pending;
+    assert.equal(result.status, "completed");
+    const noted = stderrChunks.some((c) => c.includes("verification is relaxed") || c.includes("relaxed for bundles"));
+    assert.ok(noted, "expected the relaxed-verification stderr note");
+  });
+
+  it("resolves rejected when the whole session is rejected", async () => {
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 10 });
+    const port = await waitForPort();
+    await postEvent(port, { event: "rejected" });
+    const result = await pending;
+    assert.equal(result.status, "rejected");
+    assert.equal(result.groups.length, 2);
+  });
+
+  it("times out when no callback arrives", async () => {
+    const result = await signBundleViaWebApp({ address: ADDRESS, groups: GROUPS, timeout: 1 });
+    assert.equal(result.status, "timeout");
   });
 });
 

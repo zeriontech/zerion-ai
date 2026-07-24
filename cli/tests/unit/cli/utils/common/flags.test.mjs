@@ -61,6 +61,21 @@ describe("parseFlags", () => {
     assert.equal(result.flags.chain, "base");
   });
 
+  it("collects a repeated --group into an array (bundle)", () => {
+    const result = parseFlags(["--group", "a", "--group", "b", "--group", "c"]);
+    assert.deepEqual(result.flags.group, ["a", "b", "c"]);
+  });
+
+  it("keeps a single --group as a scalar string", () => {
+    const result = parseFlags(["--group", "only"]);
+    assert.equal(result.flags.group, "only");
+  });
+
+  it("collects repeated --group=value forms too", () => {
+    const result = parseFlags(["--group=a", "--group=b"]);
+    assert.deepEqual(result.flags.group, ["a", "b"]);
+  });
+
   it("treats -h (single dash) as positional arg, not flag", () => {
     const result = parseFlags(["-h"]);
     assert.deepEqual(result.rest, ["-h"]);
