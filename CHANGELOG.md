@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/zeriontech/zerion-ai/compare/v1.6.0...v1.7.0) (2026-08-03)
+
+
+### Features
+
+* **wallet:** add proper warning for handoff token mismatch ([4ab6cff](https://github.com/zeriontech/zerion-ai/commit/4ab6cff843af598dc3894c528094921d7900e6ea))
+* **wallet:** support multiple transactions in one signing flow ([#100](https://github.com/zeriontech/zerion-ai/issues/100)) ([fdddcef](https://github.com/zeriontech/zerion-ai/commit/fdddcefadc0e14f67580820e1b401a74f47c71d0))
+
 ## [1.6.0](https://github.com/zeriontech/zerion-ai/compare/v1.5.0...v1.6.0) (2026-07-23)
 
 
