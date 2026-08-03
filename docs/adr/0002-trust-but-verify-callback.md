@@ -1,6 +1,6 @@
 # Trust-but-verify the web-app callback
 
-Status: accepted · Date: 2026-07-03
+Status: accepted · Date: 2026-07-03 · Enforcement completed by [0006](./0006-require-echoed-callback-token.md)
 
 The handoff callback is an unauthenticated POST to an ephemeral loopback port — any local
 process could forge `{"event":"completed","hashes":[…]}` and the CLI (and the agent driving
@@ -19,6 +19,7 @@ reported hash on-chain** (`getTransactionReceipt`) before reporting success.
 ## Consequences
 
 - The link contract gains a `token` field and the callback shape gains an echoed `token` —
-  a **cross-repo requirement** on zerion-web-app (see `docs/web-app-handoff-requirements.md`).
+  a **cross-repo requirement** on zerion-web-app, implemented in that repo's
+  `src/features/cli-transactions/` (`validatePayload` reads it, `cliCallback` echoes it).
 - `status: "completed"` in CLI output now means "confirmed on-chain by the CLI", not "the
   browser said so" — slightly slower, materially more trustworthy.

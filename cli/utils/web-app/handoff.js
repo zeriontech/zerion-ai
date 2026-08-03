@@ -29,7 +29,7 @@
  * app decodes it client-side, renders a review/sign surface, signs through the
  * user's connected wallet, and POSTs progress/result back to us.
  *
- * See docs/prd/cli-web-app-handoff.md and docs/web-app-handoff-requirements.md.
+ * See docs/prd/cli-web-app-handoff.md and docs/adr/0006-require-echoed-callback-token.md.
  */
 
 import { createServer } from "node:http";
@@ -168,10 +168,10 @@ export function toSolanaTransaction(raw) {
  * `address`. `version` selects the shape and which of `transactions` / `groups`
  * is read.
  *
- * `token` is a one-time nonce baked into the payload. When the web app echoes
- * it in every callback POST we reject forged/stale callbacks from other local
- * processes (trust-but-verify, ADR-0002); the web app ignores it for now, so
- * it's verified when present and accepted silently when absent.
+ * `token` is a one-time nonce baked into the payload. The web app echoes it in
+ * every callback POST, and the CLI drops any callback that doesn't carry it —
+ * that's what stops a forged POST from another local process (trust-but-verify,
+ * ADR-0002).
  */
 export function buildTransactionLink({ base, address, version, transactions, groups, port, token }) {
   const payload =
@@ -316,6 +316,7 @@ function runCallbackSession({ buildUrl, intro, timeout, onListening, onEvent }) 
     // One-time nonce the web app echoes in every callback POST (ADR-0002).
     const token = randomBytes(16).toString("hex");
     let settled = false;
+    let warnedTokenMismatch = false;
     let timer;
 
     const server = createServer((req, res) => {
@@ -346,13 +347,27 @@ function runCallbackSession({ buildUrl, intro, timeout, onListening, onEvent }) 
         } catch {
           return; // ignore malformed callbacks; keep waiting
         }
-        // Trust-but-verify: reject callbacks whose one-time token doesn't match
-        // ours — a forged POST from another local process can't guess it. The
-        // web app does not echo `token` yet (it ignores the field), so a
-        // callback without one is accepted silently; the guard activates
-        // automatically the moment the web app starts echoing it (ADR-0002).
-        if (msg.token != null && msg.token !== token) {
-          return; // forged / stale — ignore, keep waiting
+        // Trust-but-verify: the web app echoes the one-time nonce from the link
+        // payload in every callback POST, so a callback that doesn't carry ours
+        // cannot have come from the page we opened — drop it and keep waiting
+        // (ADR-0002). This covers both a wrong token and a missing one: any
+        // local process can reach an ephemeral loopback port, but it cannot
+        // guess 16 random bytes.
+        //
+        // A mismatch is normally a stale cached web-app bundle that predates
+        // the echo, which would otherwise present as an unexplained timeout —
+        // so say so once instead of failing silently.
+        if (msg.token !== token) {
+          if (!warnedTokenMismatch) {
+            warnedTokenMismatch = true;
+            process.stderr.write(
+              `Ignoring a callback that did not echo this session's one-time token` +
+              `${msg.token == null ? " (none sent)" : ""}. If signing completes in the ` +
+              `browser but this command times out, the web app is likely serving a ` +
+              `cached build that predates the token echo — hard-reload it and retry.\n`
+            );
+          }
+          return; // forged / stale / unauthenticated — ignore, keep waiting
         }
         onEvent(msg, finish);
       });
@@ -531,7 +546,8 @@ export function signViaWebApp({ address, transactions, timeout = 300, client, on
  * resolve on. A bundle may span chains for one signer address, so on-chain hash
  * verification is **relaxed** (ADR-0004): we trust the web app's per-group
  * outcome and print a stderr note rather than re-fetching receipts (one client
- * can't cover every chain). The one-time-token anti-forgery check still applies.
+ * can't cover every chain). The one-time-token anti-forgery check still applies,
+ * and for bundles it is the only check standing — see ADR-0004.
  *
  * @param {object} args
  * @param {string} args.address - signer address (same for every group)

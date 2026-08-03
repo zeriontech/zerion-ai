@@ -2,7 +2,7 @@
 
 Status: draft · Owner: zerts · Date: 2026-07-02 · Branch: `experiment/cli-sign-transactions`
 Counterpart: `zerion-web-app/docs/prd/cli-transactions.md` (owns the link contract + the pages)
-Related: [web-app-handoff-requirements.md](../web-app-handoff-requirements.md) · [CONTEXT.md](../../CONTEXT.md)
+Related: [ADR-0002](../adr/0002-trust-but-verify-callback.md) · [ADR-0006](../adr/0006-require-echoed-callback-token.md) · [CONTEXT.md](../../CONTEXT.md)
 
 ---
 
@@ -327,10 +327,12 @@ Kept intentionally light — the real web-app pages land soon and become the end
 
 ## 13. Web-app requirements (cross-repo)
 
-Tracked in [`docs/web-app-handoff-requirements.md`](../web-app-handoff-requirements.md). Chiefly:
-the codec must be the exact inverse (`base64url` + raw inflate); accept fee-null txs and
-estimate fees wallet-side; read `payload.port` and POST the callback events to
-`http://127.0.0.1:<port>/`.
+Owned on the far side by `zerion-web-app/docs/prd/cli-transactions.md` and implemented in that
+repo's `src/features/cli-transactions/`. Chiefly: the codec must be the exact inverse
+(`base64url` + raw inflate); accept fee-null txs and estimate fees wallet-side; read
+`payload.port` and POST the callback events to `http://127.0.0.1:<port>/`; and echo
+`payload.token` in **every** callback POST — the CLI drops callbacks that don't carry it
+([ADR-0006](../adr/0006-require-echoed-callback-token.md)).
 
 ---
 
@@ -422,15 +424,16 @@ The experiment hard-replaced local signing. For production the handoff became a
   set with `zerion wallet set-review-threshold <wallet> <usd|off>`. Valuation is
   sell-side per bundle via `market_data.price` (`cli/utils/trading/valuation.js`).
 - **Trust-but-verify callback**: the payload carries a one-time `token` the web app
-  must echo in every callback POST (mismatches ignored; a missing token is accepted
-  with a one-time warning during rollout), and `completed` hashes are verified
-  on-chain before success is reported.
+  must echo in every callback POST. A callback that doesn't carry it is dropped —
+  wrong and missing are treated alike, since a token-less POST is exactly what a
+  forged one looks like (ADR-0006) — and `completed` hashes are verified on-chain
+  before success is reported.
 
 ### Message signing via the web app (implemented, 2026-07-08 — WLT-1687)
 
 `sign-message` / `sign-typed-data` hand off the same way transactions do, via a
 dedicated message link contract (CLI-side in `cli/utils/web-app/handoff.js`;
-web-app obligations tracked in `docs/web-app-handoff-requirements.md`):
+web-app side in `zerion-web-app`'s `src/features/cli-transactions/`):
 
 - **Link**: `<base>/cli/message?address=<signer>#msg=<base64url(deflateRaw(JSON(payload)))>`
   — same codec as `/cli/transaction`, different path and fragment key.

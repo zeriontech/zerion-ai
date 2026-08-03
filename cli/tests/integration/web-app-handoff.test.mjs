@@ -22,9 +22,15 @@ const MESSAGE = { kind: "personal", raw: "0x68656c6c6f", display: "hello", chain
 
 let stderrChunks;
 let originalWrite;
+// The one-time token from the link the CLI just printed. The CLI drops any
+// callback that doesn't echo it (ADR-0002), so `postEvent` replays it by
+// default — that's what a conforming web app does. Integration tests run with
+// --test-concurrency=1, so one module-level slot per handoff is safe.
+let currentToken;
 
 beforeEach(() => {
   stderrChunks = [];
+  currentToken = undefined;
   originalWrite = process.stderr.write;
   process.stderr.write = (chunk) => {
     stderrChunks.push(String(chunk));
@@ -43,8 +49,9 @@ async function waitForPort(path = "/cli/transaction", fragmentKey = "tx") {
     const line = stderrChunks.find((c) => c.includes(`${path}?`));
     if (line) {
       const url = new URL(line.trim().split("\n").find((l) => l.includes(`${path}?`)));
-      const token = url.hash.replace(new RegExp(`^#${fragmentKey}=`), "");
-      const payload = JSON.parse(inflateRawSync(Buffer.from(token, "base64url")).toString());
+      const fragment = url.hash.replace(new RegExp(`^#${fragmentKey}=`), "");
+      const payload = JSON.parse(inflateRawSync(Buffer.from(fragment, "base64url")).toString());
+      currentToken = payload.token;
       return payload.port;
     }
     await new Promise((r) => setTimeout(r, 10));
@@ -52,11 +59,18 @@ async function waitForPort(path = "/cli/transaction", fragmentKey = "tx") {
   throw new Error(`CLI never printed a ${path} link`);
 }
 
-async function postEvent(port, body) {
+/**
+ * POST a callback event as the web app would. The session's one-time token is
+ * echoed automatically; pass an explicit `token` in `body` to forge a wrong one,
+ * or `{ omitToken: true }` to play a web app that predates the echo.
+ */
+async function postEvent(port, body, { omitToken = false } = {}) {
+  const payload =
+    omitToken || "token" in body ? body : { ...body, token: currentToken };
   const res = await fetch(`http://127.0.0.1:${port}/`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   assert.equal(res.status, 204);
 }
@@ -388,8 +402,28 @@ describe("signMessageViaWebApp", () => {
     const pending = signMessageViaWebApp({ address: ADDRESS, message: MESSAGE, timeout: 10 });
     const port = await waitForMessagePort();
     await postEvent(port, { event: "completed", token: "not-the-token", signature: "0xforged" });
-    // The forged event must be ignored; a token-less legit event still lands.
+    // The forged event must be ignored; a correctly-echoed one still lands.
     await postEvent(port, { event: "rejected" });
     assert.deepEqual(await pending, { status: "rejected" });
+  });
+
+  // A token-less callback is exactly what a forged POST from another local
+  // process looks like, so it must not resolve the handoff (ADR-0002).
+  it("ignores callbacks that echo no token at all", async () => {
+    const pending = signMessageViaWebApp({ address: ADDRESS, message: MESSAGE, timeout: 10 });
+    const port = await waitForMessagePort();
+    await postEvent(port, { event: "completed", signature: "0xforged" }, { omitToken: true });
+    await postEvent(port, { event: "rejected" });
+    assert.deepEqual(await pending, { status: "rejected" });
+  });
+
+  it("explains a token mismatch on stderr so a stale web app is diagnosable", async () => {
+    const pending = signMessageViaWebApp({ address: ADDRESS, message: MESSAGE, timeout: 10 });
+    const port = await waitForMessagePort();
+    await postEvent(port, { event: "completed", signature: "0xforged" }, { omitToken: true });
+    await postEvent(port, { event: "rejected" });
+    await pending;
+    const warned = stderrChunks.some((c) => c.includes("did not echo this session's one-time token"));
+    assert.ok(warned, "expected a token-mismatch explanation on stderr");
   });
 });

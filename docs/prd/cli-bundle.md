@@ -143,7 +143,7 @@ The web app owns the link contract; the CLI produces links and consumes callback
   `completed { hashes }` / `failed { failedIndex, hashes, error }` / `rejected`. **v2** streams
   `signed { group, index, hash }` and one terminal **per group** (`group-completed` /
   `group-skipped` / `group-failed`), then a single latched `summary { groups:[{ group, outcome, hashes }] }`
-  the CLI resolves on. The one-time `token` echo (ADR-0002) is verified when present.
+  the CLI resolves on. Every callback must echo the one-time `token` (ADR-0002/0006).
 - **Verification** (ADR-0004): bundle trusts per-group outcome; single-command handoffs keep the
   on-chain receipt check.
 
@@ -181,8 +181,9 @@ The callback vocabulary is the web app's and depends on the payload version (ADR
   for its per-group result, and merges each `group-failed` error into the matching summary row.
   Returns **per-group** results and **relaxes** verification (ADR-0004), printing a stderr note.
 - **Whole-session terminals** `rejected` / `failed` and the one-time `token` echo apply to both.
-  The `token` is verified when the web app echoes it and accepted silently when absent (the web app
-  does not echo it yet).
+  Every callback must echo the `token`; one that doesn't is dropped, whether the token is wrong or
+  absent (ADR-0006). For a bundle this is the only check standing, since ADR-0004 relaxes the
+  on-chain receipt check.
 
 ### 7.2 Envelope carries re-validation context
 

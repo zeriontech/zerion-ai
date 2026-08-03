@@ -22,4 +22,6 @@ handoff paths keep full ADR-0002 on-chain verification unchanged.
 - For bundles, `status: "completed"` means "the web app reported success", **not** "confirmed
   on-chain by the CLI" — weaker than ADR-0002, and reversible later via the per-chain map.
 - The one-time callback **nonce** (ADR-0002 defense #1) still applies to bundles — only the
-  on-chain receipt check is relaxed, not the anti-forgery token.
+  on-chain receipt check is relaxed, not the anti-forgery token. For bundles the nonce is
+  therefore the **only** check standing, which is why [ADR-0006](./0006-require-echoed-callback-token.md)
+  makes echoing it mandatory rather than best-effort.
