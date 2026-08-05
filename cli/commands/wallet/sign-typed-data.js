@@ -11,7 +11,7 @@ import {
   signMessageViaWebApp,
   reportMessageHandoff,
 } from "../../utils/web-app/handoff.js";
-import { toCaip2, SUPPORTED_CHAINS } from "../../utils/chain/registry.js";
+import { resolveSigningChainAsync } from "../../utils/common/validate.js";
 
 /**
  * Read EIP-712 typed data JSON from one of: --data '<json>', --file <path>, or stdin.
@@ -56,12 +56,16 @@ export default async function walletSignTypedData(args, flags) {
     process.exit(1);
   }
 
-  if (!SUPPORTED_CHAINS.includes(chain)) {
-    printError("invalid_chain", `Unsupported chain "${chain}"`, {
-      suggestion: `Supported: ${SUPPORTED_CHAINS.filter((c) => c !== "solana").join(", ")}`,
+  // Validate against the live catalog (not the static 14-chain registry) so any
+  // EVM chain Zerion supports can be signed for. `caip2` is reused at signing time.
+  const chainCheck = await resolveSigningChainAsync(chain);
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, {
+      suggestion: chainCheck.error.suggestion,
     });
     process.exit(1);
   }
+  const caip2 = chainCheck.caip2;
 
   const typedDataJson = await resolveTypedData(flags, args);
   if (!typedDataJson || !typedDataJson.trim()) {
@@ -122,8 +126,6 @@ export default async function walletSignTypedData(args, flags) {
   const passphrase = await requireAgentToken("for signing", walletName);
 
   try {
-    const caip2 = toCaip2(chain);
-
     // Re-serialize to normalize whitespace before handing to OWS
     const canonical = JSON.stringify(parsed);
     const result = ows.signTypedData(walletName, canonical, passphrase, caip2);

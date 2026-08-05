@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, after } from "node:test";
 import {
   validateChain,
   validatePositions,
   resolvePositionFilter,
+  resolveSigningChainAsync,
   CHAIN_IDS,
   POSITION_FILTERS,
 } from "#zerion/utils/common/validate.js";
+import { __setCatalogForTests } from "#zerion/utils/chain/catalog.js";
 
 describe("validateChain", () => {
   it("returns null for each valid chain", () => {
@@ -98,5 +100,56 @@ describe("CHAIN_IDS", () => {
     for (const chain of ["ethereum", "base", "arbitrum", "solana", "polygon"]) {
       assert.ok(CHAIN_IDS.has(chain), `Missing chain: ${chain}`);
     }
+  });
+});
+
+describe("resolveSigningChainAsync", () => {
+  // Inject a fixture catalog so resolution doesn't hit the network. Includes a
+  // chain outside the static 14-chain registry (robinhood) to prove the guard
+  // now follows the live catalog, and a catalog entry with no CAIP-2.
+  const FIXTURE = new Map([
+    ["ethereum", { id: "ethereum", caip2: "eip155:1", chainIdNum: 1 }],
+    ["robinhood", { id: "robinhood", caip2: "eip155:42161000", chainIdNum: 42161000 }],
+    ["nocaip", { id: "nocaip", caip2: null, chainIdNum: null }],
+  ]);
+  __setCatalogForTests(FIXTURE);
+
+  after(() => __setCatalogForTests(null));
+
+  it("resolves a chain in the live catalog to its CAIP-2, no error", async () => {
+    const result = await resolveSigningChainAsync("ethereum");
+    assert.equal(result.error, undefined);
+    assert.equal(result.caip2, "eip155:1");
+  });
+
+  it("resolves a chain outside the static 14-chain registry (robinhood)", async () => {
+    const result = await resolveSigningChainAsync("robinhood");
+    assert.equal(result.error, undefined);
+    assert.equal(result.caip2, "eip155:42161000");
+  });
+
+  it("keeps Solana's static ed25519 network id without hitting the catalog", async () => {
+    const result = await resolveSigningChainAsync("solana");
+    assert.equal(result.error, undefined);
+    assert.match(result.caip2, /^solana:/);
+  });
+
+  it("errors for a chain not in the catalog", async () => {
+    const result = await resolveSigningChainAsync("madeupchain");
+    assert.equal(result.caip2, undefined);
+    assert.equal(result.error.code, "unsupported_chain");
+    assert.match(result.error.message, /madeupchain/);
+    assert.match(result.error.suggestion, /zerion chains/);
+  });
+
+  it("errors for a catalog chain that carries no CAIP-2", async () => {
+    const result = await resolveSigningChainAsync("nocaip");
+    assert.equal(result.error.code, "unsupported_chain");
+  });
+
+  it("returns a null CAIP-2 for a falsy chain (no validation)", async () => {
+    const result = await resolveSigningChainAsync(undefined);
+    assert.equal(result.error, undefined);
+    assert.equal(result.caip2, null);
   });
 });
