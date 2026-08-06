@@ -61,6 +61,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | [`uniswap-lp.md`](./skills/zerion/partners/uniswap-lp.md) | Liquidity position management | [Uniswap](https://uniswap.org) |
 | [`uniswap-x402.md`](./skills/zerion/partners/uniswap-x402.md) | Swap with x402 pay-per-call | [Uniswap](https://uniswap.org) |
 | [`vaultsfyi-*.md`](./skills/zerion/partners/) | Deposit, market intel, rebalance, risk monitor, strategist, watchlist, yield optimizer | [Vaults.fyi](https://vaults.fyi) |
+| [`yellow-settlement-room.md`](./skills/zerion/partners/yellow-settlement-room.md) | Multiparty off-chain settlement rooms | [Yellow](https://yellow.org) |
 | [`consolidate.md`](./skills/zerion/partners/consolidate.md) | Sweep all tokens on a chain into one target | Zerion |
 
 ### Install via zerion CLI (recommended)

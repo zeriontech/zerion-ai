@@ -1,6 +1,6 @@
 ---
 name: zerion
-description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
+description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai, Yellow). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
 license: MIT
 allowed-tools: Bash, Read
 ---
@@ -110,6 +110,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Vaults.fyi (strategist) | Multi-strategy yield agent | `partners/vaultsfyi-strategist.md` |
 | Vaults.fyi (watchlist) | Vault watchlists | `partners/vaultsfyi-watchlist.md` |
 | Vaults.fyi (yield optimizer) | Yield optimization | `partners/vaultsfyi-yield-optimizer.md` |
+| Yellow | Multiparty off-chain settlement rooms | `partners/yellow-settlement-room.md` |
 | Consolidate | Sweep all tokens on a chain into one target | `partners/consolidate.md` |
 
 **Rule:** never preload partner docs. Only Read when the user explicitly invokes the partner or asks for a flow that uniquely maps to it.
