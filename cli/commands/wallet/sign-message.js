@@ -12,7 +12,8 @@ import {
   reportMessageHandoff,
 } from "../../utils/web-app/handoff.js";
 import { solanaMessageVerifier } from "../../utils/chain/solana-handoff.js";
-import { toCaip2, SUPPORTED_CHAINS, isSolana } from "../../utils/chain/registry.js";
+import { isSolana } from "../../utils/chain/registry.js";
+import { resolveSigningChainAsync } from "../../utils/common/validate.js";
 
 export default async function walletSignMessage(args, flags) {
   const walletName = flags.wallet || getConfigValue("defaultWallet");
@@ -41,12 +42,16 @@ export default async function walletSignMessage(args, flags) {
     process.exit(1);
   }
 
-  if (!SUPPORTED_CHAINS.includes(chain)) {
-    printError("invalid_chain", `Unsupported chain "${chain}"`, {
-      suggestion: `Supported: ${SUPPORTED_CHAINS.join(", ")}`,
+  // Validate against the live catalog (not the static 14-chain registry) so any
+  // chain Zerion supports can be signed for. `caip2` is reused at signing time.
+  const chainCheck = await resolveSigningChainAsync(chain);
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, {
+      suggestion: chainCheck.error.suggestion,
     });
     process.exit(1);
   }
+  const caip2 = chainCheck.caip2;
 
   // Resolve the wallet BEFORE prompting for agent-token setup, so a typo'd
   // --wallet doesn't drag the user through token creation just to fail.
@@ -88,7 +93,6 @@ export default async function walletSignMessage(args, flags) {
   const passphrase = await requireAgentToken("for signing", walletName);
 
   try {
-    const caip2 = toCaip2(chain);
     const result = ows.signMessage(walletName, message, passphrase, encoding, caip2);
 
     print({

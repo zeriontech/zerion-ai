@@ -7,7 +7,7 @@
  * supports for swap/bridge/send works without a code change here).
  */
 
-import { SUPPORTED_CHAINS } from "../chain/registry.js";
+import { SUPPORTED_CHAINS, isSolana, toCaip2 } from "../chain/registry.js";
 import { resolveChain, listTradingChainIds, listBridgeChainIds, listSendingChainIds } from "../chain/catalog.js";
 
 export const CHAIN_IDS = new Set(SUPPORTED_CHAINS);
@@ -112,4 +112,29 @@ export async function validateTradingChainAsync(chain, kind = "trade") {
   }
 
   return { config };
+}
+
+// Resolve a chain to its CAIP-2 id for off-chain signing (EIP-191 personal_sign
+// / EIP-712 typed data), validating against the live `/chains/` catalog rather
+// than the static registry — so any chain Zerion knows can be signed for
+// without a code change here. Off-chain signing needs no trading/bridge/send
+// capability, only a known chain that carries a CAIP-2, so this deliberately
+// does NOT check capability flags. Solana keeps its static ed25519 network id
+// (it has no eip155 id in the EVM catalog). Returns `{ error, caip2 }` — exactly
+// one is set.
+export async function resolveSigningChainAsync(chain) {
+  if (!chain) return { caip2: null };
+  if (isSolana(chain)) return { caip2: toCaip2("solana") };
+
+  const config = await resolveChain(chain);
+  if (!config || !config.caip2) {
+    return {
+      error: {
+        code: "unsupported_chain",
+        message: `Unsupported chain '${chain}'.`,
+        suggestion: "Run `zerion chains` for the live list of supported chains and their capabilities.",
+      },
+    };
+  }
+  return { caip2: config.caip2 };
 }

@@ -129,7 +129,11 @@ Flags: `--json` (default), `--pretty` (auto-enabled for TTY), `--quiet`.
 
 ## Supported chains
 
-`ethereum`, `base`, `arbitrum`, `optimism`, `polygon`, `binance-smart-chain`, `avalanche`, `gnosis`, `scroll`, `linea`, `zksync-era`, `zora`, `blast`, `solana`.
+Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags) is the **source of truth**.
+
+> ⚠️ **Never tell a user a chain is unsupported based on the static list below.** It is a snapshot and goes stale as chains are added. If a chain you need isn't listed here — or you're unsure whether it supports a given action — run `zerion chains` and check the flags **instead of stopping**. (This exact list, at 14 chains, once caused an agent to wrongly report that `robinhood`, `monad`, `hyperevm`, and ~20 other live chains "cannot be moved by Zerion.")
+
+Snapshot of the live catalog (verify with `zerion chains`): `0g`, `abstract`, `ape`, `arbitrum`, `astar-zkevm`, `aurora`, `avalanche`, `base`, `berachain`, `binance-smart-chain`, `blast`, `bob`, `celo`, `cronos-zkevm`, `cyber`, `degen`, `ethereum`, `fantom`, `fraxtal`, `gravity-alpha`, `hyperevm`, `ink`, `katana`, `lens`, `linea`, `lisk`, `manta-pacific`, `mantle`, `megaeth`, `metis-andromeda`, `mode`, `monad`, `okbchain`, `opbnb`, `optimism`, `plasma`, `polygon`, `polygon-zkevm`, `polynomial`, `rari`, `re-al`, `redstone`, `robinhood`, `ronin`, `scroll`, `sei`, `solana`, `somnia`, `soneium`, `sonic`, `swellchain`, `taiko`, `tempo`, `tomochain`, `tron`, `unichain`, `wonder`, `world`, `xdai`, `xinfin-xdc`, `zero`, `zkcandy`, `zklink-nova`, `zksync-era`, `zora`.
 
 Solana supports same-chain swaps and bidirectional bridging to/from EVM chains. Cross-format bridges (Solana ↔ EVM) require an explicit destination via `--to-wallet <name>` or `--to-address <addr>` matching the target chain's format.
 
