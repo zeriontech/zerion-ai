@@ -8,6 +8,7 @@ import { toTransactionEVM, toSolanaTransaction, signViaWebApp, reportHandoff } f
 import { buildPreparedGroup, printPreparedGroup } from "../../utils/web-app/prepared-group.js";
 import { decideSigningRoute } from "../../utils/trading/signing-route.js";
 import { bundleSellUsd } from "../../utils/trading/valuation.js";
+import { estimateGasWithFallback, NATIVE_TRANSFER_GAS, ERC20_TRANSFER_GAS } from "../../utils/trading/gas.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { NATIVE_ASSET_ADDRESS } from "../../utils/common/constants.js";
@@ -128,10 +129,26 @@ export default async function send(args, flags) {
       client.estimateFeesPerGas(),
     ]);
 
+    // Native gas limit is estimated, never assumed: a flat 21,000 is below the
+    // minimum on Arbitrum-Nitro/Orbit and zkSync-stack chains, which reject it
+    // pre-inclusion as "intrinsic gas too low" (see utils/trading/gas.js).
+    const nativeGas = isNative
+      ? await estimateGasWithFallback({
+          client,
+          account: walletAddress,
+          to,
+          data: "0x",
+          value: amountParsed,
+          fallback: NATIVE_TRANSFER_GAS,
+        })
+      : null;
+
     // Native balance gate — must cover amount + estimated gas. Runs regardless
-    // of signing route (defense in depth ahead of the human review).
+    // of signing route (defense in depth ahead of the human review). Priced off
+    // the same limit the transaction will carry, so the gate can't pass a send
+    // the chain will then refuse to include.
     const balance = await client.getBalance({ address: walletAddress });
-    const estimatedGasCost = 21000n * (feeData.maxFeePerGas || 0n);
+    const estimatedGasCost = (nativeGas ?? NATIVE_TRANSFER_GAS) * (feeData.maxFeePerGas || 0n);
     if (isNative && balance < amountParsed + estimatedGasCost) {
       printError("insufficient_balance",
         `Insufficient ${resolved.symbol}: have ${formatEther(balance)}, need ${amount} + gas (~${formatEther(estimatedGasCost)})`,
@@ -154,7 +171,7 @@ export default async function send(args, flags) {
 
     let tx;
     if (isNative) {
-      tx = { ...baseTx, to, value: amountParsed, data: "0x", gas: 21000n };
+      tx = { ...baseTx, to, value: amountParsed, data: "0x", gas: nativeGas };
     } else {
       const tokenAddress = resolved.address;
       if (!tokenAddress) {
@@ -189,7 +206,13 @@ export default async function send(args, flags) {
         args: [to, amountParsed],
       });
 
-      const gas = await estimateGasWithFallback(client, walletAddress, tokenAddress, data, 65000n);
+      const gas = await estimateGasWithFallback({
+        client,
+        account: walletAddress,
+        to: tokenAddress,
+        data,
+        fallback: ERC20_TRANSFER_GAS,
+      });
       tx = { ...baseTx, to: tokenAddress, value: 0n, data, gas };
     }
 
@@ -355,28 +378,5 @@ async function sendOnSolana({ token, amount, to, flags }) {
     });
   } catch (err) {
     handleTradingError(err, "send_error");
-  }
-}
-
-async function estimateGasWithFallback(client, account, to, data, fallback) {
-  try {
-    const estimate = await client.estimateGas({ account, to, data, value: 0n });
-    return (estimate * 120n) / 100n; // 20% buffer
-  } catch (err) {
-    const msg = err.message || "";
-    // If the revert reason indicates the transfer will definitely fail, abort
-    if (msg.includes("exceeds balance") || msg.includes("insufficient") || msg.includes("underflow")) {
-      const error = new Error(
-        `Transfer would fail: ${msg.split("\n")[0]}. Check your token balance.`
-      );
-      error.code = "transfer_would_revert";
-      error.suggestion = "Check your balance with: zerion positions";
-      throw error;
-    }
-    process.stderr.write(
-      `WARNING: Gas estimation failed (${msg.split("\n")[0]}). ` +
-      `Using fallback of ${fallback}. The transaction may revert and you will lose gas fees.\n`
-    );
-    return fallback;
   }
 }
