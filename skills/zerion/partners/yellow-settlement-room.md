@@ -27,14 +27,29 @@ Use this for three or more agents that share one budget or outcome. A Yellow app
 ## Requirements
 
 - Node.js 20+ with an ESM project (`"type": "module"`)
-- Yellow SDK: `npm install @yellow-org/sdk decimal.js viem`
-- Zerion CLI: `npm install -g zerion-cli`
+- npm 11.10+ (older npm silently ignores the cooldown flag below)
+- Yellow SDK: `npm install --min-release-age=15 @yellow-org/sdk decimal.js viem`
+- Zerion CLI: `npm install -g --min-release-age=15 zerion-cli`
 - Zerion API key: `export ZERION_API_KEY="zk_..."`
 - One EVM key and one Yellow client per participant
 - An RPC URL, chain ID, asset address, and Yellow node WebSocket URL
 - A funded Yellow account balance for every participant that will deposit
 
 The Yellow sandbox WebSocket is `wss://nitronode-sandbox.yellow.org/v1/ws`. Use sandbox assets and chain configuration together; do not mix sandbox and production addresses.
+
+### Supply-chain cooldown on installs
+
+Every dependency here runs in the same process as participant private keys, so a compromised release can sign or exfiltrate on its own. Compromised npm releases are usually detected and unpublished within days, so never install a freshly published version: require a rolling release age instead.
+
+```bash
+# Set the cooldown once for the agent project instead of per command.
+npm config set min-release-age 15 --location=project   # writes ./.npmrc
+npm --version                                          # must be >= 11.10
+```
+
+- `min-release-age` only affects version _resolution_. Commit `package-lock.json` and use `npm ci` for every later install so each agent process runs the same already-vetted tree.
+- Only bypass it — `--min-release-age=0` — for a security patch you have deliberately reviewed, and commit the resulting lockfile change with a reason.
+- Confirm what actually resolved before running any code that touches keys: `npm ls @yellow-org/sdk decimal.js viem`.
 
 ## Workflow
 
