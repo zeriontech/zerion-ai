@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/zeriontech/zerion-ai/compare/v1.7.0...v1.8.0) (2026-08-06)
+
+
+### Features
+
+* **skills:** Add Yellow Settlement Room Skill ([#103](https://github.com/zeriontech/zerion-ai/issues/103)) ([b55a35c](https://github.com/zeriontech/zerion-ai/commit/b55a35cae01c55642d339d1a03fe3097337d3bb4))
+
+
+### Bug Fixes
+
+* **skills:** add install collodown for deps ([51be271](https://github.com/zeriontech/zerion-ai/commit/51be271d020015623e8cd97fcc909333543c0bcf))
+* **wallet:** improve gas estimation logic ([e022388](https://github.com/zeriontech/zerion-ai/commit/e022388547dda267c21a2e870857558bb2d6170d))
+
 ## [1.7.0](https://github.com/zeriontech/zerion-ai/compare/v1.6.0...v1.7.0) (2026-08-03)
 
 
