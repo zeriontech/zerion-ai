@@ -1,41 +1,23 @@
 /**
  * Input validation for wallet read commands — chain IDs and position filters.
  *
- * `validateChain` is the synchronous, registry-backed check used by analytics
- * commands. Trading commands call `validateTradingChainAsync` instead, which
- * resolves against the live Zerion `/chains/` catalog (so any chain Zerion
- * supports for swap/bridge/send works without a code change here).
+ * Every chain guard here resolves against the live Zerion `/chains/` catalog
+ * rather than the static 14-chain registry, so any chain Zerion knows works
+ * without a code change: `validateTradingChainAsync` for swap/bridge/send (which
+ * also checks capability flags), `resolveSigningChainAsync` for off-chain
+ * signing, and `resolveReadChainAsync` for `--chain` filters on read commands.
  */
 
-import { SUPPORTED_CHAINS, isSolana, toCaip2 } from "../chain/registry.js";
+import { isSolana, toCaip2 } from "../chain/registry.js";
 import { resolveChain, listTradingChainIds, listBridgeChainIds, listSendingChainIds } from "../chain/catalog.js";
 
-export const CHAIN_IDS = new Set(SUPPORTED_CHAINS);
+const CHAINS_HINT = "Run `zerion chains` for the live list of supported chains and their capabilities.";
 
 export const POSITION_FILTERS = {
   all: "no_filter",
   simple: "only_simple",
   defi: "only_complex",
 };
-
-export function validateChain(chain) {
-  if (!chain) return null;
-  if (chain === true) {
-    return {
-      code: "missing_chain_value",
-      message: "--chain requires a value (e.g. --chain ethereum).",
-      supportedChains: Array.from(CHAIN_IDS).sort(),
-    };
-  }
-  if (!CHAIN_IDS.has(chain)) {
-    return {
-      code: "unsupported_chain",
-      message: `Unsupported chain '${chain}'.`,
-      supportedChains: Array.from(CHAIN_IDS).sort(),
-    };
-  }
-  return null;
-}
 
 export function validatePositions(flag) {
   if (!flag) return null;
@@ -132,9 +114,41 @@ export async function resolveSigningChainAsync(chain) {
       error: {
         code: "unsupported_chain",
         message: `Unsupported chain '${chain}'.`,
-        suggestion: "Run `zerion chains` for the live list of supported chains and their capabilities.",
+        suggestion: CHAINS_HINT,
       },
     };
   }
   return { caip2: config.caip2 };
+}
+
+// Validate a `--chain` filter on a read command (positions, analyze, …) against
+// the live `/chains/` catalog. Reads need no trading/bridge/send capability —
+// anything Zerion indexes can be filtered on — so this only checks that the
+// chain is known, and it deliberately does NOT require a CAIP-2 or EVM chain ID
+// (nothing is signed here, and non-EVM chains like Solana carry neither).
+// Returns `{ error, chainId }` — exactly one is set. A falsy chain means "no
+// filter" and resolves to `{ chainId: null }` without touching the network.
+export async function resolveReadChainAsync(chain) {
+  if (!chain) return { chainId: null };
+  if (chain === true) {
+    return {
+      error: {
+        code: "missing_chain_value",
+        message: "--chain requires a value (e.g. --chain ethereum).",
+        suggestion: CHAINS_HINT,
+      },
+    };
+  }
+
+  const config = await resolveChain(chain);
+  if (!config) {
+    return {
+      error: {
+        code: "unsupported_chain",
+        message: `Unsupported chain '${chain}'.`,
+        suggestion: CHAINS_HINT,
+      },
+    };
+  }
+  return { chainId: config.id };
 }

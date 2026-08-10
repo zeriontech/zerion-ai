@@ -11,16 +11,21 @@
 import * as api from "../../utils/api/client.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { validateChain, validatePositions, resolvePositionFilter } from "../../utils/common/validate.js";
+import { resolveReadChainAsync, validatePositions, resolvePositionFilter } from "../../utils/common/validate.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { formatPositions, formatDefiPositions } from "../../utils/common/format.js";
 
 export default async function walletPositions(args, flags) {
-  const chainErr = validateChain(flags.chain);
-  if (chainErr) {
-    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
+  // Validate against the live catalog (not the static 14-chain registry) so any
+  // chain Zerion indexes can be filtered on.
+  const chainCheck = await resolveReadChainAsync(flags.chain);
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, {
+      suggestion: chainCheck.error.suggestion,
+    });
     process.exit(1);
   }
+  const chainId = chainCheck.chainId;
 
   // --defi is shorthand for --positions defi + DeFi-grouped output.
   // Conflict only if user also passed an incompatible --positions value.
@@ -45,7 +50,7 @@ export default async function walletPositions(args, flags) {
   try {
     const auth = resolveAuth(flags);
     const response = await api.getPositions(address, {
-      chainId: flags.chain,
+      chainId,
       positionFilter: resolvePositionFilter(flags.positions),
       auth,
     });
@@ -58,7 +63,7 @@ export default async function walletPositions(args, flags) {
       print({
         wallet: { name: walletName, address },
         filter: "defi",
-        chain: flags.chain ?? null,
+        chain: chainId,
         summary: {
           total_value: netValue(enriched),
           gross_value: enriched.reduce((s, p) => s + (p.value || 0), 0),

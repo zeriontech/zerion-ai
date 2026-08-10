@@ -1,46 +1,13 @@
 import assert from "node:assert/strict";
-import { describe, it, after } from "node:test";
+import { describe, it, after, beforeEach } from "node:test";
 import {
-  validateChain,
   validatePositions,
   resolvePositionFilter,
   resolveSigningChainAsync,
-  CHAIN_IDS,
+  resolveReadChainAsync,
   POSITION_FILTERS,
 } from "#zerion/utils/common/validate.js";
 import { __setCatalogForTests } from "#zerion/utils/chain/catalog.js";
-
-describe("validateChain", () => {
-  it("returns null for each valid chain", () => {
-    for (const chain of CHAIN_IDS) {
-      assert.equal(validateChain(chain), null, `Expected null for valid chain '${chain}'`);
-    }
-  });
-
-  it("returns error for invalid chain", () => {
-    const result = validateChain("fantom");
-    assert.equal(result.code, "unsupported_chain");
-    assert.match(result.message, /fantom/);
-    assert.ok(Array.isArray(result.supportedChains));
-  });
-
-  it("is case-sensitive", () => {
-    const result = validateChain("Ethereum");
-    assert.equal(result.code, "unsupported_chain");
-  });
-
-  it("returns null for falsy values (undefined, null, empty string)", () => {
-    assert.equal(validateChain(undefined), null);
-    assert.equal(validateChain(null), null);
-    assert.equal(validateChain(""), null);
-  });
-
-  it("returns specific error for boolean true (from --chain with no value)", () => {
-    const result = validateChain(true);
-    assert.equal(result.code, "missing_chain_value");
-    assert.match(result.message, /--chain requires a value/);
-  });
-});
 
 describe("POSITION_FILTERS", () => {
   it("has 3 keys mapping correctly", () => {
@@ -91,18 +58,6 @@ describe("resolvePositionFilter", () => {
   });
 });
 
-describe("CHAIN_IDS", () => {
-  it("contains 14 chains", () => {
-    assert.equal(CHAIN_IDS.size, 14);
-  });
-
-  it("includes key chains", () => {
-    for (const chain of ["ethereum", "base", "arbitrum", "solana", "polygon"]) {
-      assert.ok(CHAIN_IDS.has(chain), `Missing chain: ${chain}`);
-    }
-  });
-});
-
 describe("resolveSigningChainAsync", () => {
   // Inject a fixture catalog so resolution doesn't hit the network. Includes a
   // chain outside the static 14-chain registry (robinhood) to prove the guard
@@ -112,7 +67,7 @@ describe("resolveSigningChainAsync", () => {
     ["robinhood", { id: "robinhood", caip2: "eip155:42161000", chainIdNum: 42161000 }],
     ["nocaip", { id: "nocaip", caip2: null, chainIdNum: null }],
   ]);
-  __setCatalogForTests(FIXTURE);
+  beforeEach(() => __setCatalogForTests(FIXTURE));
 
   after(() => __setCatalogForTests(null));
 
@@ -151,5 +106,64 @@ describe("resolveSigningChainAsync", () => {
     const result = await resolveSigningChainAsync(undefined);
     assert.equal(result.error, undefined);
     assert.equal(result.caip2, null);
+  });
+});
+
+describe("resolveReadChainAsync", () => {
+  // Read filters need no capability flags and no CAIP-2 — `solana` sits in the
+  // catalog with neither, and `robinhood` is outside the static 14-chain registry.
+  const FIXTURE = new Map([
+    ["ethereum", { id: "ethereum", caip2: "eip155:1", chainIdNum: 1, flags: {} }],
+    ["robinhood", { id: "robinhood", caip2: "eip155:42161000", chainIdNum: 42161000, flags: {} }],
+    ["solana", { id: "solana", caip2: null, chainIdNum: null, flags: {} }],
+  ]);
+  beforeEach(() => __setCatalogForTests(FIXTURE));
+
+  after(() => __setCatalogForTests(null));
+
+  it("resolves a chain in the live catalog to its id, no error", async () => {
+    const result = await resolveReadChainAsync("ethereum");
+    assert.equal(result.error, undefined);
+    assert.equal(result.chainId, "ethereum");
+  });
+
+  it("resolves a chain outside the static 14-chain registry (robinhood)", async () => {
+    const result = await resolveReadChainAsync("robinhood");
+    assert.equal(result.error, undefined);
+    assert.equal(result.chainId, "robinhood");
+  });
+
+  it("accepts a catalog chain with no CAIP-2 or EVM chain ID (solana)", async () => {
+    const result = await resolveReadChainAsync("solana");
+    assert.equal(result.error, undefined);
+    assert.equal(result.chainId, "solana");
+  });
+
+  it("errors for a chain not in the catalog", async () => {
+    const result = await resolveReadChainAsync("madeupchain");
+    assert.equal(result.chainId, undefined);
+    assert.equal(result.error.code, "unsupported_chain");
+    assert.match(result.error.message, /madeupchain/);
+    assert.match(result.error.suggestion, /zerion chains/);
+  });
+
+  it("is case-sensitive", async () => {
+    const result = await resolveReadChainAsync("Ethereum");
+    assert.equal(result.error.code, "unsupported_chain");
+  });
+
+  it("errors for boolean true (bare --chain with no value)", async () => {
+    const result = await resolveReadChainAsync(true);
+    assert.equal(result.error.code, "missing_chain_value");
+    assert.match(result.error.message, /--chain requires a value/);
+    assert.match(result.error.suggestion, /zerion chains/);
+  });
+
+  it("returns a null chain id for falsy values (no filter)", async () => {
+    for (const value of [undefined, null, ""]) {
+      const result = await resolveReadChainAsync(value);
+      assert.equal(result.error, undefined);
+      assert.equal(result.chainId, null);
+    }
   });
 });

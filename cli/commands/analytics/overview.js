@@ -8,14 +8,19 @@ import { summarizeAnalyze } from "../../utils/common/analyze.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { validateChain } from "../../utils/common/validate.js";
+import { resolveReadChainAsync } from "../../utils/common/validate.js";
 
 export default async function walletAnalyze(args, flags) {
-  const chainErr = validateChain(flags.chain);
-  if (chainErr) {
-    printError(chainErr.code, chainErr.message, { supportedChains: chainErr.supportedChains });
+  // Validate against the live catalog (not the static 14-chain registry) so any
+  // chain Zerion indexes can be filtered on.
+  const chainCheck = await resolveReadChainAsync(flags.chain);
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, {
+      suggestion: chainCheck.error.suggestion,
+    });
     process.exit(1);
   }
+  const chainId = chainCheck.chainId;
 
   const { walletName, address: resolved } = await resolveAddressOrWallet(args, flags);
   const addr = encodeURIComponent(resolved);
@@ -23,9 +28,9 @@ export default async function walletAnalyze(args, flags) {
 
   const posParams = { "filter[positions]": "no_filter" };
   const txParams = { "page[size]": txLimit };
-  if (flags.chain) {
-    posParams["filter[chain_ids]"] = flags.chain;
-    txParams["filter[chain_ids]"] = flags.chain;
+  if (chainId) {
+    posParams["filter[chain_ids]"] = chainId;
+    txParams["filter[chain_ids]"] = chainId;
   }
   if (flags.positions === "simple") posParams["filter[positions]"] = "only_simple";
   else if (flags.positions === "defi") posParams["filter[positions]"] = "only_complex";
