@@ -64,6 +64,27 @@ function readReceipt(response, decode) {
   return null;
 }
 
+// The signed authorization the client attached to the paid retry — same header
+// pair as the receipt, v2 then the v1 alias. Its `accepted` block is the
+// payment requirement the client actually chose, so it names the price and
+// network even when the server's receipt doesn't.
+const AUTHORIZATION_HEADERS = ["payment-signature", "x-payment"];
+
+function readAuthorization(request) {
+  for (const name of AUTHORIZATION_HEADERS) {
+    const raw = request?.headers?.get?.(name);
+    if (!raw) continue;
+    try {
+      // Base64 JSON, per x402's header codec — decoded by hand so this module
+      // keeps its imports to the packages we actually depend on.
+      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8"))?.accepted || null;
+    } catch {
+      // Same as an undecodable receipt: try the alias, then go without.
+    }
+  }
+  return null;
+}
+
 // x402's `exact` scheme settles in USDC, 6-decimal on every network Zerion
 // advertises — the same conversion normalizeMppError already does by hand.
 const USDC_DECIMALS = 6;
@@ -74,8 +95,9 @@ function formatAmount(atomic) {
   if (!Number.isFinite(n)) return null;
   const usd = n / 10 ** USDC_DECIMALS;
   // Cents for ordinary prices; a sub-cent charge keeps its significant digits
-  // instead of rounding down to "$0.00".
-  return `$${usd >= 0.01 ? usd.toFixed(2) : String(usd)}`;
+  // instead of rounding down to "$0.00". A genuine zero is not a sub-cent
+  // charge — it reads as "$0.00" like any other round figure.
+  return `$${usd > 0 && usd < 0.01 ? String(usd) : usd.toFixed(2)}`;
 }
 
 // The receipt names the network that actually settled. `auth.keys` only says
@@ -129,12 +151,15 @@ export async function getX402Fetch(auth) {
     // never happened (WLT-2024). Everything below decides that for itself.
     //
     // Note which requests the server actually charged for: a 200 that never
-    // saw a 402 cost nothing and must not print a "Paid" line. The flag is
-    // request-local — fetchAPI issues these concurrently — so the (cheap)
-    // wrapper is rebuilt per call while the client and its registered schemes
-    // stay cached.
+    // saw a 402 cost nothing and must not print a "Paid" line. Grab the signed
+    // authorization on the way past too — it's the client's own record of what
+    // it agreed to pay. Both are request-local — fetchAPI issues these
+    // concurrently — so the (cheap) wrapper is rebuilt per call while the
+    // client and its registered schemes stay cached.
     let paymentRequired = false;
+    let authorized = null;
     const inner = wrapFetchWithPayment(async (input, init) => {
+      authorized = readAuthorization(input) || authorized;
       const response = await baseFetch(input, init);
       if (response.status === 402) paymentRequired = true;
       return response;
@@ -150,20 +175,34 @@ export async function getX402Fetch(auth) {
     if (!paymentRequired) return response;
 
     // The receipt is the server's own statement about settlement, so it wins
-    // outright when present. Without one the HTTP status is all we have: a 2xx
-    // means the resource was served, which the server wouldn't do unpaid.
-    // Treating a missing receipt as failure would throw away responses that
-    // were both successful and already paid for — worse than the bug above.
+    // outright when present.
     const receipt = readReceipt(response, decodePaymentResponseHeader);
-    const settled = receipt ? receipt.success === true : response.ok;
-    if (!settled) throw settlementFailedError(await readFailureReason(response, receipt));
+    if (receipt && receipt.success !== true) {
+      throw settlementFailedError(await readFailureReason(response, receipt));
+    }
 
-    // Every detail is receipt-sourced, so it drops out of the line rather than
-    // being guessed at when the server didn't report it.
-    const network = formatNetwork(receipt?.network);
+    // Zerion sends no receipt at all — it answers a rejected authorization with
+    // a second 402 — so the status has to stand in. It only speaks about the
+    // *payment* for that one status, though: a 429, 404 or 5xx on the paid
+    // retry is about the request, not the money. Hand those back untouched so
+    // fetchAPI's rate-limit retry and JSON:API error reporting keep working,
+    // and stay quiet about a payment we can't vouch for either way. A 2xx is
+    // the resource being served, which the server wouldn't do unpaid.
+    if (!receipt) {
+      if (response.status === 402) {
+        throw settlementFailedError(await readFailureReason(response, receipt));
+      }
+      if (!response.ok) return response;
+    }
+
+    // Prefer the receipt: it reports what actually settled, which for schemes
+    // like `upto` can be less than the authorized maximum. The reference
+    // `exact` scheme leaves both fields off, so fall back to the authorization
+    // — still the client's own record, not a guess.
+    const network = formatNetwork(receipt?.network || authorized?.network);
     const parts = [
       "↳ Paid",
-      formatAmount(receipt?.amount),
+      formatAmount(receipt?.amount ?? authorized?.amount),
       "via x402",
       network && `(${network})`,
     ].filter(Boolean);
