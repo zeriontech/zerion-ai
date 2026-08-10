@@ -23,6 +23,8 @@ Or just install the CLI without setup:
 npm install -g zerion-cli
 ```
 
+The CLI is available as either `zerion` or `zerion-cli` — both run the same binary.
+
 Requires Node.js 20 or later.
 
 ## Agent skill
