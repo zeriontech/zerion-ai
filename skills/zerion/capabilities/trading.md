@@ -29,7 +29,7 @@ or broadcast (both routes run the same balance / `quote.blocking` / policy pre-f
 - **Local signing (default)** — the CLI signs with the agent token as passphrase, broadcasts, and
   waits for confirmation. This is the one-shot path.
 - **Web-app handoff** — instead of signing locally, the CLI builds the transaction, encodes it into
-  a `dashboard.zerion.io` link, opens the browser (the URL is also **printed to stderr** so headless
+  an `app.zerion.io` link, opens the browser (the URL is also **printed to stderr** so headless
   / agent environments can open it manually), and waits for a localhost callback with the result.
   A connected wallet signs in the browser; the CLI verifies the returned hash on-chain before
   reporting success.
@@ -38,14 +38,32 @@ The handoff fires when any trigger hits:
 
 | Trigger | Meaning |
 |---|---|
-| Read-only wallet | The local wallet has no key material (watch-only / imported address). |
-| Value over threshold | The trade's sell-side USD value exceeds the wallet's review threshold. |
+| Read-only wallet | The saved wallet has no key material (added with `wallet add`), so every signature routes here. |
+| Value over threshold | The trade's sell-side USD value exceeds the wallet's review threshold. **Trades only** — messages have no sell-side value, so `sign-message` / `sign-typed-data` ignore the threshold. |
 | `--review` | Force review regardless of value. |
 
 Applies to `swap` / `bridge` / `send` on **both EVM and Solana**, and to message signing
 (`capabilities/sign.md`). `consolidate` participates via `--prepare` + `bundle` (ADR-0005) rather
-than a direct handoff — see `partners/consolidate.md`. The CLI prints `Signing route: <route> — <reason>`
-to stderr on every trade. `--timeout` controls how long the handoff waits for the browser callback.
+than a direct handoff — `consolidate --execute` **always signs locally** and never consults the route
+(the threshold is a per-transaction ceiling; a sweep is N independent transactions, so under-threshold
+rows don't aggregate into a review). It needs key material: on a read-only wallet every row fails.
+Route a whole sweep through review with
+`zerion bundle --group "$(zerion consolidate <chain> <token> --prepare)"` — see `partners/consolidate.md`.
+The CLI prints `Signing route: <route> — <reason>` to stderr on every trade, and the JSON on stdout
+carries `signedVia: "local" | "web-app"` — parse that field to tell which route actually ran.
+`--timeout` controls how long the handoff waits for the browser callback (default 300s).
+
+**Value is fail-closed.** If a threshold is set but the sell-side value can't be priced, the trade
+routes to review rather than auto-signing — an unpriced token is not a bypass.
+
+**Plan for it when unattended.** On the handoff route the command blocks until a human signs in the
+browser, so a cron / CI agent cannot complete it alone. Read the wallet's type and threshold first
+(`zerion wallet list`, `capabilities/wallet.md`), and surface the stderr URL to the user instead of
+assuming a browser opened. A handoff ends in exactly one terminal outcome, reported as `status` in the
+same JSON: `completed`, `rejected` (the human declined), `failed` (the browser reported an error, or a
+returned hash failed verification), `timeout` (no callback within `--timeout`), or `aborted` (Ctrl-C —
+the transaction may still complete in the browser). **Only `completed` exits 0**; every other outcome
+exits non-zero with a structured error on stderr.
 
 **`--prepare`** on any of these commands runs the full build + gate pipeline but prints a nonce-free
 **prepared-group** envelope to stdout instead of executing — the input to `zerion bundle`, which
@@ -207,7 +225,7 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `--to-address <addr>` | Destination address for `bridge` (chain-format must match destination chain) |
 | `--to <addr>` | Recipient address for `send` |
 | `--slippage <pct>` | Slippage tolerance (default 2%, max 3%) |
-| `--timeout <sec>` | Confirmation timeout (default 120s); also the web-app handoff wait |
+| `--timeout <sec>` | Wait budget. On the **local** route: broadcast-confirmation timeout (default **120s**). On the **web-app handoff**: how long to wait for the browser callback (default **300s**) |
 | `--review` | Force the web-app handoff regardless of value (`capabilities/bundle.md`) |
 | `--prepare` | Print a prepared-group envelope instead of executing — for `zerion bundle` (`capabilities/bundle.md`) |
 | `--json` / `--pretty` / `--quiet` | Output mode (JSON default) |

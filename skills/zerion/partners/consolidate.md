@@ -16,8 +16,22 @@ Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authenticat
 The direct `--execute` path signs **locally** and therefore needs a wallet with key material. To
 sweep a **read-only / watch-only wallet**, or to route a large sweep through **human review**, use
 `--prepare` + `zerion bundle` instead: `consolidate --prepare` emits one prepared group that the
-`bundle` command hands off to the web app as a single review (ADR-0005 — this reverses consolidate's
-earlier "refuse to hand off" behavior). See `capabilities/bundle.md`.
+`bundle` command hands off to the web app as a single review (ADR-0005). See `capabilities/bundle.md`.
+
+**`--execute` always signs locally — it does not consult the signing route.** Two consequences to plan
+around:
+
+- **The review threshold does not apply to a sweep in aggregate, by design.** A wallet's threshold is a
+  per-transaction ceiling, and a consolidate is N independent transactions; N rows that are each under
+  the threshold do **not** add up into a review. Only the individual row matters, and each row is
+  bounded by `--max-value` if you want a hard cap. If you want the whole sweep judged as one entity
+  against the threshold, that's what `--prepare` + `bundle` does — the prepared group carries the
+  sweep's total value and `bundle` routes on it.
+- **On a read-only wallet `--execute` cannot sign at all.** It still requires an agent token first
+  (`no_agent_token`, exit 1, if none is configured); past that gate there is no key material, so every
+  ready row fails with a keystore error and the command exits 0 with an all-failed result (partial
+  success is the only mode). Check the wallet type first (`zerion wallet list`) and use `--prepare` + `bundle`
+  for read-only wallets — don't read an all-failed sweep as a network problem.
 
 ## When to use
 
@@ -44,7 +58,8 @@ Anything else fails with `target_token_not_found` and the error names the curate
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--execute` | _(off)_ | Broadcast the ready rows locally. Without this (and without `--prepare`), the command prints a plan only. |
+| `--execute` | _(off)_ | Broadcast the ready rows **locally** — always local signing, no handoff and no route check. Without this (and without `--prepare`), the command prints a plan only. Needs key material: on a read-only wallet every row fails. |
+| `--review` | _(off)_ | Force human review. Only meaningful with `--prepare`, where it marks the group `route: web-app` so the whole sweep goes to the web app. Ignored on `--execute`, which signs locally regardless. |
 | `--prepare` | _(off)_ | Print a **prepared-group** envelope (all ready approve+swap pairs as ONE group) instead of executing — for `zerion bundle`. EVM-only. Mutually exclusive with `--execute`. See `capabilities/bundle.md`. |
 | `--min-value <usd>` | `1` | Skip positions below this USD value (marked `skipped: dust`). |
 | `--max-value <usd>` | _(no cap)_ | Skip positions above this USD value (marked `skipped: above_max`). Pair with `--min-value` to sweep only a band — useful for "clear dust, keep main bags". |

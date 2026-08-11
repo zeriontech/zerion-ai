@@ -73,15 +73,51 @@ Before executing any capability below, **Read the matching file** for the full c
 |------|------|
 | Wallet analysis: portfolio, positions, history, PnL, watchlist | `capabilities/analyze.md` |
 | On-chain trading: swap, bridge, send | `capabilities/trading.md` |
-| Bundle several actions into one signing session (`--prepare` + `bundle`) | `capabilities/bundle.md` |
+| Human review in the browser: read-only wallets, review thresholds, `--review` | `capabilities/trading.md` § "Signing routes & web-app handoff" |
+| Bundle several actions into one signing session / one review (`--prepare` + `bundle`) | `capabilities/bundle.md` |
 | Off-chain signing: EIP-191 messages, EIP-712 typed data | `capabilities/sign.md` |
-| Wallet management: create, import, list, fund, backup, export-key, delete | `capabilities/wallet.md` |
+| Wallet management: create, import, add read-only, list, fund, review threshold, backup, export-key, delete | `capabilities/wallet.md` |
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
 | 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
 
 **Pairing rules:**
 - Trading + signing require an agent token → see `capabilities/agent-management.md` first if user has none.
 - Run analysis before trading to verify balances and positions.
+
+## Signing routes — trades don't always sign locally
+
+Every trade and message signature takes one of two routes, decided automatically **before** anything
+is signed:
+
+- **Local signing (default)** — the CLI signs with the agent token as passphrase and broadcasts. One shot, unattended.
+- **Web-app handoff** — the CLI encodes the transaction into an `app.zerion.io` link, **opens a
+  browser**, and **blocks** waiting for a human to sign there (default wait 300 s). The URL is also
+  printed to stderr, so a headless agent can hand it to the user instead of relying on the browser opening.
+
+The handoff fires when any of these hit — **know this before you run a trade**, because it changes
+whether the command can complete unattended:
+
+| Trigger | Set by |
+|---|---|
+| Read-only wallet (no key material) | `zerion wallet add <address\|ens> --name <name>` |
+| Sell-side USD value over the wallet's review threshold — **trades only** | `zerion wallet set-review-threshold <wallet> <usd\|off>` |
+| Explicit force | `--review` on the command |
+
+Messages have no USD value, so `sign-message` / `sign-typed-data` ignore the threshold — only the
+read-only and `--review` triggers apply there (`capabilities/sign.md`).
+
+The CLI prints `Signing route: <route> — <reason>` to stderr on every trade, and the JSON output
+carries `signedVia: "local" | "web-app"`, so you can always tell which route was taken. A handoff
+ends `completed` / `rejected` / `failed` / `timeout` (or `aborted` on Ctrl-C), reported as `status`
+in that same JSON: only `completed` exits 0, every other outcome exits non-zero with a structured
+stderr error — plan unattended runs around that.
+
+`consolidate --execute` is the exception: it **always signs locally** and never consults the route, because
+a sweep is N independent transactions and the threshold is a per-transaction ceiling. It therefore needs
+key material — on a read-only wallet every row fails. Route a whole sweep through review with
+`zerion bundle --group "$(zerion consolidate <chain> <token> --prepare)"` instead.
+
+Full details in `capabilities/trading.md`; read-only wallets and thresholds in `capabilities/wallet.md`.
 
 ## Partner integrations — opt-in
 
@@ -154,14 +190,17 @@ Use `zerion chains` for the live catalog with metadata.
 | `no_wallet` | No wallet specified, no default | `--wallet <name>` or set `defaultWallet` config |
 | `wallet_not_found` | Wallet not in local vault | `zerion wallet list` to check |
 | `unsupported_chain` | Invalid `--chain` value | `zerion chains` for valid IDs |
+| `readonly_chain_mismatch` | Read-only wallet's address format doesn't match the chain | An EVM (`0x…`) read-only wallet can't sign on Solana, and vice versa |
 | `api_error` 401 | Invalid API key | Check key at dashboard.zerion.io |
 | `api_error` 429 | Rate limited | Wait, lower frequency, or switch to x402 |
 
 ## Key management
 
-Wallets are encrypted with AES-256-GCM via the Open Wallet Standard (OWS) vault at `~/.ows/`. Private keys never leave the device; signing happens locally. The Zerion API never sees keys.
+Keystore wallets are encrypted with AES-256-GCM via the Open Wallet Standard (OWS) vault at `~/.ows/`. Private keys never leave the device; on the local route signing happens here. The Zerion API never sees keys.
 
-`~/.zerion/config.json` (mode 0o600) stores agent tokens, default wallet, default chain, and slippage.
+**Read-only wallets** hold no key material at all — just a name + address in `~/.zerion/readonly-wallets.json` — so they sign only via the web-app handoff above.
+
+`~/.zerion/config.json` (mode 0o600) stores agent tokens, review thresholds, default wallet, default chain, and slippage.
 
 ## Resources
 
