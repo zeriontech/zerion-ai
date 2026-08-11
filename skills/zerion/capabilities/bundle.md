@@ -158,7 +158,7 @@ zerion bundle \
 # Consolidate a read-only / over-threshold wallet by handing the whole sweep to the web app.
 zerion bundle --group "$(zerion consolidate base USDC --prepare)"
 
-# Give the browser session longer to complete.
+# Give the browser session longer to complete (handoff wait defaults to 300s).
 zerion bundle --timeout 600 --group "$(zerion swap base 100 USDC ETH --prepare)"
 ```
 

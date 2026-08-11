@@ -36,9 +36,10 @@ One skill, [`zerion`](./skills/zerion/SKILL.md), under [`./skills/zerion/`](./sk
 | File | What it covers |
 |------|----------------|
 | [`analyze.md`](./skills/zerion/capabilities/analyze.md) | Portfolio, positions, history, PnL, token search, watchlist (read-only; supports x402 / MPP) |
-| [`trading.md`](./skills/zerion/capabilities/trading.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) |
+| [`trading.md`](./skills/zerion/capabilities/trading.md) | Swap, bridge, send tokens (on-chain actions; needs API key + agent token) — plus the signing-route model: local signing vs. web-app handoff for human review |
+| [`bundle.md`](./skills/zerion/capabilities/bundle.md) | Queue several actions into one signing session / one human review (`--prepare` + `bundle`) |
 | [`sign.md`](./skills/zerion/capabilities/sign.md) | Off-chain signing — sign-message (EIP-191 / raw), sign-typed-data (EIP-712) |
-| [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, list, fund, backup, export-key, delete, sync |
+| [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, add read-only, list, fund, review threshold, backup, export-key, delete, sync |
 | [`agent-management.md`](./skills/zerion/capabilities/agent-management.md) | Agent tokens + policies (the autonomous-trading primitives) |
 | [`swap-0x.md`](./skills/zerion/capabilities/swap-0x.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains |
 
@@ -123,6 +124,14 @@ After install, ask the agent in natural language.
 
 > Send 0.1 ETH on Base to `vitalik.eth`.
 
+> Sell my USDC and DAI on Base into ETH — one signing session for both.
+
+### Human review
+
+> Ask me before anything over $500 from `bot-1`.
+
+> Track my Ledger address as `cold` and swap 1 ETH to USDC from it — I'll sign in the browser.
+
 ### Wallet management
 
 > Create a new encrypted wallet called `bot-1`.
@@ -143,6 +152,7 @@ Zerion CLI splits into two surfaces, by design.
 
 - **Wallet management and agent token setup are manual.** `wallet create`, `import`, `backup`, `export-key`, and `delete` all prompt for a passphrase. `wallet sync` emits a QR code you scan with the Zerion app. `agent create-token` mints a scoped trading credential bound to a specific wallet, and `agent create-policy` attaches the rules it has to obey — allowed chains, expiry, transfer/approval gates, contract allowlists. The sibling admin commands (`agent list-tokens`, `use-token`, `revoke-token`, `list-policies`, `show-policy`, `delete-policy`) are also gestures you make yourself. No key material moves and no spending credential widens without you in the loop. For CI and headless servers, `agent create-token` accepts `--passphrase-file <path>` (file must be mode `0600`) so token issuance can be scripted without an interactive TTY — see [`capabilities/agent-management.md`](./skills/zerion/capabilities/agent-management.md).
 - **Analysis, signing, trading, and discovery are for agents.** `analyze`, `portfolio`, `positions`, `history`, `pnl`, `sign-message`, `sign-typed-data`, `swap`, `bridge`, `send`, `swap tokens`, `search`, `chains`, `wallet list`, `wallet fund`, and `watch list` emit JSON to stdout, structured errors to stderr, and skip confirmation dialogs. Once an agent token is configured, signing and trading fire immediately — the token authorizes operations on behalf of the wallet without a passphrase prompt.
+- **You can put yourself back in the loop, per wallet.** Unattended signing is the default, not the only mode: a **read-only wallet** (`wallet add` — an address with no keys here) or a **review threshold** (`wallet set-review-threshold`) sends the affected transactions to the Zerion web app for a human to review and sign in a browser, instead of auto-signing. Agent policies say what the token may never do; the review threshold says what you want to be asked about. See [Signing routes](#signing-routes--local-signing-vs-web-app-handoff).
 
 Setup gestures (`init`, `setup skills`, `config set/unset/list`, `watch` add/remove) are one-time configuration steps you run yourself before automation takes over.
 
@@ -247,9 +257,44 @@ Requires an API key (or agent token for unattended use).
 | `zerion <send\|swap\|bridge\|consolidate> … --prepare` | Build + gate a command but print a prepared-group envelope (JSON) instead of executing — for `zerion bundle` | `zerion swap base 100 USDC ETH --prepare` |
 | `zerion bundle --group <envelope> [--group …]` | Sign several prepared groups together — one web-app handoff when any group needs review, else locally. Same signer address (chains may differ); per-group results; always exits 0 | `zerion bundle --group "$(zerion swap base 100 USDC ETH --prepare)" --group "$(zerion send USDC 20 --to 0xBob --chain base --prepare)"` |
 
+### Signing routes — local signing vs. web-app handoff
+
+Every trade (and every message signature) takes one of two routes, decided automatically **before**
+anything is signed:
+
+- **Local signing (default)** — the CLI signs with the agent token as passphrase and broadcasts. One shot, unattended.
+- **Web-app handoff** — the CLI encodes the transaction into an `app.zerion.io` link, opens a browser,
+  and **blocks** until a human signs there (default 300s, `--timeout` to change). The URL is also printed to
+  stderr, so headless/agent environments can hand it to the user. Nothing is signed locally; no agent token needed.
+
+The handoff fires when any trigger hits:
+
+| Trigger | Set by |
+|---------|--------|
+| Read-only wallet (no key material) | `zerion wallet add <address\|ens> --name <name>` |
+| Sell-side USD value over the wallet's review threshold — **trades only** | `zerion wallet set-review-threshold <wallet> <usd\|off>` |
+| Explicit force | `--review` |
+
+Messages have no USD value, so `sign-message` / `sign-typed-data` ignore the threshold — only the
+read-only and `--review` triggers apply there.
+
+Both routes run the same pre-flight (balance gates, blocking-quote checks, agent policies), and every
+trade prints `Signing route: <route> — <reason>` to stderr plus `signedVia: "local" | "web-app"` in its
+JSON output. If a threshold is set but the value can't be priced, the trade **fails closed** to review.
+A handoff ends `completed` / `rejected` / `failed` / `timeout` (or `aborted` on Ctrl-C), reported as
+`status` in that same JSON — only `completed` exits 0.
+
+The threshold is a **per-transaction** ceiling. `consolidate --execute` is therefore always local: a sweep
+is N independent transactions, and rows that are each under the threshold don't aggregate into a review
+(it also needs key material, so it can't run on a read-only wallet). To have a whole sweep judged and
+signed as one entity, run it through
+`zerion bundle --group "$(zerion consolidate <chain> <token> --prepare)"`. Full reference:
+[`capabilities/trading.md`](./skills/zerion/capabilities/trading.md) and
+[`capabilities/bundle.md`](./skills/zerion/capabilities/bundle.md).
+
 ### Wallet Management
 
-Encrypted local wallets. EVM + Solana supported. Passphrase required for all destructive ops.
+**Keystore wallets** (encrypted on this machine), plus **read-only wallets** that sign via the web app. EVM + Solana supported. Passphrase required for all destructive ops.
 
 | Command | Description | Example |
 |---------|-------------|---------|
@@ -257,7 +302,9 @@ Encrypted local wallets. EVM + Solana supported. Passphrase required for all des
 | `zerion wallet import --name <name> --evm-key` | Import from EVM private key (interactive) | `zerion wallet import --name old-wallet --evm-key` |
 | `zerion wallet import --name <name> --sol-key` | Import from Solana private key (interactive) | `zerion wallet import --name sol-bot --sol-key` |
 | `zerion wallet import --name <name> --mnemonic` | Import from seed phrase (all chains) | `zerion wallet import --name backup --mnemonic` |
-| `zerion wallet list` | List all wallets | `zerion wallet list` |
+| `zerion wallet add <address\|ens> --name <name>` | Add a read-only wallet — address only, no keys (0x, ENS, or Solana base58). Reads work normally; **all signing hands off to the web app** | `zerion wallet add vitalik.eth --name vitalik` |
+| `zerion wallet set-review-threshold <wallet> <usd\|off>` | Route trades whose sell-side value exceeds `<usd>` to the web app for human review instead of auto-signing (`off` clears it) | `zerion wallet set-review-threshold trading-bot 500` |
+| `zerion wallet list` | List all wallets (keystore + read-only) | `zerion wallet list` |
 | `zerion wallet fund` | Show deposit addresses for funding | `zerion wallet fund --wallet trading-bot` |
 | `zerion wallet backup --wallet <name>` | Export recovery phrase | `zerion wallet backup --wallet trading-bot` |
 | `zerion wallet export-key --wallet <name> [--chain evm\|solana\|all] [--index N]` | Export raw private key(s) derived from mnemonic — EVM (0x hex) and/or Solana (base58 Phantom format + 32-byte ed25519 seed). Output is stderr-only. | `zerion wallet export-key --wallet trading-bot --chain evm` |
@@ -338,6 +385,9 @@ Track wallets by name without exposing addresses in commands.
 | `zerion config unset <key>` | Remove a config value (resets to default) | `zerion config unset defaultChain` |
 | `zerion config list` | Show current configuration | `zerion config list` |
 
+Per-wallet review thresholds also live in `~/.zerion/config.json`, but are set with their own command
+rather than `config set` — see [`zerion wallet set-review-threshold`](#wallet-management).
+
 ## Global Flags
 
 | Flag | Description |
@@ -354,6 +404,9 @@ Track wallets by name without exposing addresses in commands.
 | `--offset <n>` | Skip first N results (pagination) |
 | `--search <query>` | Filter wallets by name or address |
 | `--slippage <percent>` | Slippage tolerance (default: 2%) |
+| `--review` | Force this trade to the web app for human review instead of auto-signing (see [Signing routes](#signing-routes--local-signing-vs-web-app-handoff)) |
+| `--prepare` | On `send`/`swap`/`bridge`/`consolidate`: print a prepared-group envelope instead of executing — the input to `zerion bundle` |
+| `--timeout <sec>` | Wait budget: broadcast confirmation on the local route (default 120), or the browser-callback wait on a web-app handoff (default 300) |
 | `--x402` | Pay-per-call on Base or Solana (analytics only) |
 | `--mpp` | Pay-per-call on Tempo (analytics only) |
 | `--json` | JSON output (default) |
@@ -389,6 +442,7 @@ The CLI handles:
 - empty wallets / no positions
 - rate limits (HTTP 429)
 - upstream timeout or temporary unavailability
+- a web-app handoff the human rejected, or that timed out waiting for the browser callback
 
 All errors are emitted as structured JSON on stderr with a `code` field.
 

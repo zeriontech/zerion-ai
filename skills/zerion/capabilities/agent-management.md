@@ -22,6 +22,15 @@ Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authenticat
 - "Switch which agent token is active"
 - "Revoke a token"
 
+### Not here: human-in-the-loop limits
+
+Policies are **machine-enforced** — they deny an action outright, unattended. If the user wants to be
+**asked** rather than blocked ("check with me above $500", "I'll approve big trades myself"), that's the
+wallet's **review threshold**, not a policy: `zerion wallet set-review-threshold <wallet> <usd|off>`
+routes over-threshold trades to the web app for human review. See `capabilities/wallet.md` § "Review
+threshold" and `capabilities/trading.md` § "Signing routes & web-app handoff". The two compose — a
+policy can deny what a threshold would otherwise send to review.
+
 ## Agent vs manual operations
 
 | Operation | Type | Notes |
