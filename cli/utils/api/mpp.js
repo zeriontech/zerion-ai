@@ -22,12 +22,44 @@ function normalizeMppError(err, address) {
   return e;
 }
 
+// Zerion answers a 402 with two offers side by side: the MPP/Tempo challenge in
+// `WWW-Authenticate` and an x402 offer in `PAYMENT-REQUIRED`. Since mppx 0.6.x
+// the client parses *both* on every 402, and its x402 schema only accepts EVM
+// CAIP-2 networks (`^eip155:\d+$`). Our x402 offer also advertises Solana, so
+// that parse throws `Invalid base64 JSON header` — and it throws before the
+// perfectly valid Tempo challenge beside it is ever considered, taking `--mpp`
+// down with it (WLT-2024). Upgrading doesn't help: 0.8.x rejects it too.
+//
+// So hide the x402 offer from mppx. In `--mpp` mode the Tempo challenge is the
+// one we want, and `--x402` mode goes through @x402/* instead — mppx never has
+// a reason to read this header.
+function stripX402Offer(baseFetch) {
+  return async (input, init) => {
+    const response = await baseFetch(input, init);
+    if (response.status !== 402 || !response.headers.has("payment-required")) return response;
+    const headers = new Headers(response.headers);
+    headers.delete("payment-required");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  };
+}
+
 export async function getMppFetch(auth) {
   if (_mppFetch) return _mppFetch;
   const { Mppx, tempo } = await import("mppx/client");
   const { privateKeyToAccount } = await import("viem/accounts");
   const account = privateKeyToAccount(auth.key);
-  const mppx = Mppx.create({ methods: [tempo({ account })] });
+  // Capture `fetch` *before* Mppx.create: it defaults to `polyfill: true` and
+  // swaps `globalThis.fetch` for its own 402 handler, so a wrapper that called
+  // bare `fetch()` would hit mppx's parser — and the bug above — first.
+  const baseFetch = globalThis.fetch;
+  const mppx = Mppx.create({
+    methods: [tempo({ account })],
+    fetch: stripX402Offer(baseFetch),
+  });
   const inner = mppx.fetch.bind(mppx);
 
   _mppFetch = async (url, options) => {
