@@ -97,6 +97,21 @@ register("agent", "list-policies", agentListPolicies);
 register("agent", "show-policy", agentShowPolicy);
 register("agent", "delete-policy", agentDeletePolicy);
 
+// --- Tributary subscriptions (on-chain recurring payments on Solana) ---
+
+import subscribeCreate from "./commands/tributary/create.js";
+import subscribeList from "./commands/tributary/list.js";
+import subscribeShow from "./commands/tributary/show.js";
+import subscribePause from "./commands/tributary/pause.js";
+import subscribeResume from "./commands/tributary/resume.js";
+import subscribeDelete from "./commands/tributary/delete.js";
+register("subscribe", "create", subscribeCreate);
+register("subscribe", "list", subscribeList);
+register("subscribe", "show", subscribeShow);
+register("subscribe", "pause", subscribePause);
+register("subscribe", "resume", subscribeResume);
+register("subscribe", "delete", subscribeDelete);
+
 // --- Config ---
 
 import configCmd from "./commands/config.js";

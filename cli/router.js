@@ -77,6 +77,16 @@ function printUsage() {
       "agent show-policy <id>": "Show policy details",
       "agent delete-policy <id>": "Delete a policy",
     },
+    tributary: {
+      "subscribe create <amount> <recipient> --interval <frequency>":
+        "Create on-chain recurring subscription (Solana + Tributary)",
+      "subscribe list [--status active|paused|all] [--pretty]":
+        "List payment policies for wallet",
+      "subscribe show <policy-id>": "Show single policy details",
+      "subscribe pause <policy-id>": "Pause a payment policy",
+      "subscribe resume <policy-id>": "Resume a paused policy",
+      "subscribe delete <policy-id>": "Permanently delete a policy",
+    },
     watchlist: {
       "watch <address> --name <label>": "Add wallet to watchlist",
       "watch list": "List watched wallets",
