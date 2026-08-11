@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.0](https://github.com/zeriontech/zerion-ai/compare/v1.8.0...v1.9.0) (2026-08-11)
+
+
+### Features
+
+* **cli:** add zerion-cli alias ([5718e1e](https://github.com/zeriontech/zerion-ai/commit/5718e1e156028fc0fdd28d148f1b1498dda94363))
+* **skills:** handoff docs updates ([#109](https://github.com/zeriontech/zerion-ai/issues/109)) ([c27cccc](https://github.com/zeriontech/zerion-ai/commit/c27cccca8432fbff57ac342e50c4db3141641aee))
+
+
+### Bug Fixes
+
+* **cli:** unblock --mpp and gate the x402 "Paid" line on settlement (WLT-2024) ([#108](https://github.com/zeriontech/zerion-ai/issues/108)) ([c8c7258](https://github.com/zeriontech/zerion-ai/commit/c8c72580ce60bae6cf54a31a512d08e0713d4587))
+* **wallet:** update validate chains logic in read requests ([2b576c0](https://github.com/zeriontech/zerion-ai/commit/2b576c05f5b46ef5b5d9bcbc5fac25a4001fbab8))
+
 ## [1.8.0](https://github.com/zeriontech/zerion-ai/compare/v1.7.0...v1.8.0) (2026-08-06)
 
 
