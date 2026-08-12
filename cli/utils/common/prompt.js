@@ -5,6 +5,71 @@
 import { createInterface } from "node:readline";
 import { readFileSync, statSync } from "node:fs";
 
+const ENTER = ["\n", "\r"];
+const CTRL_C = "\u0003";
+const CTRL_D = "\u0004";
+const BACKSPACE = ["\u007F", "\b"];
+const ESC = "\u001B";
+
+/**
+ * Fold one raw-mode stdin chunk into the masked-input state machine.
+ *
+ * A chunk is not one keystroke: a paste arrives as a single multi-character
+ * chunk, and pasting is how private keys and mnemonics are actually entered.
+ * So every chunk is walked character by character — otherwise a pasted key
+ * echoes one `*` for the whole paste and a trailing newline lands *inside*
+ * the secret instead of submitting it.
+ *
+ * Returns the new buffer plus what to echo, and whether the caller should
+ * finish (Enter/Ctrl-D) or abort (Ctrl-C). Anything after the terminator in
+ * the same chunk is dropped rather than left to leak into the next prompt.
+ */
+export function applyMaskedChunk(current, chunk) {
+  let value = current;
+  let echo = "";
+
+  for (let i = 0; i < chunk.length; i++) {
+    const ch = chunk[i];
+
+    if (ENTER.includes(ch) || ch === CTRL_D) {
+      return { value, echo, done: true, abort: false };
+    }
+
+    if (ch === CTRL_C) {
+      return { value, echo, done: false, abort: true };
+    }
+
+    if (BACKSPACE.includes(ch)) {
+      if (value.length > 0) {
+        value = value.slice(0, -1);
+        echo += "\b \b";
+      }
+      continue;
+    }
+
+    if (ch === ESC) {
+      // Terminal escape sequence — arrow keys, bracketed-paste markers
+      // (ESC [ 200 ~ … ESC [ 201 ~). Swallow it so it never becomes part of
+      // the secret. CSI runs until a final byte in @–~; other sequences are
+      // rare enough that dropping the ESC alone is fine.
+      if (chunk[i + 1] === "[") {
+        let j = i + 2;
+        while (j < chunk.length && !/[@-~]/.test(chunk[j])) j++;
+        i = j;
+      }
+      continue;
+    }
+
+    // Remaining control characters carry no text — never echo a `*` for them.
+    if (ch < " ") continue;
+
+    value += ch;
+    echo += "*";
+  }
+
+  return { value, echo, done: false, abort: false };
+}
+
 export function readSecret(prompt, { mask = false } = {}) {
   return new Promise((resolve) => {
     process.stderr.write(prompt);
@@ -16,29 +81,27 @@ export function readSecret(prompt, { mask = false } = {}) {
       process.stdin.resume();
       process.stdin.setEncoding("utf8");
 
-      const onData = (ch) => {
-        if (ch === "\n" || ch === "\r" || ch === "\u0004") {
-          // Enter or Ctrl-D — done
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
-          process.stdin.removeListener("data", onData);
-          process.stderr.write("\n");
-          resolve(input.trim());
-        } else if (ch === "\u0003") {
-          // Ctrl-C — abort
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
+      const restore = () => {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener("data", onData);
+      };
+
+      const onData = (chunk) => {
+        const step = applyMaskedChunk(input, chunk);
+        input = step.value;
+        if (step.echo) process.stderr.write(step.echo);
+
+        if (step.abort) {
+          restore();
           process.stderr.write("\n");
           process.exit(130);
-        } else if (ch === "\u007F" || ch === "\b") {
-          // Backspace
-          if (input.length > 0) {
-            input = input.slice(0, -1);
-            process.stderr.write("\b \b");
-          }
-        } else {
-          input += ch;
-          process.stderr.write("*");
+        }
+
+        if (step.done) {
+          restore();
+          process.stderr.write("\n");
+          resolve(input.trim());
         }
       };
 
