@@ -7,15 +7,17 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bri
 
 ## Installation
 
-Set up everything in one command (install CLI globally, configure your API key, and add skills across all detected coding agents):
+Set up everything in one command (install CLI globally, configure your API key, and add skills to your coding agents):
 
 ```bash
-npx -y zerion-cli init -y --browser
+npx zerion-cli init
 ```
 
-- `-y` runs setup non-interactively
-- `--browser` opens [dashboard.zerion.io](https://dashboard.zerion.io) so you can grab an API key and paste it back
-- skills install globally to every detected AI coding agent by default
+- authenticates in the browser via [dashboard.zerion.io](https://dashboard.zerion.io) and saves the key for you — no copy/paste
+- detects your coding agent (Claude Code, Cursor, Codex, Gemini) and installs the Zerion skills globally
+- add `-y` to skip the prompts: browser login, then every skill installed
+
+On a remote or headless host, add `--no-open` to print the authorize URL instead of opening a browser. Without a terminal (CI, piped), `init` prints API-key instructions rather than waiting on a browser login — set `ZERION_API_KEY` there instead.
 
 Or just install the CLI without setup:
 
@@ -372,8 +374,9 @@ Track wallets by name without exposing addresses in commands.
 |---------|-------------|---------|
 | `zerion login` | Authenticate — browser (dashboard) login, paste an API key, or pay-per-call | `zerion login` |
 | `zerion login --browser` | Browser auth: opens dashboard.zerion.io, captures the key via loopback | `zerion login --browser` |
-| `zerion init` | One-shot onboarding — install CLI globally, authenticate, install agent skills | `zerion init` |
-| `zerion init -y --browser` | Non-interactive init that opens dashboard.zerion.io for the API key | `npx -y zerion-cli init -y --browser` |
+| `zerion init` | One-shot onboarding — install CLI globally, browser login, install agent skills | `npx zerion-cli init` |
+| `zerion init -y` | Same, without prompts: browser login, then install every skill | `zerion init -y` |
+| `zerion init --no-open` | Print the authorize URL instead of opening a browser (remote / headless) | `zerion init --no-open` |
 | `zerion setup skills` | Install Zerion agent skills into detected coding agents | `zerion setup skills` |
 | `zerion setup skills --agent claude-code` | Install into a specific agent | `zerion setup skills --agent claude-code` |
 
