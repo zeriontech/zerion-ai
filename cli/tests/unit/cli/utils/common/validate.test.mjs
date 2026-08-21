@@ -3,6 +3,7 @@ import { describe, it, after, beforeEach } from "node:test";
 import {
   validatePositions,
   resolvePositionFilter,
+  resolvePositionFilterForAddress,
   resolveSigningChainAsync,
   resolveReadChainAsync,
   POSITION_FILTERS,
@@ -164,6 +165,50 @@ describe("resolveReadChainAsync", () => {
       const result = await resolveReadChainAsync(value);
       assert.equal(result.error, undefined);
       assert.equal(result.chainId, null);
+    }
+  });
+});
+
+// The Zerion API has no protocol positions for Solana yet: `/positions/` 400s
+// on both `no_filter` and `only_complex` for base58 addresses. This helper is
+// the single place that decides what to send (WLT-2076).
+describe("resolvePositionFilterForAddress", () => {
+  const EVM = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+  const SOL = "ebDDhKWSBXPirnzXgFWTTArfymyG4n5fpg1Y5UgwNRY";
+
+  it("leaves every filter untouched for EVM addresses", () => {
+    assert.deepEqual(resolvePositionFilterForAddress(EVM, undefined), { filter: "no_filter" });
+    assert.deepEqual(resolvePositionFilterForAddress(EVM, "all"), { filter: "no_filter" });
+    assert.deepEqual(resolvePositionFilterForAddress(EVM, "simple"), { filter: "only_simple" });
+    assert.deepEqual(resolvePositionFilterForAddress(EVM, "defi"), { filter: "only_complex" });
+  });
+
+  it("downgrades an implicit 'everything' to only_simple on Solana, with a note", () => {
+    const result = resolvePositionFilterForAddress(SOL, undefined);
+    assert.equal(result.filter, "only_simple");
+    assert.match(result.note, /Solana/);
+    assert.equal(result.error, undefined);
+  });
+
+  it("downgrades an explicit --positions all the same way", () => {
+    assert.equal(resolvePositionFilterForAddress(SOL, "all").filter, "only_simple");
+  });
+
+  it("passes --positions simple through without a note", () => {
+    assert.deepEqual(resolvePositionFilterForAddress(SOL, "simple"), { filter: "only_simple" });
+  });
+
+  it("refuses an explicit DeFi ask on Solana rather than silently substituting", () => {
+    const result = resolvePositionFilterForAddress(SOL, "defi");
+    assert.equal(result.filter, undefined);
+    assert.equal(result.error.code, "solana_defi_unsupported");
+    assert.match(result.error.suggestion, /EVM address/);
+  });
+
+  it("never returns a filter the Solana endpoint rejects", () => {
+    for (const flag of [undefined, "all", "simple", "defi"]) {
+      const { filter } = resolvePositionFilterForAddress(SOL, flag);
+      if (filter) assert.equal(filter, "only_simple", `flag '${flag}' produced '${filter}'`);
     }
   });
 });

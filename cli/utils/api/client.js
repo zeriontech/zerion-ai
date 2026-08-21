@@ -139,9 +139,15 @@ export async function fetchAPI(pathname, params = {}, auth) {
 
 // --- Wallet endpoints ---
 
+// `filter[positions]` defaults to `only_simple` server-side, which silently
+// drops every DeFi position from the total — so the CLI disagreed with the
+// Zerion app on any wallet holding DeFi (WLT-2076). Ask for the aggregated
+// view instead. Unlike `/positions/`, this endpoint accepts `no_filter` for
+// Solana addresses too, so it needs no ecosystem guard.
 export async function getPortfolio(address, options = {}) {
   return fetchAPI(`/wallets/${encodeURIComponent(address)}/portfolio`, {
     currency: options.currency || "usd",
+    "filter[positions]": options.positionFilter || "no_filter",
   }, options.auth);
 }
 

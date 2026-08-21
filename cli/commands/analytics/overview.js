@@ -3,12 +3,12 @@
  * Returns a concise summary (portfolio, top positions, recent txs, PnL).
  */
 
-import { fetchAPI } from "../../utils/api/client.js";
+import { fetchAPI, getPortfolio } from "../../utils/api/client.js";
 import { summarizeAnalyze } from "../../utils/common/analyze.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { resolveReadChainAsync } from "../../utils/common/validate.js";
+import { resolveReadChainAsync, resolvePositionFilterForAddress } from "../../utils/common/validate.js";
 
 export default async function walletAnalyze(args, flags) {
   // Validate against the live catalog (not the static 14-chain registry) so any
@@ -26,19 +26,33 @@ export default async function walletAnalyze(args, flags) {
   const addr = encodeURIComponent(resolved);
   const txLimit = flags.limit ? parseInt(flags.limit, 10) : 10;
 
-  const posParams = { "filter[positions]": "no_filter" };
+  // Same Solana rule as `positions`: `only_simple` is the only filter that
+  // endpoint accepts for base58 addresses. Without this the positions leg 400s
+  // and `analyze` reports `count: 0` with a `failures` entry — which reads like
+  // an empty wallet rather than a filter the API refused.
+  const filterCheck = resolvePositionFilterForAddress(resolved, flags.positions);
+  if (filterCheck.error) {
+    printError(filterCheck.error.code, filterCheck.error.message, {
+      suggestion: filterCheck.error.suggestion,
+    });
+    process.exit(1);
+  }
+
+  const posParams = { "filter[positions]": filterCheck.filter };
   const txParams = { "page[size]": txLimit };
   if (chainId) {
     posParams["filter[chain_ids]"] = chainId;
     txParams["filter[chain_ids]"] = chainId;
   }
-  if (flags.positions === "simple") posParams["filter[positions]"] = "only_simple";
-  else if (flags.positions === "defi") posParams["filter[positions]"] = "only_complex";
 
   try {
     const auth = resolveAuth(flags);
     const results = await Promise.allSettled([
-      fetchAPI(`/wallets/${addr}/portfolio`, {}, auth),
+      // Go through getPortfolio so the total carries the same
+      // `filter[positions]` default as everything else — fetching this endpoint
+      // raw is what let the summary pair an only_simple total with a
+      // no_filter position list.
+      getPortfolio(resolved, { auth }),
       fetchAPI(`/wallets/${addr}/positions/`, posParams, auth),
       fetchAPI(`/wallets/${addr}/transactions/`, txParams, auth),
       fetchAPI(`/wallets/${addr}/pnl`, {}, auth),
@@ -53,6 +67,7 @@ export default async function walletAnalyze(args, flags) {
     const summary = summarizeAnalyze(resolved, ...values);
     if (walletName !== resolved) summary.label = walletName;
     if (failures.length) summary.failures = failures;
+    if (filterCheck.note) summary.notes = [filterCheck.note];
     if (auth.kind !== "apiKey") summary.auth = auth.kind;
 
     print(summary);

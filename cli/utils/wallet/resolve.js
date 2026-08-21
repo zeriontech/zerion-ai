@@ -5,8 +5,9 @@
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import * as ows from "./keystore.js";
-import { getConfigValue } from "../config.js";
+import { getConfigValue, getWalletOrigin, getWalletAddresses } from "../config.js";
 import { isSolana } from "../chain/registry.js";
+import { isEvmAddress, isSolanaAddress } from "../chain/address.js";
 import { printError } from "../common/output.js";
 import { resolveWatchAddress } from "./watchlist.js";
 import { getReadonly } from "./readonly.js";
@@ -45,7 +46,7 @@ async function resolveEns(name) {
 }
 
 export async function resolveAddress(input) {
-  if (/^0x[0-9a-fA-F]{40}$/.test(input)) return input;
+  if (isEvmAddress(input)) return input;
   // Check local wallets first — handles names like "test.zerion.eth"
   try {
     return ows.getEvmAddress(input);
@@ -55,12 +56,41 @@ export async function resolveAddress(input) {
     if (!resolved) throw new Error(`Could not resolve ENS name: ${input}`);
     return resolved;
   }
-  // Solana public keys: 44-character base58
-  if (/^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(input)) return input;
-  throw new Error(`Invalid address: "${input}". Expected a 0x address, ENS name (.eth), or Solana address.`);
+  // Solana Name Service is not wired up. Say so instead of falling through to
+  // the wallet-name lookup, which reports `wallet_not_found` and sends the
+  // caller off to audit their wallet list over a name it never had (WLT-2076).
+  if (input.endsWith(".sol")) {
+    const err = new Error(
+      `Solana Name Service (.sol) names are not supported yet — only ENS (.eth) resolves. ` +
+      `Pass the base58 Solana address for "${input}" instead.`
+    );
+    err.code = "sns_not_supported";
+    throw err;
+  }
+  // Solana public keys: 43–44 character base58
+  if (isSolanaAddress(input)) return input;
+  const err = new Error(
+    `Invalid address: "${input}". Expected a 0x address, ENS name (.eth), or Solana address.`
+  );
+  err.code = "invalid_address";
+  throw err;
 }
 
-export function resolveWallet(flags, args = []) {
+/**
+ * Resolve `flags`/`args` to a wallet name + address.
+ *
+ * `options.purpose` picks the ecosystem rules:
+ *   - `"sign"` (default) — the address must be able to sign on `chain`, so an
+ *     ecosystem mismatch is fatal and the chain always resolves to a concrete
+ *     default. Used by send/swap/bridge/consolidate.
+ *   - `"read"` — nothing is signed, so the wallet's ecosystem need not match
+ *     the chain. Only an *explicit* `--chain` can conflict; the `ethereum`
+ *     default never does. Used by the analytics commands via
+ *     `resolveAddressOrWallet`.
+ */
+export function resolveWallet(flags, args = [], options = {}) {
+  const forRead = options.purpose === "read";
+
   // If --watch is passed, resolve from watchlist
   if (flags.watch) {
     const address = resolveWatchAddress(flags.watch);
@@ -82,20 +112,29 @@ export function resolveWallet(flags, args = []) {
     process.exit(1);
   }
 
-  // Determine chain to pick the right address type
-  const chain = flags.chain || flags["from-chain"] || getConfigValue("defaultChain") || "ethereum";
+  // Determine chain to pick the right address type. On the read path an
+  // unset --chain stays unset: "no chain asked for" and "defaulted to ethereum"
+  // must not be conflated, or every Solana wallet looks like a mismatch.
+  const explicitChain = flags.chain || flags["from-chain"];
+  const chain = explicitChain || getConfigValue("defaultChain") || "ethereum";
 
   // Read-only "my wallet": no key material, address-only. Signing always routes
   // to the web-app handoff. The stored address's ecosystem (EVM 0x vs Solana
-  // base58) must match the requested chain — refuse a mismatch rather than
-  // resolving an address the connected wallet can't sign for.
+  // base58) must match the chain being signed for — refuse a mismatch rather
+  // than resolving an address the connected wallet can't sign for. Reading is
+  // unconstrained: the Zerion API takes either address shape, so only an
+  // explicit --chain can conflict there (WLT-2076).
   const ro = getReadonly(walletName);
   if (ro) {
-    const roIsSolana = SOL_ADDR_RE.test(ro.address);
-    if (isSolana(chain) !== roIsSolana) {
+    const roIsSolana = isSolanaAddress(ro.address);
+    const comparedChain = forRead ? explicitChain : chain;
+    if (comparedChain && isSolana(comparedChain) !== roIsSolana) {
+      const kind = roIsSolana ? "a Solana" : "an EVM";
+      const target = isSolana(comparedChain) ? "Solana" : `EVM chain "${comparedChain}"`;
       printError("readonly_chain_mismatch",
-        `Read-only wallet "${walletName}" is a ${roIsSolana ? "Solana" : "EVM"} address; ` +
-        `it can't sign on ${isSolana(chain) ? "Solana" : `EVM chain "${chain}"`}.`,
+        forRead
+          ? `Read-only wallet "${walletName}" is ${kind} address; there is nothing to read for it on ${target}.`
+          : `Read-only wallet "${walletName}" is ${kind} address; it can't sign on ${target}.`,
         { suggestion: roIsSolana ? "Use --chain solana." : "Use an EVM --chain." }
       );
       process.exit(1);
@@ -104,27 +143,69 @@ export function resolveWallet(flags, args = []) {
   }
 
   try {
-    let address;
-    if (isSolana(chain)) {
-      address = ows.getSolAddress(walletName);
-      if (!address) throw new Error("No Solana address");
-    } else {
-      address = ows.getEvmAddress(walletName);
-    }
-    return { walletName, address };
+    return { walletName, address: forRead
+      ? readAddressFor(walletName, explicitChain)
+      : signAddressFor(walletName, chain) };
   } catch (err) {
-    const code = err.message?.includes("not found") ? "wallet_not_found" : "ows_error";
+    const code = err.code
+      || (err.message?.includes("not found") ? "wallet_not_found" : "ows_error");
     printError(code, code === "wallet_not_found"
       ? `Wallet "${walletName}" not found`
-      : `Wallet error: ${err.message}`, {
+      : code === "ows_error" ? `Wallet error: ${err.message}` : err.message, {
       suggestion: "List wallets with: zerion wallet list",
     });
     process.exit(1);
   }
 }
 
-const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
-const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+function signAddressFor(walletName, chain) {
+  if (!isSolana(chain)) return ows.getEvmAddress(walletName);
+  const address = ows.getSolAddress(walletName);
+  if (!address) throw new Error("No Solana address");
+  return address;
+}
+
+/**
+ * Pick the address to *read* for a keystore wallet.
+ *
+ * Not simply "the account for `chain`": a wallet imported with `--sol-key`
+ * still gets an EVM account, but its secp256k1 key was generated at random, so
+ * that 0x address is a stranger's and reading it silently reports an empty
+ * portfolio. `walletOrigins` records which side the user actually owns, and
+ * `getWalletAddresses` is the existing filter for it — reuse it rather than
+ * trusting that an account merely exists.
+ */
+function readAddressFor(walletName, explicitChain) {
+  const { evmAddress, solAddress } = getWalletAddresses(
+    ows.getWallet(walletName),
+    getWalletOrigin(walletName),
+  );
+
+  if (explicitChain) {
+    const wantSolana = isSolana(explicitChain);
+    const address = wantSolana ? solAddress : evmAddress;
+    if (!address) {
+      const err = new Error(
+        `Wallet "${walletName}" has no ${wantSolana ? "Solana" : "EVM"} account, ` +
+        `so there is nothing to read on chain "${explicitChain}".`
+      );
+      err.code = "no_account_for_chain";
+      throw err;
+    }
+    return address;
+  }
+
+  // No --chain asked for: return whichever account the wallet owns, EVM first
+  // since that's the common case for a multi-account (mnemonic) wallet.
+  const address = evmAddress || solAddress;
+  if (!address) {
+    const err = new Error(`Wallet "${walletName}" has no readable account.`);
+    err.code = "ows_error";
+    throw err;
+  }
+  return address;
+}
+
 
 /**
  * Resolve a destination address for cross-chain bridges/swaps. Picks the right
@@ -143,7 +224,7 @@ export async function resolveDestination({ toAddressOrEns, toWalletName, fallbac
 
   if (toAddressOrEns) {
     if (wantsSolana) {
-      if (!SOL_ADDR_RE.test(toAddressOrEns)) {
+      if (!isSolanaAddress(toAddressOrEns)) {
         throw new Error(
           `--to-address ${toAddressOrEns} is not a Solana address. ` +
           `Solana destinations need a base58 Solana pubkey.`
@@ -151,7 +232,7 @@ export async function resolveDestination({ toAddressOrEns, toWalletName, fallbac
       }
       return { address: toAddressOrEns, source: "address" };
     }
-    if (EVM_ADDR_RE.test(toAddressOrEns) || toAddressOrEns.endsWith(".eth")) {
+    if (isEvmAddress(toAddressOrEns) || toAddressOrEns.endsWith(".eth")) {
       const resolved = await resolveAddress(toAddressOrEns);
       return { address: resolved, source: "address" };
     }
@@ -199,19 +280,42 @@ export async function resolveDestination({ toAddressOrEns, toWalletName, fallbac
   return { address: evmAddress, source: "wallet", walletName: lookupWallet };
 }
 
+// Does this positional arg look like an address rather than a wallet name?
+// `.sol` counts deliberately: it is not resolvable, but routing it here lets
+// resolveAddress explain that instead of the caller reporting it as a missing
+// wallet name.
+function looksLikeAddress(value) {
+  return value.startsWith("0x")
+    || value.endsWith(".eth")
+    || value.endsWith(".sol")
+    || isSolanaAddress(value);
+}
+
 /**
  * Resolve address from positional arg or --wallet/--address/--watch flags.
  * Supports both `wallet portfolio <addr>` and `portfolio --wallet <name>`.
+ *
+ * This is the read path — every analytics command funnels through it — so it
+ * resolves wallets with `purpose: "read"`: no signing happens here, and the
+ * wallet's ecosystem need not match any chain.
  */
 export async function resolveAddressOrWallet(args, flags) {
-  if (args[0] && (args[0].startsWith("0x") || args[0].endsWith(".eth") || /^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(args[0]))) {
-    const address = await resolveAddress(args[0]);
-    return { walletName: args[0], address };
+  try {
+    if (args[0] && looksLikeAddress(args[0])) {
+      const address = await resolveAddress(args[0]);
+      return { walletName: args[0], address };
+    }
+    const resolved = resolveWallet(flags, args, { purpose: "read" });
+    let address = resolved.address;
+    if (resolved.needsResolve) {
+      address = await resolveAddress(address);
+    }
+    return { walletName: resolved.walletName, address };
+  } catch (err) {
+    // Commands call this before their own try/catch, so an address-resolution
+    // failure would otherwise surface as a bare `unexpected_error`. Emit the
+    // structured code the error already carries.
+    printError(err.code || "address_resolve_failed", err.message);
+    process.exit(1);
   }
-  const resolved = resolveWallet(flags, args);
-  let address = resolved.address;
-  if (resolved.needsResolve) {
-    address = await resolveAddress(address);
-  }
-  return { walletName: resolved.walletName, address };
 }

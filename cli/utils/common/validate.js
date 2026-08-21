@@ -9,6 +9,7 @@
  */
 
 import { isSolana, toCaip2 } from "../chain/registry.js";
+import { isSolanaAddress } from "../chain/address.js";
 import { resolveChain, listTradingChainIds, listBridgeChainIds, listSendingChainIds } from "../chain/catalog.js";
 
 const CHAINS_HINT = "Run `zerion chains` for the live list of supported chains and their capabilities.";
@@ -40,6 +41,46 @@ export function validatePositions(flag) {
 
 export function resolvePositionFilter(flag) {
   return POSITION_FILTERS[flag] || "no_filter";
+}
+
+/**
+ * Pick the `filter[positions]` value to send for one specific address.
+ *
+ * The Zerion API has no protocol (DeFi) positions for Solana yet, and
+ * `/positions/` hard-rejects both `no_filter` and `only_complex` for base58
+ * addresses with a 400 ("currently not supported for Solana addresses").
+ * `only_simple` is the only value it accepts. EVM addresses take all three.
+ *
+ * So on Solana:
+ *   - `--positions defi` / `--defi` asks for something that cannot exist —
+ *     a structured error beats silently handing back token holdings.
+ *   - `all` or unset already means "everything there is", and on Solana that
+ *     *is* the simple set — downgrade quietly but say so in the output.
+ *   - `simple` is already the only supported value.
+ *
+ * Returns `{ filter, note }` or `{ error }` — exactly one of filter/error set.
+ */
+export function resolvePositionFilterForAddress(address, flag) {
+  const filter = resolvePositionFilter(flag);
+  if (!isSolanaAddress(address) || filter === "only_simple") return { filter };
+
+  if (filter === "only_complex") {
+    return {
+      error: {
+        code: "solana_defi_unsupported",
+        message:
+          "Solana addresses have no DeFi positions in the Zerion API yet, " +
+          "so there is nothing for --positions defi to return.",
+        suggestion:
+          "Drop --defi/--positions defi to see token holdings, or query an EVM address.",
+      },
+    };
+  }
+
+  return {
+    filter: "only_simple",
+    note: "Solana has no DeFi positions in the Zerion API yet — showing token holdings only.",
+  };
 }
 
 const TRADING_CAPABILITIES = {

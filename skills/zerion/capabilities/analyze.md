@@ -1,7 +1,9 @@
 
 # Zerion — Wallet Analysis
 
-Read-only insights into any crypto wallet across 14 EVM chains and Solana. All commands accept `0x...` addresses, ENS names (e.g. `vitalik.eth`), local wallet names, or watched addresses.
+Read-only insights into any crypto wallet across 14 EVM chains and Solana. All commands accept `0x...` addresses, base58 Solana addresses, ENS names (e.g. `vitalik.eth`), saved wallet names (keystore or read-only, either ecosystem), or watched addresses.
+
+**Name resolution is ENS-only.** `.eth` resolves; `.sol` (Solana Name Service) does not and reports `sns_not_supported` — pass the base58 address instead.
 
 ## Setup
 
@@ -93,6 +95,16 @@ Key behaviors:
 - **`position_type`** ∈ `deposit | loan | staked | locked | reward | wallet | investment` — tag each row for downstream filtering.
 - Combining `--defi` with `--positions all|simple` errors with `conflicting_flags`.
 
+## Solana limitations
+
+The Zerion API has no protocol (DeFi) positions for Solana yet, so on a base58 address:
+
+- `positions` / `analyze` return **token holdings only**, and add a `notes` entry saying so. No flag needed — the CLI picks the filter the API accepts.
+- `--defi` / `--positions defi` errors with `solana_defi_unsupported`, because there is nothing for it to return. Don't retry it with a different filter; the wallet has no DeFi to find.
+- `portfolio`, `history`, and `pnl` work exactly as they do on EVM.
+
+Everything else is symmetric: a Solana wallet saved with `wallet add` reads by name with no `--chain` flag, same as an EVM one.
+
 ## Token search (find a contract address)
 
 ```bash
@@ -141,7 +153,15 @@ JSON on stdout, structured errors on stderr. See the parent `SKILL.md` (Setup + 
 | `unsupported_chain` | Invalid `--chain` | `zerion chains` for valid IDs |
 | `unsupported_positions_filter` | Invalid `--positions` | Use `all`, `simple`, or `defi` |
 | `conflicting_flags` | `--defi` combined with `--positions all\|simple` | Pick one — `--defi` already implies `--positions defi` |
+| `solana_defi_unsupported` | `--defi`/`--positions defi` on a Solana address | Drop the flag — Solana has no DeFi positions in the API yet |
+| `sns_not_supported` | A `.sol` name was passed | Only ENS (`.eth`) resolves; pass the base58 address |
+| `readonly_chain_mismatch` | An explicit `--chain` contradicts a saved wallet's ecosystem | Drop `--chain`, or match it to the wallet (`--chain solana` for a Solana wallet) |
+| `no_account_for_chain` | Saved wallet has no account on the requested `--chain` | Drop `--chain`, or use a wallet with that account |
 | `api_error` 429 | Rate limited | Wait, reduce frequency, or switch to `--x402` |
 | `api_error` 400 | Invalid address or ENS resolution failure | Retry with the resolved 0x address |
 
 Empty positions/history usually means the wallet is inactive or very new — not an error.
+
+## Totals include DeFi
+
+`portfolio` and `analyze` report the **aggregated** total — wallet tokens plus DeFi (deposited, staked, locked, borrowed) — so the number matches the Zerion app. With `--chain`, `portfolio` reports that chain's slice of the total and omits the 24h change, which the API only publishes wallet-wide.

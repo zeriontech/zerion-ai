@@ -190,7 +190,7 @@ Use `zerion chains` for the live catalog with metadata.
 | `no_wallet` | No wallet specified, no default | `--wallet <name>` or set `defaultWallet` config |
 | `wallet_not_found` | Wallet not in local vault | `zerion wallet list` to check |
 | `unsupported_chain` | Invalid `--chain` value | `zerion chains` for valid IDs |
-| `readonly_chain_mismatch` | Read-only wallet's address format doesn't match the chain | An EVM (`0x…`) read-only wallet can't sign on Solana, and vice versa |
+| `readonly_chain_mismatch` | Read-only wallet's address format doesn't match an explicitly requested chain | An EVM (`0x…`) read-only wallet can't sign on Solana, and vice versa. Read commands need no `--chain` |
 | `api_error` 401 | Invalid API key | Check key at dashboard.zerion.io |
 | `api_error` 429 | Rate limited | Wait, lower frequency, or switch to x402 |
 
