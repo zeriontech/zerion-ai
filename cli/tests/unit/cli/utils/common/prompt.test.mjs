@@ -3,7 +3,8 @@ import { describe, it, before, after } from "node:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyMaskedChunk, readPassphraseFromFile } from "#zerion/utils/common/prompt.js";
+import { PassThrough } from "node:stream";
+import { readSecret, readPassphraseFromFile } from "#zerion/utils/common/prompt.js";
 
 const isWindows = process.platform === "win32";
 
@@ -73,95 +74,134 @@ describe("readPassphraseFromFile", () => {
   });
 });
 
-describe("applyMaskedChunk", () => {
+describe("readSecret masked input", () => {
   const KEY = "0x0ee04d8466aa0f5a05d3ab5a3f9f1e1c2b3a49586d7c8b9a0f1e2d3c4b5a6978";
+  const PROMPT = "Enter EVM private key (hex): ";
+  const BACKSPACE = "\u007F";
+  const CTRL_C = "\u0003";
+  const CTRL_D = "\u0004";
+  const ESC = "\u001B";
 
-  it("masks a typed character one-for-one", () => {
-    assert.deepEqual(applyMaskedChunk("", "a"), {
-      value: "a",
-      echo: "*",
-      done: false,
-      abort: false,
-    });
+  let realStdin;
+  let realWrite;
+  let realExit;
+
+  // readline in terminal mode only needs isTTY + setRawMode, so a PassThrough
+  // standing in for stdin exercises the real prompt without needing a pty.
+  function fakeTty() {
+    const stream = new PassThrough();
+    stream.isTTY = true;
+    stream.setRawMode = () => stream;
+    return stream;
+  }
+
+  function withStdin(stream) {
+    Object.defineProperty(process, "stdin", { value: stream, configurable: true });
+  }
+
+  before(() => {
+    realStdin = process.stdin;
+    realWrite = process.stderr.write;
+    realExit = process.exit;
   });
 
-  it("masks every character of a pasted key, not just the chunk", () => {
-    const step = applyMaskedChunk("", KEY);
-    assert.equal(step.value, KEY);
-    assert.equal(step.echo, "*".repeat(KEY.length));
-    assert.equal(step.done, false);
+  after(() => {
+    withStdin(realStdin);
+    process.stderr.write = realWrite;
+    process.exit = realExit;
   });
 
-  it("submits when a pasted key arrives with a trailing newline", () => {
-    const step = applyMaskedChunk("", `${KEY}\n`);
-    assert.equal(step.value, KEY);
-    assert.equal(step.done, true);
-    assert.equal(step.echo, "*".repeat(KEY.length));
+  /**
+   * Drive one masked prompt: returns the resolved secret plus everything that
+   * reached the screen, so a test can assert the secret was never echoed.
+   */
+  async function prompt(chunks) {
+    const stream = fakeTty();
+    withStdin(stream);
+
+    let written = "";
+    process.stderr.write = (str) => {
+      written += str;
+      return true;
+    };
+
+    const pending = readSecret(PROMPT, { mask: true });
+    for (const chunk of chunks) stream.write(chunk);
+    const value = await pending;
+
+    process.stderr.write = realWrite;
+    return { value, written };
+  }
+
+  it("returns the typed secret without echoing it", async () => {
+    const { value, written } = await prompt(["s", "e", "c", "r", "e", "t", "\r"]);
+    assert.equal(value, "secret");
+    assert.equal(written, `${PROMPT}\n`);
   });
 
-  it("submits on CRLF without keeping the CR", () => {
-    const step = applyMaskedChunk("0xab", "cd\r\n");
-    assert.equal(step.value, "0xabcd");
-    assert.equal(step.done, true);
+  it("keeps a key pasted as one chunk intact and off the screen", async () => {
+    const { value, written } = await prompt([`${KEY}\n`]);
+    assert.equal(value, KEY);
+    assert.equal(written, `${PROMPT}\n`);
   });
 
-  it("drops anything after the terminator so it cannot leak into the next prompt", () => {
-    const step = applyMaskedChunk("", "secret\nleftover");
-    assert.equal(step.value, "secret");
-    assert.equal(step.echo, "*".repeat(6));
-    assert.equal(step.done, true);
+  it("never echoes an asterisk or any of the secret's characters", async () => {
+    const { written } = await prompt([`${KEY}\n`]);
+    assert.ok(!written.includes("*"), "expected no asterisks");
+    assert.ok(!written.includes(KEY.slice(2, 10)), "expected no key characters");
   });
 
-  it("submits on Ctrl-D", () => {
-    const step = applyMaskedChunk("abc", "\u0004");
-    assert.equal(step.value, "abc");
-    assert.equal(step.done, true);
+  it("submits on a bare CR and on LF alike", async () => {
+    assert.equal((await prompt(["abc\r"])).value, "abc");
+    assert.equal((await prompt(["abc\n"])).value, "abc");
   });
 
-  it("aborts on Ctrl-C", () => {
-    const step = applyMaskedChunk("abc", "\u0003");
-    assert.equal(step.abort, true);
-    assert.equal(step.done, false);
+  it("erases the last character on backspace", async () => {
+    const { value } = await prompt(["0xab", BACKSPACE, "c\r"]);
+    assert.equal(value, "0xac");
   });
 
-  it("erases the last character on backspace", () => {
-    const step = applyMaskedChunk("abc", "\u007F");
-    assert.equal(step.value, "ab");
-    assert.equal(step.echo, "\b \b");
+  it("ignores backspace on an empty buffer", async () => {
+    const { value } = await prompt([BACKSPACE, "ab\r"]);
+    assert.equal(value, "ab");
   });
 
-  it("ignores backspace on an empty buffer", () => {
-    assert.deepEqual(applyMaskedChunk("", "\u007F"), {
-      value: "",
-      echo: "",
-      done: false,
-      abort: false,
-    });
+  it("strips bracketed-paste markers from a pasted key", async () => {
+    const { value } = await prompt([`${ESC}[200~${KEY}${ESC}[201~`, "\r"]);
+    assert.equal(value, KEY);
   });
 
-  it("strips bracketed-paste markers", () => {
-    const step = applyMaskedChunk("", `\u001B[200~${KEY}\u001B[201~`);
-    assert.equal(step.value, KEY);
-    assert.equal(step.echo, "*".repeat(KEY.length));
+  it("ignores arrow keys instead of taking them as input", async () => {
+    const { value } = await prompt(["ab", `${ESC}[A`, "c\r"]);
+    assert.equal(value, "abc");
   });
 
-  it("ignores arrow keys instead of masking them as input", () => {
-    const step = applyMaskedChunk("ab", "\u001B[Ac");
-    assert.equal(step.value, "abc");
-    assert.equal(step.echo, "*");
-  });
-
-  it("ignores other control characters", () => {
-    const step = applyMaskedChunk("", "\u0001a\u0002");
-    assert.equal(step.value, "a");
-    assert.equal(step.echo, "*");
-  });
-
-  it("keeps spaces so a mnemonic survives", () => {
+  it("keeps the inner spaces of a mnemonic and trims the edges", async () => {
     const words = "test test test test test test test test test test test junk";
-    const step = applyMaskedChunk("", `${words}\r`);
-    assert.equal(step.value, words);
-    assert.equal(step.done, true);
-    assert.equal(step.echo, "*".repeat(words.length));
+    const { value } = await prompt([`  ${words}  \r`]);
+    assert.equal(value, words);
+  });
+
+  it("exits 130 on Ctrl-C", async () => {
+    const codes = [];
+    process.exit = (code) => codes.push(code);
+    await prompt(["abc", CTRL_C]);
+    process.exit = realExit;
+    assert.deepEqual(codes, [130]);
+  });
+
+  it("resolves empty on Ctrl-D at an empty prompt rather than hanging", async () => {
+    const { value } = await prompt([CTRL_D]);
+    assert.equal(value, "");
+  });
+
+  it("falls back to line-buffered reads when stdin is not a TTY", async () => {
+    const stream = new PassThrough();
+    stream.isTTY = false;
+    withStdin(stream);
+
+    const pending = readSecret(PROMPT, { mask: true });
+    stream.write(`${KEY}\n`);
+    assert.equal(await pending, KEY);
   });
 });

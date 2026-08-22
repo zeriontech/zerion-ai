@@ -35,8 +35,8 @@ export default async function walletImport(args, flags) {
     let wallet;
     let origin;
 
-    // Key material is masked for the same reason the passphrase is: it is read
-    // in front of whoever can see the screen (and shared screens / recordings).
+    // Key material is hidden while typing for the same reason the passphrase is:
+    // it is entered in front of whoever can see the screen (or the recording).
     if (hasEvmKey) {
       const key = await readSecret("Enter EVM private key (hex): ", { mask: true });
       wallet = ows.importFromKey(name, key, passphrase, "evm");

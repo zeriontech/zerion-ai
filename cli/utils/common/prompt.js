@@ -5,107 +5,47 @@
 import { createInterface } from "node:readline";
 import { readFileSync, statSync } from "node:fs";
 
-const ENTER = ["\n", "\r"];
-const CTRL_C = "\u0003";
-const CTRL_D = "\u0004";
-const BACKSPACE = ["\u007F", "\b"];
-const ESC = "\u001B";
-
-/**
- * Fold one raw-mode stdin chunk into the masked-input state machine.
- *
- * A chunk is not one keystroke: a paste arrives as a single multi-character
- * chunk, and pasting is how private keys and mnemonics are actually entered.
- * So every chunk is walked character by character — otherwise a pasted key
- * echoes one `*` for the whole paste and a trailing newline lands *inside*
- * the secret instead of submitting it.
- *
- * Returns the new buffer plus what to echo, and whether the caller should
- * finish (Enter/Ctrl-D) or abort (Ctrl-C). Anything after the terminator in
- * the same chunk is dropped rather than left to leak into the next prompt.
- */
-export function applyMaskedChunk(current, chunk) {
-  let value = current;
-  let echo = "";
-
-  for (let i = 0; i < chunk.length; i++) {
-    const ch = chunk[i];
-
-    if (ENTER.includes(ch) || ch === CTRL_D) {
-      return { value, echo, done: true, abort: false };
-    }
-
-    if (ch === CTRL_C) {
-      return { value, echo, done: false, abort: true };
-    }
-
-    if (BACKSPACE.includes(ch)) {
-      if (value.length > 0) {
-        value = value.slice(0, -1);
-        echo += "\b \b";
-      }
-      continue;
-    }
-
-    if (ch === ESC) {
-      // Terminal escape sequence — arrow keys, bracketed-paste markers
-      // (ESC [ 200 ~ … ESC [ 201 ~). Swallow it so it never becomes part of
-      // the secret. CSI runs until a final byte in @–~; other sequences are
-      // rare enough that dropping the ESC alone is fine.
-      if (chunk[i + 1] === "[") {
-        let j = i + 2;
-        while (j < chunk.length && !/[@-~]/.test(chunk[j])) j++;
-        i = j;
-      }
-      continue;
-    }
-
-    // Remaining control characters carry no text — never echo a `*` for them.
-    if (ch < " ") continue;
-
-    value += ch;
-    echo += "*";
-  }
-
-  return { value, echo, done: false, abort: false };
-}
-
 export function readSecret(prompt, { mask = false } = {}) {
   return new Promise((resolve) => {
     process.stderr.write(prompt);
 
-    // If masking and stdin is a TTY, use raw mode to replace each keystroke with *
+    // Hidden input, the way sudo and ssh do it: nothing is drawn while typing.
+    // readline gives this for free — `terminal: true` turns on its raw-mode line
+    // editing (pastes, backspace, arrow keys, kill-line, Ctrl-C/Ctrl-D) while a
+    // null `output` means it echoes nothing at all. Don't swap in a no-op
+    // output stream instead: readline writes its cursor/clear escapes straight
+    // to output, and the clear-to-end-of-screen one wipes the prompt away.
     if (mask && process.stdin.isTTY) {
-      let input = "";
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.setEncoding("utf8");
+      const rl = createInterface({
+        input: process.stdin,
+        output: null,
+        terminal: true,
+        historySize: 0, // never keep a secret in readline's history
+      });
 
-      const restore = () => {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener("data", onData);
+      // close() re-emits `close`, so guard: without this the first resolve wins
+      // and a plain Enter would hand back "" instead of the secret.
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        rl.close();
+        process.stderr.write("\n");
+        resolve(value);
       };
 
-      const onData = (chunk) => {
-        const step = applyMaskedChunk(input, chunk);
-        input = step.value;
-        if (step.echo) process.stderr.write(step.echo);
+      rl.on("line", (line) => finish(line.trim()));
 
-        if (step.abort) {
-          restore();
-          process.stderr.write("\n");
-          process.exit(130);
-        }
+      // Ctrl-D at an empty prompt closes without emitting `line`; resolve empty
+      // so the caller's own validation reports it instead of hanging forever.
+      rl.on("close", () => finish(""));
 
-        if (step.done) {
-          restore();
-          process.stderr.write("\n");
-          resolve(input.trim());
-        }
-      };
-
-      process.stdin.on("data", onData);
+      // Once something listens for SIGINT, readline stops letting Ctrl-C kill
+      // the process, so exit here — after close() has restored the terminal.
+      rl.on("SIGINT", () => {
+        finish("");
+        process.exit(130);
+      });
       return;
     }
 
@@ -117,7 +57,6 @@ export function readSecret(prompt, { mask = false } = {}) {
     });
   });
 }
-
 /**
  * Prompt for a passphrase with optional confirmation (enter twice).
  * Requires an interactive terminal — passphrase must always be entered by a human.
