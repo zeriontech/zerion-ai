@@ -32,11 +32,14 @@ For execution (swap/bridge/send) → `capabilities/trading.md`. For wallet creat
 zerion analyze <address|name>
 zerion analyze <address|name> --chain <chain>
 zerion analyze <address|name> --positions all|simple|defi
+zerion analyze <address|name> --defi                # same as --positions defi
 zerion analyze <address|name> --limit <n>           # txs to sample (default 10)
 zerion analyze <address|name> --x402                # pay-per-call
 ```
 
 Fetches portfolio + positions + transactions + PnL in parallel. Returns a summary with portfolio total + chain breakdown + 1-day change, top 10 positions by value, 5 most recent transactions, and PnL totals.
+
+With `--chain`, every leg is scoped to that chain: `portfolio.total` becomes that chain's slice, `portfolio.chain` names it, and `change_1d` is `null` (the API publishes changes wallet-wide only). `portfolio.chains` still carries the full breakdown.
 
 ## Targeted reads
 
@@ -164,4 +167,6 @@ Empty positions/history usually means the wallet is inactive or very new — not
 
 ## Totals include DeFi
 
-`portfolio` and `analyze` report the **aggregated** total — wallet tokens plus DeFi (deposited, staked, locked, borrowed) — so the number matches the Zerion app. With `--chain`, `portfolio` reports that chain's slice of the total and omits the 24h change, which the API only publishes wallet-wide.
+`portfolio` and `analyze` report the **aggregated** total — wallet tokens plus DeFi (deposited, staked, locked, borrowed) — so the number matches the Zerion app. With `--chain`, both report that chain's slice of the total and omit the 24h change, which the API only publishes wallet-wide.
+
+Because the total includes DeFi, `portfolio`'s position rows do too: each row carries `position_type` (`wallet`, `deposit`, `staked`, `locked`, `loan`, `reward`) and `protocol`. Two rows for the same token — held plus staked — are two distinct positions, not a double count.

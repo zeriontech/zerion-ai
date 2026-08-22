@@ -55,3 +55,43 @@ describe("summarizeAnalyze", () => {
     assert.equal(result.wallet.query, "vitalik.eth");
   });
 });
+
+// `analyze --chain X` filters the positions and transactions legs, but the
+// /portfolio endpoint takes no chain filter — so the total has to be sliced the
+// same way `portfolio` slices it, or the summary reports a wallet-wide number
+// over a one-chain list (WLT-2076).
+describe("summarizeAnalyze — --chain scoping", () => {
+  const portfolio = { data: { attributes: {
+    total: { positions: 50000 },
+    changes: { absolute_1d: -100, percent_1d: -0.2 },
+    positions_distribution_by_chain: { ethereum: 45000, base: 5000 },
+  } } };
+
+  it("reports the chain's slice as the total", () => {
+    const result = summarizeAnalyze("0xABC", portfolio, null, null, null, { chainId: "base" });
+    assert.equal(result.portfolio.total, 5000);
+    assert.equal(result.portfolio.chain, "base");
+  });
+
+  it("drops the 24h change when scoped to a chain", () => {
+    const result = summarizeAnalyze("0xABC", portfolio, null, null, null, { chainId: "base" });
+    assert.equal(result.portfolio.change_1d, null);
+  });
+
+  it("keeps the full chain distribution so the rest is still visible", () => {
+    const result = summarizeAnalyze("0xABC", portfolio, null, null, null, { chainId: "base" });
+    assert.deepEqual(result.portfolio.chains, { ethereum: 45000, base: 5000 });
+  });
+
+  it("is unchanged with no chain: wallet-wide total, change present, no chain key", () => {
+    const result = summarizeAnalyze("0xABC", portfolio, null, null, null);
+    assert.equal(result.portfolio.total, 50000);
+    assert.deepEqual(result.portfolio.change_1d, { absolute_1d: -100, percent_1d: -0.2 });
+    assert.equal("chain" in result.portfolio, false);
+  });
+
+  it("reports null, not the wallet total, for a chain the wallet is absent from", () => {
+    const result = summarizeAnalyze("0xABC", portfolio, null, null, null, { chainId: "arbitrum" });
+    assert.equal(result.portfolio.total, null);
+  });
+});

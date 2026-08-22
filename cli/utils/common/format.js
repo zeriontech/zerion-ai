@@ -34,6 +34,14 @@ function usd(value) {
   return `$${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// A signed dollar delta (e.g. a 24h change), coloured like a percentage.
+function usdDelta(value) {
+  if (value == null) return "-";
+  const n = Number(value);
+  const color = n >= 0 ? GREEN : RED;
+  return `${color}${n >= 0 ? "+" : "-"}${usd(Math.abs(n))}${RESET}`;
+}
+
 function pct(value) {
   if (value == null) return "-";
   const n = Number(value);
@@ -97,18 +105,44 @@ export function formatSearch(data) {
   return lines.join("\n");
 }
 
+// Structured `notes` (e.g. the Solana "token holdings only" downgrade) exist to
+// explain a result that would otherwise look wrong. JSON consumers read them off
+// the payload; pretty mode has to print them or humans — the ones likely to ask
+// where their DeFi went — never see them.
+function noteLines(data) {
+  const notes = data.notes ?? [];
+  if (!notes.length) return [];
+  return [...notes.map((n) => `  ${DIM}ⓘ ${n}${RESET}`), ""];
+}
+
 export function formatPortfolio(data) {
+  const scope = data.chain ? ` ${DIM}· ${data.chain}${RESET}` : "";
   const lines = [
-    `${BOLD}Portfolio${RESET} — ${data.wallet.name} ${DIM}(${data.wallet.address.slice(0, 8)}...)${RESET}\n`,
-    `  Total: ${BOLD}${usd(data.portfolio.total)}${RESET}  24h: ${pct(data.portfolio.change_24h)}\n`,
+    `${BOLD}Portfolio${RESET} — ${data.wallet.name} ${DIM}(${data.wallet.address.slice(0, 8)}...)${RESET}${scope}\n`,
+    // change_24h is `changes.absolute_1d` — dollars, not a percentage. It was
+    // being rendered through pct(), which printed a $4,048 move as "-4048.26%".
+    `  Total: ${BOLD}${usd(data.portfolio.total)}${RESET}  24h: ${usdDelta(data.portfolio.change_24h)}\n`,
+    ...noteLines(data),
   ];
 
   if (data.positions.length > 0) {
-    lines.push(`  ${DIM}${pad("Token", 16)} ${pad("Chain", 12)} ${padStart("Value", 12)} ${padStart("Amount", 16)}${RESET}`);
-    lines.push(`  ${DIM}${"─".repeat(58)}${RESET}`);
+    // The total includes DeFi, so the list does too — label the protocol rows,
+    // or a staked ETH row is indistinguishable from the wallet ETH row above it.
+    const hasDefi = data.positions.some((p) => p.position_type && p.position_type !== "wallet");
+    const typeHeader = hasDefi ? ` ${pad("Type", 10)} Protocol` : "";
+    lines.push(`  ${DIM}${pad("Token", 16)} ${pad("Chain", 12)} ${padStart("Value", 12)} ${padStart("Amount", 16)}${typeHeader}${RESET}`);
+    lines.push(`  ${DIM}${"─".repeat(hasDefi ? 80 : 58)}${RESET}`);
     for (const p of data.positions) {
+      // A plain holding gets blanks, not a "[—]" badge: the column exists to
+      // mark the protocol rows, and most rows are ordinary token balances.
+      const isProtocolRow = p.position_type && p.position_type !== "wallet";
+      const typeCol = !hasDefi
+        ? ""
+        : isProtocolRow
+          ? ` ${positionTypeBadge(p.position_type)} ${p.protocol || ""}`.trimEnd()
+          : ` ${pad("", 10)}`;
       lines.push(
-        `  ${pad(p.symbol || "?", 16)} ${pad(p.chain || "?", 12)} ${padStart(usd(p.value), 12)} ${padStart(p.quantity?.toFixed(4) || "-", 16)}`
+        `  ${pad(p.symbol || "?", 16)} ${pad(p.chain || "?", 12)} ${padStart(usd(p.value), 12)} ${padStart(p.quantity?.toFixed(4) || "-", 16)}${typeCol}`
       );
     }
   }
@@ -119,6 +153,7 @@ export function formatPositions(data) {
   const walletLabel = data.wallet.name || data.wallet.address.slice(0, 10) + "...";
   const lines = [
     `${BOLD}Positions${RESET} — ${walletLabel} (${data.count})\n`,
+    ...noteLines(data),
     `  ${DIM}${pad("Token", 16)} ${pad("Chain", 12)} ${padStart("Value", 12)} ${padStart("24h", 18)} ${padStart("Amount", 16)}${RESET}`,
     `  ${DIM}${"─".repeat(76)}${RESET}`,
   ];

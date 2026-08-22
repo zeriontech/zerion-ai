@@ -4,6 +4,7 @@ import {
   validatePositions,
   resolvePositionFilter,
   resolvePositionFilterForAddress,
+  resolvePositionsFlag,
   resolveSigningChainAsync,
   resolveReadChainAsync,
   POSITION_FILTERS,
@@ -210,5 +211,44 @@ describe("resolvePositionFilterForAddress", () => {
       const { filter } = resolvePositionFilterForAddress(SOL, flag);
       if (filter) assert.equal(filter, "only_simple", `flag '${flag}' produced '${filter}'`);
     }
+  });
+});
+
+// `--defi` and `--positions defi` mean the same thing, and both `positions` and
+// `analyze` accept them. The shorthand used to live inside `positions` only, so
+// `analyze --defi` was dropped silently — including on Solana, where it has to
+// refuse rather than hand back token holdings.
+describe("resolvePositionsFlag", () => {
+  it("returns nothing asked for when neither flag is set", () => {
+    assert.deepEqual(resolvePositionsFlag({}), { value: undefined, defiMode: false });
+  });
+
+  it("maps --defi to --positions defi and flags DeFi-grouped output", () => {
+    assert.deepEqual(resolvePositionsFlag({ defi: true }), { value: "defi", defiMode: true });
+  });
+
+  it("accepts --defi alongside a redundant --positions defi", () => {
+    assert.deepEqual(
+      resolvePositionsFlag({ defi: true, positions: "defi" }),
+      { value: "defi", defiMode: true },
+    );
+  });
+
+  it("rejects --defi combined with a contradictory --positions", () => {
+    for (const positions of ["all", "simple"]) {
+      const { error } = resolvePositionsFlag({ defi: true, positions });
+      assert.equal(error.code, "conflicting_flags");
+      assert.match(error.message, new RegExp(positions));
+    }
+  });
+
+  it("passes explicit --positions values through without defiMode", () => {
+    assert.deepEqual(resolvePositionsFlag({ positions: "all" }), { value: "all", defiMode: false });
+    assert.deepEqual(resolvePositionsFlag({ positions: "defi" }), { value: "defi", defiMode: false });
+  });
+
+  it("still validates the --positions value", () => {
+    assert.equal(resolvePositionsFlag({ positions: "bogus" }).error.code, "unsupported_positions_filter");
+    assert.equal(resolvePositionsFlag({ positions: true }).error.code, "missing_positions_value");
   });
 });

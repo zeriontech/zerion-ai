@@ -3,7 +3,16 @@
  * into a concise summary (portfolio, top positions, recent txs, PnL).
  */
 
-export function summarizeAnalyze(address, portfolio, positions, transactions, pnl) {
+import { portfolioTotals } from "./portfolio.js";
+
+export function summarizeAnalyze(address, portfolio, positions, transactions, pnl, options = {}) {
+  const chainId = options.chainId ?? null;
+  const attrs = portfolio?.data?.attributes;
+  // With --chain the total is that chain's slice and the 24h change is dropped:
+  // the API publishes changes wallet-wide only. `chains` stays whole so a caller
+  // can still see where the rest of the value sits.
+  const totals = portfolioTotals(attrs, chainId);
+
   const topPositions = Array.isArray(positions?.data)
     ? positions.data
         .sort((a, b) => (b.attributes?.value ?? 0) - (a.attributes?.value ?? 0))
@@ -40,10 +49,11 @@ export function summarizeAnalyze(address, portfolio, positions, transactions, pn
   return {
     wallet: { query: address },
     portfolio: {
-      total: portfolio?.data?.attributes?.total?.positions ?? null,
+      total: totals.total,
       currency: "usd",
-      change_1d: portfolio?.data?.attributes?.changes ?? null,
-      chains: portfolio?.data?.attributes?.positions_distribution_by_chain ?? null,
+      change_1d: chainId ? null : (attrs?.changes ?? null),
+      chains: attrs?.positions_distribution_by_chain ?? null,
+      ...(chainId ? { chain: chainId } : {}),
     },
     positions: {
       count: Array.isArray(positions?.data) ? positions.data.length : 0,

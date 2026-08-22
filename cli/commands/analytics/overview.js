@@ -8,7 +8,11 @@ import { summarizeAnalyze } from "../../utils/common/analyze.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { resolveReadChainAsync, resolvePositionFilterForAddress } from "../../utils/common/validate.js";
+import {
+  resolveReadChainAsync,
+  resolvePositionFilterForAddress,
+  resolvePositionsFlag,
+} from "../../utils/common/validate.js";
 
 export default async function walletAnalyze(args, flags) {
   // Validate against the live catalog (not the static 14-chain registry) so any
@@ -22,6 +26,16 @@ export default async function walletAnalyze(args, flags) {
   }
   const chainId = chainCheck.chainId;
 
+  // `--defi` is a synonym for `--positions defi` here too. `analyze` used to
+  // read only `flags.positions`, so `--defi` was silently ignored — including
+  // on Solana, where it must refuse rather than return token holdings.
+  const positionsFlag = resolvePositionsFlag(flags);
+  if (positionsFlag.error) {
+    const { code, message, ...details } = positionsFlag.error;
+    printError(code, message, details);
+    process.exit(1);
+  }
+
   const { walletName, address: resolved } = await resolveAddressOrWallet(args, flags);
   const addr = encodeURIComponent(resolved);
   const txLimit = flags.limit ? parseInt(flags.limit, 10) : 10;
@@ -30,7 +44,7 @@ export default async function walletAnalyze(args, flags) {
   // endpoint accepts for base58 addresses. Without this the positions leg 400s
   // and `analyze` reports `count: 0` with a `failures` entry — which reads like
   // an empty wallet rather than a filter the API refused.
-  const filterCheck = resolvePositionFilterForAddress(resolved, flags.positions);
+  const filterCheck = resolvePositionFilterForAddress(resolved, positionsFlag.value);
   if (filterCheck.error) {
     printError(filterCheck.error.code, filterCheck.error.message, {
       suggestion: filterCheck.error.suggestion,
@@ -64,7 +78,10 @@ export default async function walletAnalyze(args, flags) {
       .map((r, i) => (r.status === "rejected" ? labels[i] : null))
       .filter(Boolean);
 
-    const summary = summarizeAnalyze(resolved, ...values);
+    // Pass --chain through: the positions and transactions legs are filtered by
+    // it, so the total has to be that chain's slice or the summary reports a
+    // wallet-wide number over a one-chain list (same fix as `portfolio`).
+    const summary = summarizeAnalyze(resolved, ...values, { chainId });
     if (walletName !== resolved) summary.label = walletName;
     if (failures.length) summary.failures = failures;
     if (filterCheck.note) summary.notes = [filterCheck.note];

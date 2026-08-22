@@ -3,6 +3,7 @@ import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
 import { formatPortfolio } from "../../utils/common/format.js";
 import { resolveReadChainAsync, resolvePositionFilterForAddress } from "../../utils/common/validate.js";
+import { portfolioTotals } from "../../utils/common/portfolio.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 
 export default async function portfolio(args, flags) {
@@ -36,14 +37,9 @@ export default async function portfolio(args, flags) {
       }),
     ]);
 
-    const attrs = portfolioRes.data?.attributes ?? {};
-    const byChain = attrs.positions_distribution_by_chain ?? {};
-    // The portfolio endpoint takes no chain filter, so when --chain narrows the
-    // position list we take that chain's slice of the distribution too —
-    // otherwise the header reports an all-chain total over a one-chain list.
-    const total = chainId ? (byChain[chainId] ?? 0) : (attrs.total?.positions ?? 0);
-    // 24h change is only published wallet-wide; don't attribute it to one chain.
-    const change24h = chainId ? null : (attrs.changes?.absolute_1d ?? null);
+    const totals = portfolioTotals(portfolioRes.data?.attributes, chainId);
+    const total = totals.total ?? 0;
+    const change24h = totals.change24h;
 
     const positions = (positionsRes.data || [])
       .map((p) => ({
@@ -53,6 +49,11 @@ export default async function portfolio(args, flags) {
         quantity: p.attributes.quantity?.float,
         value: p.attributes.value,
         price: p.attributes.price,
+        // The total now includes DeFi, so the list does too. Without these an
+        // 8 ETH wallet row and a 4 ETH staked row render identically and read
+        // like a double count.
+        position_type: p.attributes.position_type ?? null,
+        protocol: p.attributes.application_metadata?.name ?? p.attributes.protocol ?? null,
       }))
       .filter((p) => p.value > 0)
       .sort((a, b) => b.value - a.value);

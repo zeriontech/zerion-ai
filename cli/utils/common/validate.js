@@ -44,6 +44,34 @@ export function resolvePositionFilter(flag) {
 }
 
 /**
+ * Normalise the two ways a caller can ask for DeFi: `--positions defi` and the
+ * `--defi` shorthand. Both `positions` and `analyze` accept them, so the
+ * shorthand lives here rather than in one command — `analyze --defi` used to be
+ * dropped on the floor because only `positions` knew about the flag.
+ *
+ * Returns `{ value, defiMode }` or `{ error }`. `value` is the effective
+ * `--positions` value (`undefined` when nothing was asked for); `defiMode` says
+ * whether the caller wants DeFi-grouped output, which only `positions` renders.
+ */
+export function resolvePositionsFlag(flags = {}) {
+  const defiMode = Boolean(flags.defi);
+  if (defiMode && flags.positions && flags.positions !== "defi") {
+    return {
+      error: {
+        code: "conflicting_flags",
+        message: `--defi cannot be combined with --positions ${flags.positions}. Use one or the other.`,
+      },
+    };
+  }
+
+  const value = defiMode ? "defi" : flags.positions;
+  const invalid = validatePositions(value);
+  if (invalid) return { error: invalid };
+
+  return { value, defiMode };
+}
+
+/**
  * Pick the `filter[positions]` value to send for one specific address.
  *
  * The Zerion API has no protocol (DeFi) positions for Solana yet, and
