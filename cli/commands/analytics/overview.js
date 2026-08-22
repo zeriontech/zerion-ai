@@ -62,11 +62,12 @@ export default async function walletAnalyze(args, flags) {
   try {
     const auth = resolveAuth(flags);
     const results = await Promise.allSettled([
-      // Go through getPortfolio so the total carries the same
-      // `filter[positions]` default as everything else — fetching this endpoint
-      // raw is what let the summary pair an only_simple total with a
-      // no_filter position list.
-      getPortfolio(resolved, { auth }),
+      // The total must carry the same `filter[positions]` as the position
+      // list — pairing them differently is the bug this PR fixes, and it cuts
+      // both ways: a raw fetch paired an only_simple total with a no_filter
+      // list, and a hardcoded no_filter would pair an all-position total with
+      // an explicit `--positions simple` list.
+      getPortfolio(resolved, { auth, positionFilter: filterCheck.filter }),
       fetchAPI(`/wallets/${addr}/positions/`, posParams, auth),
       fetchAPI(`/wallets/${addr}/transactions/`, txParams, auth),
       fetchAPI(`/wallets/${addr}/pnl`, {}, auth),

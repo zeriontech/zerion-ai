@@ -37,9 +37,10 @@ export default async function portfolio(args, flags) {
       }),
     ]);
 
-    const totals = portfolioTotals(portfolioRes.data?.attributes, chainId);
-    const total = totals.total ?? 0;
-    const change24h = totals.change24h;
+    // No `?? 0`: portfolioTotals keeps "the API said nothing" as null, and
+    // `analyze` reports the same null — coercing here made the two commands
+    // disagree ($0.00 vs null) on a chain the wallet holds nothing on.
+    const { total, change24h } = portfolioTotals(portfolioRes.data?.attributes, chainId);
 
     const positions = (positionsRes.data || [])
       .map((p) => ({
