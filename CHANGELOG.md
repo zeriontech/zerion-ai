@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.1](https://github.com/zeriontech/zerion-ai/compare/v1.9.0...v1.9.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* **cli:** mask private key and mnemonic input on wallet import (WLT-2075) ([#112](https://github.com/zeriontech/zerion-ai/issues/112)) ([e8fa093](https://github.com/zeriontech/zerion-ai/commit/e8fa0934ac7327c9eb8ded67e6e713bbb8549002))
+* **cli:** portfolio DeFi totals and Solana read paths (WLT-2076) ([#114](https://github.com/zeriontech/zerion-ai/issues/114)) ([18972f6](https://github.com/zeriontech/zerion-ai/commit/18972f6c90ff69441d86b1b60222b39414f43396))
+
 ## [1.9.0](https://github.com/zeriontech/zerion-ai/compare/v1.8.0...v1.9.0) (2026-08-11)
 
 
