@@ -35,16 +35,20 @@ export default async function walletImport(args, flags) {
     let wallet;
     let origin;
 
+    // Key material is hidden while typing for the same reason the passphrase is:
+    // it is entered in front of whoever can see the screen (or the recording).
     if (hasEvmKey) {
-      const key = await readSecret("Enter EVM private key (hex): ");
+      const key = await readSecret("Enter EVM private key (hex): ", { mask: true });
       wallet = ows.importFromKey(name, key, passphrase, "evm");
       origin = WALLET_ORIGIN.EVM_KEY;
     } else if (hasSolKey) {
-      const key = await readSecret("Enter Solana private key (base58, hex, or byte array): ");
+      const key = await readSecret("Enter Solana private key (base58, hex, or byte array): ", {
+        mask: true,
+      });
       wallet = ows.importFromKey(name, key, passphrase, "solana");
       origin = WALLET_ORIGIN.SOL_KEY;
     } else {
-      const mnemonic = await readSecret("Enter mnemonic phrase: ");
+      const mnemonic = await readSecret("Enter mnemonic phrase: ", { mask: true });
       wallet = ows.importFromMnemonic(name, mnemonic, passphrase);
       origin = WALLET_ORIGIN.MNEMONIC;
     }
