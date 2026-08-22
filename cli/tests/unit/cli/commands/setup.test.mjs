@@ -57,5 +57,15 @@ describe("zerion setup", () => {
       const out = JSON.parse(res.stdout);
       assert.match(out.command, /--yes/);
     });
+
+    // The flag parser only understands `--flags`, so the router has to lift the
+    // `-y` shorthand out of the positional args — otherwise it's dropped and a
+    // command documented as non-interactive still prompts. Note the ordering:
+    // `--dry-run -y` would have `-y` consumed as --dry-run's value instead.
+    it("-y shorthand is honored like --yes", () => {
+      const res = runZerion(["setup", "skills", "-y", "--dry-run"]);
+      const out = JSON.parse(res.stdout);
+      assert.match(out.command, /--yes/);
+    });
   });
 });

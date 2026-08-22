@@ -18,7 +18,7 @@
 ## Requirements
 
 - Uniswap AI skills: `npx skills add Uniswap/uniswap-ai`
-- Zerion CLI: `npx -y zerion-cli init -y --browser`
+- Zerion CLI: `npx zerion-cli init`
 - Zerion API key: `export ZERION_API_KEY="zk_..."`
 - Uniswap API key: `export UNISWAP_API_KEY="..."`
 - `cast` (Foundry): `curl -L https://foundry.paradigm.xyz | bash && foundryup`

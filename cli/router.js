@@ -143,8 +143,9 @@ function printUsage() {
     setup: {
       "login": "Authenticate — browser (dashboard) login, paste an API key, or pay-per-call",
       "login --browser": "Browser authentication: opens dashboard.zerion.io, captures the key via loopback",
-      "init": "One-shot onboarding: install CLI globally, authenticate, install agent skills",
-      "init -y --browser": "Non-interactive init that opens dashboard.zerion.io for the API key",
+      "init": "One-shot onboarding: install CLI globally, browser login, install agent skills (`npx zerion-cli init`)",
+      "init -y": "Same without prompts: browser login, then install every skill",
+      "init --no-open": "Print the authorize URL instead of opening a browser (remote / headless hosts)",
       "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-ai` (45+ hosts)",
     },
     // Trading-supported chains (swap/bridge/send). Mirrors Zerion API
@@ -164,11 +165,18 @@ function printUsage() {
 }
 
 export async function dispatch(argv) {
-  const { rest, flags } = parseFlags(argv);
+  let { rest, flags } = parseFlags(argv);
 
-  // Handle shorthand flags (-h, -v) that the flag parser treats as positional
+  // Handle shorthand flags (-h, -v, -y) that the flag parser treats as
+  // positional. `-y` matters most for `init`/`setup`, whose help advertises it:
+  // without this it was silently dropped and `init -y` still prompted. It's
+  // also filtered out of the positional args, since no command takes it as one.
   if (rest.includes("-h")) flags.help = true;
   if (rest.includes("-v")) flags.version = true;
+  if (rest.includes("-y")) {
+    flags.yes = true;
+    rest = rest.filter((arg) => arg !== "-y");
+  }
 
   if (flags.version || flags.v) {
     const { readFileSync } = await import("node:fs");

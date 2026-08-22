@@ -3,31 +3,34 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { print, printError } from "../utils/common/output.js";
-import { openBrowser } from "../utils/common/browser.js";
 import { DASHBOARD_URL } from "../utils/common/constants.js";
-import { getApiKey } from "../utils/config.js";
+import { getApiKey, setConfigValue } from "../utils/config.js";
 import { runInteractiveAuth } from "../utils/api/interactive-auth.js";
+import { authenticateWithBrowser } from "../utils/api/oauth.js";
 
 const ZERION_AGENT_REPO = "zeriontech/zerion-ai";
 
 const HELP = {
   usage: "zerion init [options]",
   description:
-    "One-shot onboarding: install the CLI globally, authenticate (browser login, paste an API key, or pay-per-call), and install Zerion agent skills into detected coding agents. By default the auth and skills steps are interactive.",
+    "One-shot onboarding: install the CLI globally, authenticate in the browser, and install Zerion agent skills into detected coding agents. Interactive by default — auth offers browser login, pasting a key, or pay-per-call, and the skills step lets you pick.",
   flags: {
-    "--yes, -y": "Non-interactive — skip prompts and install ALL skills (otherwise user picks)",
-    "--browser": "With --yes: open dashboard.zerion.io to grab an API key (interactive runs offer browser login directly)",
+    "--yes, -y": "Skip the prompts — browser login straight away, and install ALL skills (otherwise user picks)",
+    "--no-open": "Print the authorize URL instead of opening a browser (remote / headless hosts)",
     "--no-install": "Skip the global `npm install -g zerion-cli` step",
     "--no-auth": "Skip the API key configuration step",
     "--no-skills": "Skip the agent skills install step",
     "--agent <name>": "Scope skills install to one agent (e.g. claude-code, cursor)",
+    "--browser": "No-op — browser auth is the default now; accepted so older one-liners keep working",
   },
   examples: {
-    "npx -y zerion-cli init -y --browser":
-      "Bootstrap end-to-end non-interactively, opening the dashboard for the API key",
+    "npx zerion-cli init": "Bootstrap end-to-end: global install, browser login, pick skills",
+    "zerion init -y": "No prompts — browser login, then install every skill",
     "zerion init --no-install --agent claude-code":
       "Skip self-install and only set up Claude Code",
   },
+  unattended:
+    "Browser login needs someone to approve it, so without a TTY (CI, piped, container) the auth step prints API-key instructions instead of waiting on the loopback callback. Set ZERION_API_KEY or run `zerion config set apiKey <key>` there.",
 };
 
 function log(line = "") {
@@ -78,29 +81,51 @@ function ensureGlobalInstall() {
   return { ok: true, skipped: false };
 }
 
-async function ensureApiKey({ yes, browser }) {
+function printKeyFallback() {
+  log(`  → Get an API key at ${DASHBOARD_URL}, then run:`);
+  log(`      zerion config set apiKey <your-key>`);
+  log(`    (or set ZERION_API_KEY, or run 'zerion login' later)`);
+}
+
+async function ensureApiKey({ yes, open }) {
   const existing = getApiKey();
   if (existing) {
     log("  ✓ Already authenticated");
     return { ok: true, skipped: true };
   }
 
-  if (yes) {
-    log(`  ! No API key configured. Get one at ${DASHBOARD_URL} and run:`);
-    log(`    zerion config set apiKey <your-key>`);
-    log(`    (or run 'zerion login' for browser authentication)`);
-    if (browser) openBrowser(DASHBOARD_URL);
-    return { ok: true, skipped: true, reason: "non_interactive" };
-  }
-
+  // Browser login needs no prompt — approval happens out-of-band in the
+  // browser — but it does need a human to approve it, and the loopback wait is
+  // 5 minutes. A TTY is the "someone is watching" signal; without one (CI,
+  // piped, container) hand over instructions rather than hang.
   if (!process.stdin.isTTY) {
     log(`  ! No API key configured and stdin is not interactive.`);
-    log(`    Set ZERION_API_KEY or run: zerion config set apiKey <your-key>`);
+    printKeyFallback();
     return { ok: true, skipped: true, reason: "non_tty" };
   }
 
+  // --yes means "don't ask me questions", not "don't authenticate": skip the
+  // method picker and go straight to browser login, same path as
+  // `zerion login --browser`.
+  if (yes) {
+    try {
+      const { apiKey } = await authenticateWithBrowser({ open, log });
+      setConfigValue("apiKey", apiKey);
+      log("  ✓ Authenticated — API key saved to config");
+      return { ok: true, method: "oauth" };
+    } catch (err) {
+      log(`  ! Browser authorization failed: ${err.message}`);
+      return {
+        ok: false,
+        method: "oauth",
+        reason: err.code || "oauth_failed",
+        message: err.message,
+      };
+    }
+  }
+
   // Interactive: browser login (default), paste a key, or pay-per-call.
-  return runInteractiveAuth({ log, open: true });
+  return runInteractiveAuth({ log, open });
 }
 
 function installSkills({ agent, yes }) {
@@ -148,7 +173,9 @@ export default async function init(args, flags) {
   }
 
   const yes = Boolean(flags.yes || flags.y);
-  const browser = Boolean(flags.browser);
+  // parseFlags maps `--no-open` to `flags.open = false`. `--browser` is
+  // accepted but ignored — browser auth is the default now.
+  const open = flags.open !== false;
   // parseFlags maps `--no-install` to `flags.install = false`
   const skipInstall = flags.install === false;
   const skipAuth = flags.auth === false;
@@ -175,8 +202,11 @@ export default async function init(args, flags) {
   log("[2/3] Authenticate");
   const authRes = skipAuth
     ? { ok: true, skipped: true, reason: "flag" }
-    : await ensureApiKey({ yes, browser });
+    : await ensureApiKey({ yes, open });
   steps.push({ step: "auth", ...authRes });
+  // A denied or timed-out login shouldn't undo a good CLI + skills install:
+  // print the manual fallback, keep going, and still exit 0.
+  if (!authRes.ok) printKeyFallback();
 
   log("");
   log("[3/3] Install agent skills");
@@ -191,5 +221,5 @@ export default async function init(args, flags) {
 
   printSuccessSummary();
 
-  print({ ok: true, action: "init", steps });
+  print({ ok: true, action: "init", nonInteractive: yes, steps });
 }
