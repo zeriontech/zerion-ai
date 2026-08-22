@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { readSecret, readPassphraseFromFile } from "#zerion/utils/common/prompt.js";
+import { readSecret, readPassphrase, readPassphraseFromFile } from "#zerion/utils/common/prompt.js";
 
 const isWindows = process.platform === "win32";
 
@@ -80,6 +80,7 @@ describe("readSecret masked input", () => {
   const BACKSPACE = "\u007F";
   const CTRL_C = "\u0003";
   const CTRL_D = "\u0004";
+  const CTRL_U = "\u0015"; // kill line
   const ESC = "\u001B";
 
   let realStdin;
@@ -203,5 +204,94 @@ describe("readSecret masked input", () => {
     const pending = readSecret(PROMPT, { mask: true });
     stream.write(`${KEY}\n`);
     assert.equal(await pending, KEY);
+  });
+
+  it("clears the whole line on Ctrl-U (kill line)", async () => {
+    const { value } = await prompt(["wrong", CTRL_U, "right\r"]);
+    assert.equal(value, "right");
+  });
+
+  // `wallet import` runs prompts back to back (passphrase, confirm, key);
+  // each one must get a fresh interface on the same stdin without dropping input.
+  it("keeps two sequential prompts on the same stdin separate", async () => {
+    const stream = fakeTty();
+    withStdin(stream);
+
+    let written = "";
+    process.stderr.write = (str) => {
+      written += str;
+      return true;
+    };
+
+    const first = readSecret("Enter passphrase: ", { mask: true });
+    stream.write("hunter2\r");
+    assert.equal(await first, "hunter2");
+
+    const second = readSecret(PROMPT, { mask: true });
+    stream.write(`${KEY}\r`);
+    assert.equal(await second, KEY);
+
+    process.stderr.write = realWrite;
+    assert.equal(written, `Enter passphrase: \n${PROMPT}\n`);
+  });
+
+  // A terminal paste can end in \r\n; the \r submits, and the leftover \n must
+  // not submit the NEXT prompt as an empty line.
+  it("does not leak the LF of a CRLF submit into the next prompt", async () => {
+    const stream = fakeTty();
+    withStdin(stream);
+    process.stderr.write = () => true;
+
+    const first = readSecret(PROMPT, { mask: true });
+    stream.write("first-secret\r\n");
+    assert.equal(await first, "first-secret");
+
+    const second = readSecret(PROMPT, { mask: true });
+    stream.write("second-secret\r");
+    assert.equal(await second, "second-secret");
+
+    process.stderr.write = realWrite;
+  });
+});
+
+describe("readPassphrase confirm flow", () => {
+  let realStdin;
+  let realWrite;
+
+  before(() => {
+    realStdin = process.stdin;
+    realWrite = process.stderr.write;
+  });
+
+  after(() => {
+    Object.defineProperty(process, "stdin", { value: realStdin, configurable: true });
+    process.stderr.write = realWrite;
+  });
+
+  it("retries on mismatch and never echoes either attempt", async () => {
+    const stream = new PassThrough();
+    stream.isTTY = true;
+    stream.setRawMode = () => stream;
+    Object.defineProperty(process, "stdin", { value: stream, configurable: true });
+
+    // Reply to each prompt as it appears: first pair mismatches, second matches.
+    const replies = ["first-try\r", "does-not-match\r", "correct horse\r", "correct horse\r"];
+    let written = "";
+    process.stderr.write = (str) => {
+      written += str;
+      if (str.endsWith("passphrase: ")) {
+        const reply = replies.shift();
+        if (reply) process.nextTick(() => stream.write(reply));
+      }
+      return true;
+    };
+
+    const value = await readPassphrase({ confirm: true });
+    process.stderr.write = realWrite;
+
+    assert.equal(value, "correct horse");
+    assert.match(written, /do not match/i);
+    assert.ok(!written.includes("first-try"), "expected no echo of the first attempt");
+    assert.ok(!written.includes("correct horse"), "expected no echo of the passphrase");
   });
 });
