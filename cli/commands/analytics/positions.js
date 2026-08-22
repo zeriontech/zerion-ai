@@ -11,7 +11,7 @@
 import * as api from "../../utils/api/client.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
-import { resolveReadChainAsync, validatePositions, resolvePositionFilter } from "../../utils/common/validate.js";
+import { resolveReadChainAsync, resolvePositionsFlag, resolvePositionFilterForAddress } from "../../utils/common/validate.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 import { formatPositions, formatDefiPositions } from "../../utils/common/format.js";
 
@@ -27,31 +27,34 @@ export default async function walletPositions(args, flags) {
   }
   const chainId = chainCheck.chainId;
 
-  // --defi is shorthand for --positions defi + DeFi-grouped output.
-  // Conflict only if user also passed an incompatible --positions value.
-  const defiMode = !!flags.defi;
-  if (defiMode && flags.positions && flags.positions !== "defi") {
-    printError(
-      "conflicting_flags",
-      `--defi cannot be combined with --positions ${flags.positions}. Use one or the other.`,
-    );
+  // --defi is shorthand for --positions defi + DeFi-grouped output. The flag
+  // normalisation is shared with `analyze`, which accepts the same two flags.
+  const positionsFlag = resolvePositionsFlag(flags);
+  if (positionsFlag.error) {
+    const { code, message, ...details } = positionsFlag.error;
+    printError(code, message, details);
     process.exit(1);
   }
-  if (defiMode) flags.positions = "defi";
-
-  const posErr = validatePositions(flags.positions);
-  if (posErr) {
-    printError(posErr.code, posErr.message, { supportedValues: posErr.supportedValues });
-    process.exit(1);
-  }
+  const { value: positionsValue, defiMode } = positionsFlag;
 
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
+
+  // Solana takes only `only_simple` on this endpoint — downgrade an implicit
+  // "everything", but refuse an explicit DeFi ask rather than quietly handing
+  // back token holdings that were never what was requested.
+  const filterCheck = resolvePositionFilterForAddress(address, positionsValue);
+  if (filterCheck.error) {
+    printError(filterCheck.error.code, filterCheck.error.message, {
+      suggestion: filterCheck.error.suggestion,
+    });
+    process.exit(1);
+  }
 
   try {
     const auth = resolveAuth(flags);
     const response = await api.getPositions(address, {
       chainId,
-      positionFilter: resolvePositionFilter(flags.positions),
+      positionFilter: filterCheck.filter,
       auth,
     });
 
@@ -89,12 +92,14 @@ export default async function walletPositions(args, flags) {
       .filter((p) => p.value > 0)
       .sort((a, b) => b.value - a.value);
 
-    print({
+    const payload = {
       wallet: { name: walletName, address },
       positions,
       count: positions.length,
-      filter: flags.positions || "all",
-    }, formatPositions);
+      filter: positionsValue || "all",
+    };
+    if (filterCheck.note) payload.notes = [filterCheck.note];
+    print(payload, formatPositions);
   } catch (err) {
     printError(err.code || "positions_error", err.message);
     process.exit(1);

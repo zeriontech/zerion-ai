@@ -64,8 +64,10 @@ worth knowing before you plan a flow:
 
 - Trades on a read-only wallet **cannot run unattended** — a human has to sign in the browser.
 - No agent token is needed on the handoff path (there's no keystore to unlock).
-- The stored address's ecosystem fixes which chains it can sign for — an EVM (`0x…`) read-only wallet
-  refuses `--chain solana` with `readonly_chain_mismatch`, and vice versa.
+- The stored address's ecosystem fixes which chains it can **sign** for — an EVM (`0x…`) read-only wallet
+  refuses `--chain solana` with `readonly_chain_mismatch`, and vice versa. This is a signing constraint
+  only: read commands take either ecosystem and need no `--chain` at all (`zerion portfolio my-sol-wallet`
+  works). Passing a `--chain` that contradicts the wallet is still reported, since there'd be nothing to read.
 - `wallet backup` / `wallet export-key` error clearly — there is no key material to export.
 - `consolidate --execute` signs locally and so **cannot work** on a read-only wallet — it still demands
   an agent token first (`no_agent_token`, exit 1, if none is configured), and once past that gate every
@@ -194,5 +196,5 @@ After step 1's agent-token prompt, the wallet is ready for autonomous trading vi
 | `name_in_use` | `wallet add` name already taken by a keystore wallet | Pick another `--name` |
 | `readonly_invalid_address` | `wallet add` value isn't a 0x address, `.eth` name, or base58 pubkey | Check the address format |
 | `ens_resolve_failed` | ENS name didn't resolve to an EVM address | Verify the name, or pass the raw `0x` address |
-| `readonly_chain_mismatch` | Read-only wallet's ecosystem ≠ the requested chain | EVM wallet → EVM `--chain`; Solana wallet → `--chain solana` |
+| `readonly_chain_mismatch` | Read-only wallet's ecosystem ≠ an **explicitly requested** chain | EVM wallet → EVM `--chain`; Solana wallet → `--chain solana`. Reads need no `--chain` at all |
 | `invalid_threshold` | `set-review-threshold` value isn't a non-negative USD number or `off` | e.g. `500` or `off` |

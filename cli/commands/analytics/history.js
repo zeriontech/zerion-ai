@@ -2,15 +2,26 @@ import * as api from "../../utils/api/client.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAddressOrWallet } from "../../utils/wallet/resolve.js";
 import { formatHistory } from "../../utils/common/format.js";
+import { resolveReadChainAsync } from "../../utils/common/validate.js";
 import { resolveAuth } from "../../utils/api/auth.js";
 
 export default async function history(args, flags) {
+  // Validate against the live catalog so a typo reports `unsupported_chain`
+  // with a `zerion chains` hint rather than a raw 400 from the API.
+  const chainCheck = await resolveReadChainAsync(flags.chain);
+  if (chainCheck.error) {
+    printError(chainCheck.error.code, chainCheck.error.message, {
+      suggestion: chainCheck.error.suggestion,
+    });
+    process.exit(1);
+  }
+
   const { walletName, address } = await resolveAddressOrWallet(args, flags);
 
   try {
     const auth = resolveAuth(flags);
     const response = await api.getTransactions(address, {
-      chainId: flags.chain,
+      chainId: chainCheck.chainId,
       limit: flags.limit ? parseInt(flags.limit, 10) : 10,
       auth,
     });
