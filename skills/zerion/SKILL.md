@@ -148,6 +148,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Vaults.fyi (yield optimizer) | Yield optimization | `partners/vaultsfyi-yield-optimizer.md` |
 | Yellow | Multiparty off-chain settlement rooms | `partners/yellow-settlement-room.md` |
 | Consolidate | Sweep all tokens on a chain into one target | `partners/consolidate.md` |
+| Treasury liquidation | Drain a wallet across all chains, and/or sweep a whole multi-chain portfolio into one token | `partners/treasury-liquidation.md` |
 
 **Rule:** never preload partner docs. Only Read when the user explicitly invokes the partner or asks for a flow that uniquely maps to it.
 

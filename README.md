@@ -68,6 +68,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | [`vaultsfyi-*.md`](./skills/zerion/partners/) | Deposit, market intel, rebalance, risk monitor, strategist, watchlist, yield optimizer | [Vaults.fyi](https://vaults.fyi) |
 | [`yellow-settlement-room.md`](./skills/zerion/partners/yellow-settlement-room.md) | Multiparty off-chain settlement rooms | [Yellow](https://yellow.org) |
 | [`consolidate.md`](./skills/zerion/partners/consolidate.md) | Sweep all tokens on a chain into one target | Zerion |
+| [`treasury-liquidation.md`](./skills/zerion/partners/treasury-liquidation.md) | Drain a wallet across all chains, and/or sweep a whole multi-chain portfolio into one token | Zerion |
 
 ### Install via zerion CLI (recommended)
 
