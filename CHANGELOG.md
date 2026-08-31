@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.10.0](https://github.com/zeriontech/zerion-ai/compare/v1.9.1...v1.10.0) (2026-08-31)
+
+
+### Features
+
+* add Cursor Marketplace plugin manifest ([613d995](https://github.com/zeriontech/zerion-ai/commit/613d995923d23f6fa40cdbfeaba3ab3fb0b63aab))
+* add Cursor Marketplace plugin manifest ([525f562](https://github.com/zeriontech/zerion-ai/commit/525f5626fc13decd189759b2b292325d3fa5b44c))
+* use Cursor's own manifest format instead of the root one ([5cc29e1](https://github.com/zeriontech/zerion-ai/commit/5cc29e1a2f186c84645a9642ee0c908e170bc6b7))
+
+
+### Bug Fixes
+
+* Cursor Marketplace listing — manifest format, logo, MCP name, install docs ([7a873d1](https://github.com/zeriontech/zerion-ai/commit/7a873d1c91d4cdfb24bbe79fd8cfabb72544bb6a))
+* draw the logo as positive shapes so Cursor renders it correctly ([668fc02](https://github.com/zeriontech/zerion-ai/commit/668fc028ee82703fd11ef6172b0877132d687898))
+* name the MCP server Zerion ([6a78e7a](https://github.com/zeriontech/zerion-ai/commit/6a78e7a1e67eec8d5ff6c3f28867ce9710e32e75))
+* name the MCP server zerion-mcp ([7244bb1](https://github.com/zeriontech/zerion-ai/commit/7244bb181e36507bc9f69248f43c9406a7aa4086))
+* rename the logo to assets/avatar.png and drop the unused SVG ([89b2a74](https://github.com/zeriontech/zerion-ai/commit/89b2a74a0980295028e97ae94a121478912fe52f))
+* rename the MCP server key so it renders cleanly ([b9219ca](https://github.com/zeriontech/zerion-ai/commit/b9219caa91c77ca9899b15b45845d029065195ef))
+
 ## [1.9.1](https://github.com/zeriontech/zerion-ai/compare/v1.9.0...v1.9.1) (2026-08-22)
 
 
