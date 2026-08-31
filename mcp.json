@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zerion-api-docs": {
+      "type": "http",
+      "url": "https://developers.zerion.io/mcp"
+    }
+  }
+}
