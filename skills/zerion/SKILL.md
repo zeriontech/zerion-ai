@@ -128,6 +128,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Bankr | Twitter/X-native trading bot patterns | `partners/bankr.md` |
 | Li.Fi Earn | Cross-chain yield routing | `partners/lifi-earn.md` |
 | Monad addresses | Monad chain address tooling | `partners/monad-addresses.md` |
+| Staking | Liquid staking and restaking (Lido, Rocket Pool, Frax, cbETH, EigenLayer) | `partners/staking.md` |
 | Moonpay (onramp) | Fiat → crypto onramp | `partners/moonpay-onramp.md` |
 | Moonpay (Iron) | Iron stablecoin flows | `partners/moonpay-iron.md` |
 | Moonpay (Predict) | Prediction market integration | `partners/moonpay-predict.md` |
