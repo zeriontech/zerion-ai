@@ -1,6 +1,6 @@
 ---
 name: zerion
-description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai, Yellow). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
+description: "Crypto wallet API + CLI for AI agents. Single entry point for wallet analysis (portfolio, positions, history, PnL), on-chain trading (swap, bridge, send), off-chain signing (EIP-191, EIP-712), wallet management (create/import/backup), agent tokens + policies for autonomous trading, and partner integrations (0x, Bankr, Li.Fi, Moonpay, OpenSea, Uniswap, Vaults.fyi, Trails, Umbra, Somnia, Monad, Sendai, Yellow). Use this skill for any crypto wallet, DeFi, or on-chain task. Deep docs load on demand from `capabilities/` and `partners/`."
 license: MIT
 allowed-tools: Bash, Read
 ---
@@ -128,6 +128,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Bankr | Twitter/X-native trading bot patterns | `partners/bankr.md` |
 | Li.Fi Earn | Cross-chain yield routing | `partners/lifi-earn.md` |
 | Monad addresses | Monad chain address tooling | `partners/monad-addresses.md` |
+| OpenSea automint | Unattended NFT minting from SeaDrop drops | `partners/opensea-automint.md` |
 | Moonpay (onramp) | Fiat → crypto onramp | `partners/moonpay-onramp.md` |
 | Moonpay (Iron) | Iron stablecoin flows | `partners/moonpay-iron.md` |
 | Moonpay (Predict) | Prediction market integration | `partners/moonpay-predict.md` |
