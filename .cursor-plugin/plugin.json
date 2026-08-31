@@ -1,0 +1,35 @@
+{
+  "name": "zerion-agent",
+  "displayName": "Zerion",
+  "version": "1.9.1",
+  "description": "Give your agent a wallet. Analyze any address (portfolio, positions, history, PnL) and execute swaps, bridges and sends across 14 EVM chains and Solana, with agent-token policies for safe autonomous trading.",
+  "author": {
+    "name": "Zerion",
+    "email": "support@zerion.io"
+  },
+  "publisher": "Zerion",
+  "homepage": "https://zerion.io",
+  "repository": "https://github.com/zeriontech/zerion-ai",
+  "license": "MIT",
+  "logo": "assets/avatar.png",
+  "keywords": [
+    "zerion",
+    "wallet",
+    "defi",
+    "trading",
+    "crypto",
+    "swap",
+    "bridge",
+    "ens",
+    "x402"
+  ],
+  "tags": [
+    "wallet",
+    "web3",
+    "defi",
+    "trading",
+    "developer-tools"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "mcp.json"
+}

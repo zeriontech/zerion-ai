@@ -87,11 +87,7 @@ Installs globally across all detected coding agents. Use `--agent <name>` to sco
 
 ### Install via Cursor
 
-Install [`zerion-agent`](https://cursor.com/marketplace) from the Cursor Marketplace, or add the repo directly:
-
-```text
-Settings → Plugins → Add plugin → zeriontech/zerion-ai
-```
+Install `zerion-agent` from the [Cursor Marketplace](https://cursor.com/marketplace): open **Customize** in the sidebar, find **Zerion**, then **Install** and pick project or user scope.
 
 The plugin ships the `zerion` skill plus the hosted Zerion API docs MCP server (`https://developers.zerion.io/mcp`), so the agent can look up endpoint reference without leaving the editor.
 
