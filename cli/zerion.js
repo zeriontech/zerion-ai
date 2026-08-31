@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 
+
+
 /**
  * Zerion CLI — unified entry point for wallet analysis and trading.
  * Routes argv to command handlers via the router.
  */
-
 import { register, registerSingle, dispatch } from "./router.js";
 import { printError, setPrettyMode } from "./utils/common/output.js";
 import { migrateFromZerionCli } from "./utils/common/migrate.js";
+import { parseFlags } from "./utils/common/flags.js";
 
 // Migrate config from ~/.zerion-cli → ~/.zerion on first run after upgrade
 migrateFromZerionCli();
@@ -17,8 +19,13 @@ if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.
   setPrettyMode(true);
 }
 
-// --- Wallet management ---
+// Global interceptor for --agent-token flag
+const { flags } = parseFlags(process.argv.slice(2));
+if (flags["agent-token"]) {
+  process.env.ZERION_AGENT_TOKEN = flags["agent-token"];
+}
 
+// --- Wallet management ---
 import walletCreate from "./commands/wallet/create.js";
 import walletImport from "./commands/wallet/import.js";
 import walletAdd from "./commands/wallet/add.js";
