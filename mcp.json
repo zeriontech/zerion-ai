@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "zerion-mcp": {
+    "Zerion": {
       "type": "http",
       "url": "https://developers.zerion.io/mcp"
     }
