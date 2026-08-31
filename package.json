@@ -20,7 +20,7 @@
     ".claude-plugin/",
     ".codex-plugin/",
     "gemini-extension.json",
-    "plugin.json",
+    ".cursor-plugin/",
     "mcp.json",
     "assets/",
     "README.md",
