@@ -88,6 +88,15 @@ reserve too small to broadcast anything — so any residue there is stranded unt
 manual top-up. Size reserves in USD, and apply the bridge floor to the amount
 actually leaving (balance minus reserve), not to the balance before it.
 
+**The positions indexer lags fresh deposits by minutes.** A bridge reported
+`delivery=delivered` and `eth_getBalance` showed 132 POL on-chain while the
+positions API still returned $0.00 native for that chain — which made a
+gas-affordability check false-skip the whole chain moments after it had been
+deliberately topped up. Cuts the other way too: quantities read from `positions`
+right after a batch of swaps miss the proceeds (a bridge sized from that read
+carried $3 instead of $100). After any top-up or sweep, confirm via RPC before
+acting on an indexer read.
+
 **Trust on-chain balances over everything.** `eth_getBalance` for native,
 `eth_call` + `0x70a08231<padded addr>` for ERC-20. Use
 `https://ethereum-rpc.publicnode.com` (llamarpc 521s, cloudflare-eth errors).

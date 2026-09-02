@@ -100,9 +100,13 @@ def stage_a(wallet, chains, dest, min_value):
         native_usd = (nat or {}).get("value") or 0.0
         budget = affordable_swaps(ch, native_usd)
         if budget < 1:
+            # The figure comes from the positions indexer, which lags a fresh
+            # top-up by minutes: a bridge can deliver native on-chain while this
+            # still reads $0.00. Before trusting a zero, check eth_getBalance.
             log(f"{ch}: SKIPPED -- gas ${native_usd:,.2f} cannot fund a sweep plus "
                 f"the bridge that must follow (needs > ${bridge_gas_usd(ch):.2f}). "
-                f"Top up native on {ch} to recover this chain.")
+                f"Top up native on {ch} to recover this chain (if you just did, "
+                f"the indexer may not have caught up -- verify via RPC and rerun).")
             continue
 
         plan = run(["zerion", "consolidate", ch, tgt, "--wallet", wallet,
