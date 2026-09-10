@@ -54,6 +54,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | [`bankr.md`](./skills/zerion/partners/bankr.md) | Twitter/X-native trading bot patterns | [Bankr](https://bankr.bot) |
 | [`lifi-earn.md`](./skills/zerion/partners/lifi-earn.md) | Cross-chain yield routing | [Li.Fi](https://li.fi) |
 | [`monad-addresses.md`](./skills/zerion/partners/monad-addresses.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
+| [`opensea-automint.md`](./skills/zerion/partners/opensea-automint.md) | Unattended NFT minting from OpenSea SeaDrop drops — discovery, market-data scoring, scheduled execution with safety rails | [OpenSea](https://opensea.io) |
 | [`moonpay-onramp.md`](./skills/zerion/partners/moonpay-onramp.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
 | [`moonpay-iron.md`](./skills/zerion/partners/moonpay-iron.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
 | [`moonpay-predict.md`](./skills/zerion/partners/moonpay-predict.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
