@@ -44,7 +44,7 @@ to whatever unrelated package holds that name:
 
   ```bash
   git clone https://github.com/penumbraaasol/automint && cd automint
-  git checkout 5da1e8f        # pin; review the diff before moving this forward
+  git checkout 5b3d105        # pin; review the diff before moving this forward
   npm install
   ```
 - OpenSea API key in `.env` as `OPENSEA_API_KEY`
