@@ -39,11 +39,12 @@ to whatever unrelated package holds that name:
 
 - Zerion CLI: `npm install -g zerion-cli`, `export ZERION_API_KEY="zk_..."`
 - automint, pinned to a reviewed revision — the package is unpublished and must
-  be installed from source, subject to your dependency-cooldown policy:
+  be installed from source. Apply this repository's required 15-day dependency
+  cooldown before adopting any revision:
 
   ```bash
   git clone https://github.com/penumbraaasol/automint && cd automint
-  git checkout b0affc0        # pin; review the diff before moving this forward
+  git checkout 5da1e8f        # pin; review the diff before moving this forward
   npm install
   ```
 - OpenSea API key in `.env` as `OPENSEA_API_KEY`
