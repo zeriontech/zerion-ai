@@ -58,7 +58,7 @@ an opaque blob instead of real intent.
 
   ```bash
   git clone https://github.com/penumbraaasol/automint && cd automint
-  git checkout 2102e11        # pin; review the diff before moving this forward
+  git checkout 5b1fb4e        # pin; review the diff before moving this forward
   npm install
   ```
 - OpenSea API key in `.env` as `OPENSEA_API_KEY`
