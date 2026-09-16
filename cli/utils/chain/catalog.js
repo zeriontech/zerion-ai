@@ -29,6 +29,38 @@ function buildCatalog(response) {
   return byId;
 }
 
+// Chains whose catalog entry has no public RPC a non-browser client can reach.
+// Only consulted after every catalog URL has failed, so the catalog always wins
+// once chain-storage publishes real endpoints and these entries go cold.
+//
+// arc: chain-storage lists only `https://rpc.zerion.io/v1/arc`, which is behind
+// a Cloudflare managed challenge and 403s anything that isn't a browser, so the
+// CLI cannot build a transaction on Arc at all. chainid.network has Arc mainnet
+// (5042) with an empty `rpc` array, so the daily chainlist sync has nothing to
+// pick up. These are Circle's official public endpoints, from
+// https://docs.arc.io/arc/references/rpc-endpoints.
+const RPC_SEED = {
+  arc: [
+    "https://rpc.mainnet.arc.io",
+    "https://rpc.blockdaemon.mainnet.arc.io",
+    "https://rpc.drpc.mainnet.arc.io",
+    "https://rpc.quicknode.mainnet.arc.io",
+  ],
+};
+
+const isHttpUrl = (u) => typeof u === "string" && /^https?:\/\//i.test(u);
+
+/**
+ * Per-chain RPC override: `ZERION_RPC_URL_<CHAIN>`, where <CHAIN> is the Zerion
+ * chain id upper-cased with `-` replaced by `_` (binance-smart-chain →
+ * ZERION_RPC_URL_BINANCE_SMART_CHAIN). Mirrors the existing SOLANA_RPC_URL
+ * escape hatch. Tried first; the catalog's own URLs stay on as fallbacks.
+ */
+function rpcOverrideFor(chainId) {
+  const url = process.env[`ZERION_RPC_URL_${chainId.toUpperCase().replace(/-/g, "_")}`]?.trim();
+  return isHttpUrl(url) ? url : null;
+}
+
 function toConfig(item) {
   const id = item.id;
   if (!id) return null;
@@ -36,9 +68,13 @@ function toConfig(item) {
   const flags = attrs.flags || {};
   const externalIdHex = attrs.external_id || "";
   const chainIdNum = externalIdHex ? Number.parseInt(externalIdHex, 16) : null;
-  const rpcHttpUrls = (attrs.rpc?.public_servers_url || []).filter((u) =>
-    typeof u === "string" && /^https?:\/\//i.test(u)
-  );
+  const rpcHttpUrls = [
+    ...new Set([
+      rpcOverrideFor(id),
+      ...(attrs.rpc?.public_servers_url || []),
+      ...(RPC_SEED[id] || []),
+    ].filter(isHttpUrl)),
+  ];
 
   return {
     id,
@@ -125,6 +161,13 @@ export async function getNativeFungible(chainId) {
 
   nativeFungibleCache.set(chainId, promise);
   return promise;
+}
+
+// Test seam — build a catalog straight from a `/chains/` payload, so tests can
+// cover URL resolution (overrides, seeds, de-duplication) rather than stubbing
+// the shape it produces.
+export function __buildCatalogForTests(response) {
+  return buildCatalog(response);
 }
 
 // Test seam — let unit tests inject a fixture catalog without hitting the network.
