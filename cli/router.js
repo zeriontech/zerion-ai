@@ -143,7 +143,7 @@ function printUsage() {
     setup: {
       "login": "Authenticate — browser (dashboard) login, paste an API key, or pay-per-call",
       "login --browser": "Browser authentication: opens dashboard.zerion.io, captures the key via loopback",
-      "init": "One-shot onboarding: install CLI globally, browser login, install agent skills (`npx zerion-cli init`)",
+      "init": "One-shot onboarding: install CLI globally, browser login, install agent skills (`npx zerion-cli@latest init`)",
       "init -y": "Same without prompts: browser login, then install every skill",
       "init --no-open": "Print the authorize URL instead of opening a browser (remote / headless hosts)",
       "setup skills": "Install Zerion agent skills via `npx skills add zeriontech/zerion-ai` (45+ hosts)",

@@ -27,7 +27,8 @@ npm install -g zerion-cli
 ```
 
 Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication). **Trading needs
-an API key + agent token** (pay-per-call `--x402` / `--mpp` does NOT apply).
+an API key** (pay-per-call `--x402` / `--mpp` does NOT apply), plus an agent token when signing
+locally — a read-only wallet signs in the web app and needs none.
 
 ## When to use
 
@@ -85,7 +86,8 @@ zerion bundle --group "$(zerion swap base 100 USDC ETH --prepare)" \
               --group "$(zerion send USDC 20 --to 0xBob --chain base --prepare)"
 ```
 
-`--group` is **repeatable**; each value must be a `--prepare` envelope. Pipeline:
+`--group` is **repeatable**; each value must be a `--prepare` envelope (or, for a protocol call no
+command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
 
 1. **Parse & validate shape** — every `--group` must be a `kind: "zerion-prepared-group"` envelope;
    anything else is rejected (`--group` values are untrusted stdin).
@@ -134,7 +136,7 @@ zerion bundle --group "$(zerion swap base 100 USDC ETH --prepare)" \
 | Code | Cause | Fix |
 |------|-------|-----|
 | `missing_groups` | `bundle` called with no `--group` | Pass at least one `--group "$(… --prepare)"` |
-| `invalid_group` | A `--group` value isn't valid JSON / isn't a prepared-group envelope / has a bad shape | Produce it with a `--prepare` command; don't hand-edit |
+| `invalid_group` | A `--group` value isn't valid JSON / isn't a prepared-group envelope / has a bad shape | Produce it with a `--prepare` command; for a protocol leg, follow "Hand-built groups" |
 | `mixed_address` | Groups name different signer addresses (or ecosystems) | All groups must be prepared from the **same wallet** |
 | `insufficient_aggregate_balance` | Groups each pass alone but overspend a token **together** | Drop a group or lower an amount |
 | `policy_denied` | A group violates an active agent policy on re-validation | Check `zerion agent list-policies`; revise the token or the trade |
@@ -161,6 +163,57 @@ zerion bundle --group "$(zerion consolidate base USDC --prepare)"
 # Give the browser session longer to complete (handoff wait defaults to 300s).
 zerion bundle --timeout 600 --group "$(zerion swap base 100 USDC ETH --prepare)"
 ```
+
+## Hand-built groups — protocol legs only
+
+A withdraw, unstake, redeem, claim or repay call that no CLI command covers has no `--prepare`, so
+you build its envelope yourself (`capabilities/defi-exit.md` covers finding the call). **Swaps,
+bridges, transfers and approvals never go here** — use `zerion swap` / `bridge` / `send`, and the
+only swap that may appear in a group is an `evm` object copied verbatim out of `zerion swap
+--prepare`. `bundle` checks the envelope's shape and nothing else, so a wrong call is not rejected:
+it reaches the user looking legitimate.
+
+Write the envelope to a file so shell quoting can't mangle it:
+
+```bash
+cat > exit-1.json <<'JSON'
+{"kind":"zerion-prepared-group","version":1,"ecosystem":"evm",
+ "chain":"base","address":"0xuser…","route":"web-app",
+ "summary":{},"outflows":[],
+ "transactions":[{"label":"Withdraw from <protocol>","evm":{
+   "type":"0x2",
+   "from":"0xuser…",
+   "to":"0xcontract…",
+   "chainId":"0x2105",
+   "gas":"0x493e0",
+   "value":"0x0",
+   "data":"0xcalldata…",
+   "gasPrice":null,"maxFee":null,"maxPriorityFee":null,"customData":null}}]}
+JSON
+
+zerion bundle --group "$(cat exit-1.json)"   # the signer comes from each envelope's address
+```
+
+Get these wrong and the link opens on an error page:
+
+- **`"route":"web-app"` is required.** `bundle` picks its route from this field alone — it doesn't
+  look at whether the wallet is read-only — so without it the run tries to sign locally and fails
+  on a missing agent token.
+- **Every `evm` object needs all six of `from`, `to`, `value`, `data`, `chainId` and `gas`.** The
+  web app rejects the whole link, naming the first one it can't find. `from` must equal the
+  envelope's `address` exactly, or it fails with a from-mismatch.
+- **`chain` and `chainId` are different things.** `chain` (on the envelope) is a Zerion slug from
+  `zerion chains` — `ethereum`, `base`, `polygon`. `chainId` (inside `evm`) is the numeric chain id
+  as hex — `0x1`, `0x2105`, `0x89`. A slug in `chainId` is rejected.
+- `chainId`, `gas` and `value` are hex quantities; `data` defaults to `"0x"`. Leave the fee fields
+  `null` — the wallet estimates them at signing. `nonce` is optional: the web app assigns it.
+- Write addresses in lowercase hex, copied from CLI or explorer output — never retyped or
+  re-checksummed by hand.
+- Repeat `--group` once per file to review everything in one browser session.
+
+Easiest way to get the shape exactly right: run any real command with `--prepare` once (e.g.
+`zerion swap base 1 USDC ETH --prepare`) and copy its `evm` object, swapping in your own `to`,
+`data` and `value`.
 
 ## AI prompt examples
 
