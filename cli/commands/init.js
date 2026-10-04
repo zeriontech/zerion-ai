@@ -68,16 +68,45 @@ function globalZerionVersion() {
   }
 }
 
-// Compares major.minor.patch only — a prerelease of the same version is not
-// "newer", so `1.9.1` installed vs `1.9.1-next.…` running doesn't reinstall.
+// Semver precedence (build metadata ignored). A prerelease sorts below its
+// release, so `1.9.1` installed vs `1.9.1-next.…` running doesn't reinstall,
+// while `1.9.1-next.…` → `1.9.1` and an older `next` build → a newer one do.
 export function isOlderVersion(installed, running) {
-  const parse = (v) => v.split("-")[0].split(".").map((n) => Number(n) || 0);
-  const a = parse(installed);
-  const b = parse(running);
+  return compareSemver(installed, running) < 0;
+}
+
+function compareSemver(a, b) {
+  const parse = (v) => {
+    const [core, pre] = v.split("+")[0].split(/-(.*)/s);
+    return { core: core.split(".").map((n) => Number(n) || 0), pre: pre ? pre.split(".") : [] };
+  };
+  const x = parse(a);
+  const y = parse(b);
   for (let i = 0; i < 3; i++) {
-    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
+    if (d !== 0) return Math.sign(d);
   }
-  return false;
+  // A release outranks any prerelease of the same core version.
+  if (!x.pre.length && !y.pre.length) return 0;
+  if (!x.pre.length) return 1;
+  if (!y.pre.length) return -1;
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const p = x.pre[i];
+    const q = y.pre[i];
+    if (p === undefined) return -1;
+    if (q === undefined) return 1;
+    const pNum = /^\d+$/.test(p);
+    const qNum = /^\d+$/.test(q);
+    if (pNum && qNum) {
+      const d = BigInt(p) - BigInt(q);
+      if (d !== 0n) return d < 0n ? -1 : 1;
+    } else if (pNum !== qNum) {
+      return pNum ? -1 : 1; // numeric identifiers sort below alphanumeric ones
+    } else if (p !== q) {
+      return p < q ? -1 : 1;
+    }
+  }
+  return 0;
 }
 
 // `name` is the id `npx skills add -a` expects. `env` means "running inside

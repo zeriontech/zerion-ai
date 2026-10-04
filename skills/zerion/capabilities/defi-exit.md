@@ -20,9 +20,14 @@ web app, which needs CLI 1.7.0 or newer.
 zerion positions <address> --defi --chain <chain>   # grouped by protocol
 ```
 
-The CLI is the source of truth. Positions named in the user's message are hints — exit what the CLI
-shows. For each one, note the protocol, its type (deposit, staked, reward, LP, loan), the chain, and
-the receipt token or contract it sits in.
+**The user's request sets the scope; the CLI only confirms what's inside it.** This command returns
+every DeFi position on the chain. Keep only the ones the user asked about (the protocol, positions
+or chain they named) and leave the rest alone. They can come up in §5 as suggestions, never as exits.
+Use the CLI to check that each requested position exists and what it holds. If one is missing, or
+differs from what the user described, tell them rather than substituting something else.
+
+For each position in scope, note the protocol, its type (deposit, staked, reward, LP, loan), the
+chain, and the receipt token or contract it sits in.
 
 ## 2. Pick the way out
 
@@ -69,10 +74,16 @@ correct route for a position, say which one and why. Don't guess at calldata.
 Write it as a hand-built bundle group — `capabilities/bundle.md` § "Hand-built groups" has the
 envelope and every field rule (`"route":"web-app"`, the six `evm` fields, slug vs. hex chain id).
 
-- **Conversion amount known up front** (e.g. claiming a fixed reward) → run `zerion swap …
-  --prepare` and add its group to the same `bundle`, so the user signs everything once.
-- **Amount only known after the protocol leg confirms** → send the protocol leg alone. Watch the
-  chain over RPC, then quote the swap and send its link as soon as the withdrawal lands.
+A conversion can't be prepared from tokens the wallet doesn't hold yet. `zerion swap --prepare`
+rejects an insufficient balance before it prints an envelope, and `bundle` checks outflows against
+the wallet's current balances, not against what an earlier group in the bundle will bring in. So:
+
+- **By default, the protocol leg goes alone.** Send it, watch the chain over RPC until it confirms,
+  then quote the swap and send its link right away. This holds even when you know the exact amount
+  in advance, e.g. a fixed reward claim.
+- **Same bundle only if the wallet already holds enough** of the token to cover the conversion
+  before the protocol leg runs (check the raw on-chain balance). Then `zerion swap … --prepare` and
+  add its group alongside the protocol leg so the user signs once.
 
 ## 5. After the exit
 

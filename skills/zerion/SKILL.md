@@ -100,7 +100,7 @@ Before executing any capability below, **Read the matching file** for the full c
 These apply to anything that ends in a transaction — one swap, a DeFi exit, or "sell everything on Blast and move it to Ethereum".
 
 **Reading state**
-- The CLI is the source of truth for what the wallet holds, not a list in the user's message. Scope reads with `--chain`, `--defi` or `--positions` instead of dumping the whole portfolio.
+- The user's request sets the scope; the CLI is the source of truth for what exists inside it and how much. Don't act on positions or tokens the user didn't ask about just because a read returned them. If something they named isn't there, say so. Scope reads with `--chain`, `--defi` or `--positions` instead of dumping the whole portfolio.
 - For any amount you'll transact, read the exact raw balance on-chain (`eth_call` → `balanceOf`), never a rounded figure from `positions` — a rounded-up amount reverts on the last wei. Use `$ETH_RPC_URL` if it's set, otherwise a public RPC such as `https://<chain>.drpc.org`, with a browser-like `User-Agent` (public endpoints reject the default one).
 - Check `zerion chains` before telling the user a chain can't do something.
 
@@ -115,7 +115,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 - Pass `--wallet <name>` explicitly on every `swap`, `bridge` and `send`, including the `--prepare` runs that feed a bundle. Never rely on the default wallet. (`bundle` itself takes the signer from each group's `address`.)
 - Selling a whole balance: quote slightly below the exact on-chain amount (truncate, never round up) and accept the dust.
 - Slippage, unless the user says otherwise: `--slippage 0.3` stable-to-stable, `--slippage 1` for anything else.
-- Batch related transactions with `zerion bundle` so the user signs once (`capabilities/bundle.md`). If a later leg's amount is only known once an earlier one confirms, make it a separate leg — don't guess the amount.
+- Batch related transactions with `zerion bundle` so the user signs once (`capabilities/bundle.md`). A leg that spends tokens an earlier leg brings in can't join it: `--prepare` and `bundle` check the wallet's current balances, not future inflows. Send the earlier leg, wait for it to confirm on-chain, then prepare the next one.
 
 **Signing**
 - On the **web-app route** (read-only wallet, review threshold, `--review`) a signing link executes nothing — the user's signature is the approval. Show the plan and the link in the **same** message; don't stop to ask first. The gas check above is the one exception. On the **local route** the CLI signs and broadcasts immediately, so the plan must be right before you run it.

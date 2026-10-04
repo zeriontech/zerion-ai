@@ -306,6 +306,28 @@ describe("isOlderVersion", () => {
     assert.equal(isOlderVersion("1.9.1", "1.9.1-next.20260824133608.g735d2e5"), false);
     assert.equal(isOlderVersion("1.9.0", "1.9.1-next.20260824133608.g735d2e5"), true);
   });
+
+  // Stripping the prerelease left these stale installs in place.
+  it("upgrades a prerelease to its release, and an older next build to a newer one", () => {
+    assert.equal(isOlderVersion("1.9.1-next.20260824133608.g735d2e5", "1.9.1"), true);
+    assert.equal(
+      isOlderVersion("1.9.1-next.20260714143206.ga55957e", "1.9.1-next.20260824133608.g735d2e5"),
+      true
+    );
+    assert.equal(
+      isOlderVersion("1.9.1-next.20260824133608.g735d2e5", "1.9.1-next.20260714143206.ga55957e"),
+      false
+    );
+  });
+
+  it("follows semver precedence for prerelease identifiers and ignores build metadata", () => {
+    const ordered = ["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0"];
+    for (let i = 1; i < ordered.length; i++) {
+      assert.equal(isOlderVersion(ordered[i - 1], ordered[i]), true, `${ordered[i - 1]} < ${ordered[i]}`);
+      assert.equal(isOlderVersion(ordered[i], ordered[i - 1]), false, `${ordered[i]} !< ${ordered[i - 1]}`);
+    }
+    assert.equal(isOlderVersion("1.9.1+build.5", "1.9.1"), false);
+  });
 });
 
 describe("skill install targets", () => {
