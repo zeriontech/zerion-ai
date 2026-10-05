@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { getSwapQuote, getSwapOffers, selectOffer, pickOffer, isQuoteExecutable, quoteOnlyResult } from "#zerion/utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, selectOffer, pickOffer, isQuoteExecutable, quoteOnlyResult, allOffersShortOfBalance, shouldListBridgeOffers, bridgeOffersResult } from "#zerion/utils/trading/swap.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.ZERION_API_KEY;
@@ -486,5 +486,45 @@ describe("quoteOnlyResult", () => {
     assert.equal(out.enoughBalance, true);
     assert.equal(out.note, undefined);
     assert.equal(out.blocking, undefined);
+  });
+});
+
+// `bridge --quote` must price, never execute — even one offer, which plain
+// `bridge` auto-executes — and must not refuse a short balance.
+describe("bridge --quote helpers", () => {
+  const short = { blocking: { code: "not_enough_input_asset_balance" }, transactionSwap: null, liquiditySource: "A", estimatedOutput: "1" };
+  const ready = { blocking: null, transactionSwap: { to: "0xRouter" }, liquiditySource: "B", estimatedOutput: "2" };
+
+  it("lists a single offer when quoting, but still auto-executes it otherwise", () => {
+    assert.equal(shouldListBridgeOffers({ quoteOnly: true, strategy: null, offerCount: 1 }), true);
+    assert.equal(shouldListBridgeOffers({ quoteOnly: true, strategy: "cheapest", offerCount: 3 }), true);
+    assert.equal(shouldListBridgeOffers({ quoteOnly: false, strategy: null, offerCount: 1 }), false);
+    assert.equal(shouldListBridgeOffers({ quoteOnly: false, strategy: null, offerCount: 2 }), true);
+    assert.equal(shouldListBridgeOffers({ quoteOnly: false, strategy: "fast", offerCount: 2 }), false);
+  });
+
+  it("detects a balance-only block, and nothing else", () => {
+    assert.equal(allOffersShortOfBalance([short, short]), true);
+    assert.equal(allOffersShortOfBalance([short, ready]), false);
+    assert.equal(allOffersShortOfBalance([short, { ...short, blocking: { code: "output_too_small" } }]), false);
+    assert.equal(allOffersShortOfBalance([]), false);
+  });
+
+  it("marks a quote-only listing as indicative when the balance is short", () => {
+    const out = bridgeOffersResult({ fromChain: "blast", toChain: "robinhood" }, [short], { quoteOnly: true });
+    assert.equal(out.quoteOnly, true);
+    assert.equal(out.enoughBalance, false);
+    assert.match(out.note, /Indicative/);
+    assert.equal(out.executed, false);
+    assert.match(out.hint, /nothing was built or signed/);
+    assert.equal(out.offers[0].executable, false);
+  });
+
+  it("keeps the plain listing unchanged", () => {
+    const out = bridgeOffersResult({ fromChain: "blast" }, [ready, short]);
+    assert.equal(out.quoteOnly, undefined);
+    assert.equal(out.note, undefined);
+    assert.equal(out.count, 2);
+    assert.match(out.hint, /--fast or --cheapest/);
   });
 });

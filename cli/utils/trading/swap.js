@@ -194,11 +194,15 @@ export function isQuoteExecutable(quote) {
   return Boolean(quote.transactionSwap || quote.transactionSwapSolana);
 }
 
+// When the balance is short the API builds no transaction, which leaves network
+// gas and the protocol fee out of a quote — it's indicative until re-quoted.
+const INDICATIVE_PRICE_NOTE =
+  "Indicative: the wallet doesn't hold enough of the input token yet, so network gas " +
+  "and the protocol fee aren't included. Re-quote once the tokens arrive.";
+
 // Result for `swap --quote`: the price, and whether the wallet could execute
 // it now. The point is pricing tokens the wallet doesn't hold yet (an earlier
-// claim or unstake delivers them), so the balance gate is skipped. When the
-// balance is short the API builds no transaction, which leaves network gas and
-// the protocol fee out — the output is indicative until re-quoted.
+// claim or unstake delivers them), so the balance gate is skipped.
 export function quoteOnlyResult(summary, quote) {
   const enoughBalance = quote.preconditions?.enough_balance !== false;
   return {
@@ -206,11 +210,53 @@ export function quoteOnlyResult(summary, quote) {
     quoteOnly: true,
     enoughBalance,
     ...(quote.blocking && { blocking: quote.blocking }),
-    ...(!enoughBalance && {
-      note:
-        "Indicative: the wallet doesn't hold enough of the input token yet, so network gas " +
-        "and the protocol fee aren't included. Re-quote once the tokens arrive.",
+    ...(!enoughBalance && { note: INDICATIVE_PRICE_NOTE }),
+  };
+}
+
+// True when no offer is executable and the only reason is a short input
+// balance — `bridge` refuses then, unless it's only pricing (`--quote`).
+export function allOffersShortOfBalance(offers) {
+  if (offers.length === 0 || offers.some(isQuoteExecutable)) return false;
+  const codes = new Set(offers.map((o) => o.blocking?.code).filter(Boolean));
+  return codes.size === 1 && codes.has("not_enough_input_asset_balance");
+}
+
+// `bridge` lists offers instead of executing: by default when several come
+// back and no strategy is picked, and always with `--quote` — even a single
+// offer, which would otherwise auto-execute.
+export function shouldListBridgeOffers({ quoteOnly, strategy, offerCount }) {
+  return Boolean(quoteOnly) || (!strategy && offerCount > 1);
+}
+
+// The `bridge` offers listing. With `quoteOnly`, says so and flags a price that
+// can't account for gas yet because the wallet doesn't hold the tokens.
+export function bridgeOffersResult(context, offers, { quoteOnly = false } = {}) {
+  const list = offers.map((q) => ({
+    provider: q.liquiditySource,
+    estimatedOutput: q.estimatedOutput,
+    estimatedSeconds: q.estimatedSeconds,
+    fee: q.fee,
+    // Match pickOffer's selection logic — an offer with no blocking error but
+    // missing transaction data would otherwise show as `ready` here and get
+    // silently skipped at execution.
+    executable: isQuoteExecutable(q),
+    blocking: q.blocking,
+  }));
+  const shortOfBalance = allOffersShortOfBalance(offers);
+  return {
+    ...context,
+    offers: list,
+    count: list.length,
+    ...(quoteOnly && {
+      quoteOnly: true,
+      enoughBalance: !shortOfBalance,
+      ...(shortOfBalance && { note: INDICATIVE_PRICE_NOTE }),
     }),
+    hint: quoteOnly
+      ? "Prices only — nothing was built or signed. Re-run without --quote, with --fast or --cheapest, to execute."
+      : "Re-run with --fast or --cheapest to execute. Use --cheapest for highest output, --fast for lowest time.",
+    executed: false,
   };
 }
 

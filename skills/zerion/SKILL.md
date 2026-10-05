@@ -106,7 +106,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 
 **Gas vs. proceeds — before any signing link**
 - For each action, total the gas of every leg (an approve, a claim and a swap each pay gas): `eth_estimateGas` on the real call × the current fee × the native token's price from CLI output. Compare that with what actually lands back in the wallet after swap fees and price impact.
-- Price a conversion with `zerion swap <chain> <amount> <from> <to> --quote`. It works before the wallet holds the input token (e.g. tokens a claim will deliver): it reports `enoughBalance: false` and an indicative price that leaves out network gas and the protocol fee, so allow for both. Don't import CLI internals or quote with someone else's address to get a fuller number.
+- Price a conversion with `zerion swap <chain> <amount> <from> <to> --quote`, and a move between chains with `zerion bridge … --quote` (it lists every route and never executes, even when there's only one). Both work before the wallet holds the input token (e.g. tokens a claim will deliver): it reports `enoughBalance: false` and an indicative price that leaves out network gas and the protocol fee, so allow for both. Don't import CLI internals or quote with someone else's address to get a fuller number.
 - Proceeds comfortably above gas → go ahead. Gas at or near the proceeds → **stop and ask**: show each item's gas, proceeds and what's left, in dollars, all failing items in one message, then wait. Don't skip it quietly and don't proceed quietly.
 - Prove with `eth_call` that each transaction moves value, and skip no-ops (say which and why). A token with no venue: say so and stop — don't retry a quote that keeps failing.
 
@@ -120,6 +120,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 
 **Signing**
 - On the **web-app route** (read-only wallet, review threshold, `--review`) a signing link executes nothing — the user's signature is the approval. Show the plan and the link in the **same** message; don't stop to ask first. The gas check above is the one exception. On the **local route** the CLI signs and broadcasts immediately, so the plan must be right before you run it.
+- When you share a web-app link, tell the user what to expect: it opens app.zerion.io, which shows the full review (signing address, balance changes, fee, a security check) before they do anything, then asks them to connect a wallet if none is connected. It has to be the wallet that owns the signing address, since the transaction can only come from that address.
 - `swap`, `bridge`, `send` and `bundle` print the link to stderr, then block for up to 300 s waiting for the signature. Run them in the background, read the link within a few seconds, and show it straight away.
 - `swap`, `bridge` and `send` print `Signing route: <route> — <reason>` to stderr before signing; `bundle` prints `Bundle route: <route>`. No such line → the command never got that far; fix it.
 - `timeout` or `rejected` only means the CLI stopped watching — the user may have signed afterwards. Check on-chain (balances, allowances, recent transactions) before regenerating anything. Don't wait on Zerion's indexer; it lags by minutes.
