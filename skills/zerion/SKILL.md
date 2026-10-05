@@ -106,6 +106,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 
 **Gas vs. proceeds — before any signing link**
 - For each action, total the gas of every leg (an approve, a claim and a swap each pay gas): `eth_estimateGas` on the real call × the current fee × the native token's price from CLI output. Compare that with what actually lands back in the wallet after swap fees and price impact.
+- Price a conversion with `zerion swap <chain> <amount> <from> <to> --quote`. It works before the wallet holds the input token (e.g. tokens a claim will deliver): it reports `enoughBalance: false` and an indicative price that leaves out network gas and the protocol fee, so allow for both. Don't import CLI internals or quote with someone else's address to get a fuller number.
 - Proceeds comfortably above gas → go ahead. Gas at or near the proceeds → **stop and ask**: show each item's gas, proceeds and what's left, in dollars, all failing items in one message, then wait. Don't skip it quietly and don't proceed quietly.
 - Prove with `eth_call` that each transaction moves value, and skip no-ops (say which and why). A token with no venue: say so and stop — don't retry a quote that keeps failing.
 
@@ -122,6 +123,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 - `swap`, `bridge`, `send` and `bundle` print the link to stderr, then block for up to 300 s waiting for the signature. Run them in the background, read the link within a few seconds, and show it straight away.
 - `swap`, `bridge` and `send` print `Signing route: <route> — <reason>` to stderr before signing; `bundle` prints `Bundle route: <route>`. No such line → the command never got that far; fix it.
 - `timeout` or `rejected` only means the CLI stopped watching — the user may have signed afterwards. Check on-chain (balances, allowances, recent transactions) before regenerating anything. Don't wait on Zerion's indexer; it lags by minutes.
+- A link belongs to the run that printed it. Once that run has ended, don't share its link again: the CLI is no longer listening for the result, but the transaction rides in the link, so it may still be signable. If the chain shows nothing went through, run the command again for a fresh link, and tell the user to sign only the new one — signing both could execute the action twice.
 - Multi-step flows: as soon as one leg confirms on-chain, quote the next and send its link without waiting to be asked.
 - **Never** write an `app.zerion.io` link yourself. Only the CLI can produce a working one — the transaction rides in the URL fragment. If a command fails, fix the command.
 

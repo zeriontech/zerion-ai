@@ -194,6 +194,26 @@ export function isQuoteExecutable(quote) {
   return Boolean(quote.transactionSwap || quote.transactionSwapSolana);
 }
 
+// Result for `swap --quote`: the price, and whether the wallet could execute
+// it now. The point is pricing tokens the wallet doesn't hold yet (an earlier
+// claim or unstake delivers them), so the balance gate is skipped. When the
+// balance is short the API builds no transaction, which leaves network gas and
+// the protocol fee out — the output is indicative until re-quoted.
+export function quoteOnlyResult(summary, quote) {
+  const enoughBalance = quote.preconditions?.enough_balance !== false;
+  return {
+    ...summary,
+    quoteOnly: true,
+    enoughBalance,
+    ...(quote.blocking && { blocking: quote.blocking }),
+    ...(!enoughBalance && {
+      note:
+        "Indicative: the wallet doesn't hold enough of the input token yet, so network gas " +
+        "and the protocol fee aren't included. Re-quote once the tokens arrive.",
+    }),
+  };
+}
+
 // Mapped-quote selection — same strategy semantics as selectOffer, but works
 // on the post-`offerToQuote` shape so callers (`bridge`) don't have to refetch
 // the API to get a single quote after listing offers.

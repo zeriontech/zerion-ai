@@ -18,9 +18,8 @@ import { fileURLToPath } from "node:url";
 import { isOlderVersion, detectRunningAgent, skillTargets } from "#zerion/commands/init.js";
 
 const ZERION_BIN = fileURLToPath(new URL("../../../../zerion.js", import.meta.url));
-const PKG_VERSION = JSON.parse(
-  readFileSync(new URL("../../../../../package.json", import.meta.url), "utf8")
-).version;
+const PKG_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
+const PKG_VERSION = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")).version;
 
 // Blank out every marker init uses to detect a coding agent, so a test run
 // from inside Claude Code / Codex sees a plain non-TTY shell.
@@ -245,18 +244,23 @@ describe("zerion init", () => {
 
   // Under npx the temp copy is first on PATH, so the global install is looked
   // up via `npm root -g`. A fake npm stands in for both calls.
-  describe("global install from npx", () => {
-    function runFromNpx(globalVersion) {
+  describe("global install step", () => {
+    // `global`: null (none), a version string, or "self" (the global copy is
+    // this checkout, as with `npm link`). `launcher`: where the bin is run from.
+    function runInit({ global, launcher = join("_npx", "abc") }) {
       const dir = realpathSync(mkdtempSync(join(tmpdir(), "zerion-init-")));
-      const npxDir = join(dir, "_npx", "abc");
+      const launchDir = join(dir, launcher);
       const binDir = join(dir, "bin");
       const globalRoot = join(dir, "global");
-      mkdirSync(npxDir, { recursive: true });
+      mkdirSync(launchDir, { recursive: true });
       mkdirSync(binDir);
-      symlinkSync(ZERION_BIN, join(npxDir, "zerion.js"));
-      if (globalVersion) {
-        mkdirSync(join(globalRoot, "zerion-cli"), { recursive: true });
-        writeFileSync(join(globalRoot, "zerion-cli", "package.json"), JSON.stringify({ version: globalVersion }));
+      mkdirSync(globalRoot);
+      symlinkSync(ZERION_BIN, join(launchDir, "zerion.js"));
+      if (global === "self") {
+        symlinkSync(PKG_ROOT, join(globalRoot, "zerion-cli"));
+      } else if (global) {
+        mkdirSync(join(globalRoot, "zerion-cli"));
+        writeFileSync(join(globalRoot, "zerion-cli", "package.json"), JSON.stringify({ version: global }));
       }
       const callLog = join(dir, "npm-calls.log");
       writeFileSync(
@@ -265,7 +269,7 @@ describe("zerion init", () => {
       );
       chmodSync(join(binDir, "npm"), 0o755);
 
-      const res = spawnSync("node", [join(npxDir, "zerion.js"), "init", "--no-auth", "--no-skills"], {
+      const res = spawnSync("node", [join(launchDir, "zerion.js"), "init", "--no-auth", "--no-skills"], {
         encoding: "utf8",
         env: { ...process.env, HOME: dir, PATH: `${binDir}:${process.env.PATH}` },
       });
@@ -274,22 +278,38 @@ describe("zerion init", () => {
       return { res, calls, install: parseResult(res).steps.find((s) => s.step === "install") };
     }
 
-    it("installs when there is no global copy", () => {
-      const { calls, install } = runFromNpx(null);
+    it("installs from npx when there is no global copy", () => {
+      const { calls, install } = runInit({ global: null });
       assert.deepEqual(calls, [`install -g zerion-cli@${PKG_VERSION}`]);
       assert.equal(install.skipped, false);
     });
 
     it("upgrades an older global copy instead of skipping it", () => {
-      const { calls, install } = runFromNpx("1.0.0");
+      const { calls, install } = runInit({ global: "1.0.0" });
       assert.deepEqual(calls, [`install -g zerion-cli@${PKG_VERSION}`]);
       assert.equal(install.from, "1.0.0");
     });
 
     it("leaves a current global copy alone", () => {
-      const { calls, install } = runFromNpx(PKG_VERSION);
+      const { calls, install } = runInit({ global: PKG_VERSION });
       assert.deepEqual(calls, []);
       assert.equal(install.skipped, true);
+    });
+
+    // A project-local copy used to count as "already installed globally" just
+    // because its path had no `_npx` in it.
+    it("installs from a project's node_modules too, instead of claiming it's global", () => {
+      const { calls, install, res } = runInit({ global: null, launcher: join("project", "node_modules", ".bin") });
+      assert.deepEqual(calls, [`install -g zerion-cli@${PKG_VERSION}`]);
+      assert.equal(install.skipped, false);
+      assert.doesNotMatch(res.stderr, /already installed globally/);
+    });
+
+    it("skips when it is the global copy itself", () => {
+      const { calls, install, res } = runInit({ global: "self" });
+      assert.deepEqual(calls, []);
+      assert.equal(install.skipped, true);
+      assert.match(res.stderr, /already installed globally \(v/);
     });
   });
 });

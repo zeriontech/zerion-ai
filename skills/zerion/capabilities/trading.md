@@ -228,6 +228,7 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `--timeout <sec>` | Wait budget. On the **local** route: broadcast-confirmation timeout (default **120s**). On the **web-app handoff**: how long to wait for the browser callback (default **300s**) |
 | `--review` | Force the web-app handoff regardless of value (`capabilities/bundle.md`) |
 | `--prepare` | Print a prepared-group envelope instead of executing — for `zerion bundle` (`capabilities/bundle.md`) |
+| `--quote` | `swap` only: print the price and stop. Skips the balance check, so it prices tokens the wallet doesn't hold yet (`enoughBalance: false`); without the tokens the API leaves out network gas and the protocol fee, so treat that price as indicative and re-quote once they arrive. Can't be combined with `--prepare` |
 | `--json` / `--pretty` / `--quiet` | Output mode (JSON default) |
 
 ## Pre-trade safety checklist

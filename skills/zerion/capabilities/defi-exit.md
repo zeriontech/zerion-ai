@@ -37,7 +37,7 @@ For each position, work out the correct exit:
   `zerion swap` on the receipt token. Compare it with withdrawing first.
 - **Protocol call** — withdraw, unstake, redeem, claim, repay → build it yourself (§3–4).
 - **Slow exit** — cooldown, unbonding period, epoch wait → before committing, quote selling the
-  receipt token directly (`zerion swap <chain> <amount> <receipt> <target> --prepare`) and compare it
+  receipt token directly (`zerion swap <chain> <amount> <receipt> <target> --quote`) and compare it
   with the underlying value. Selling sometimes beats waiting; give the user both numbers.
 - **Loans and leverage** → don't unwind as part of a list. Repaying or withdrawing collateral moves
   the health factor; raise it with the user on its own.
@@ -76,7 +76,10 @@ envelope and every field rule (`"route":"web-app"`, the six `evm` fields, slug v
 
 A conversion can't be prepared from tokens the wallet doesn't hold yet. `zerion swap --prepare`
 rejects an insufficient balance before it prints an envelope, and `bundle` checks outflows against
-the wallet's current balances, not against what an earlier group in the bundle will bring in. So:
+the wallet's current balances, not against what an earlier group in the bundle will bring in.
+Pricing it is different: `zerion swap … --quote` works before the tokens arrive, so use it for the
+gas-vs-proceeds check up front (its price leaves out network gas and the protocol fee until the
+tokens are there). So:
 
 - **By default, the protocol leg goes alone.** Send it, watch the chain over RPC until it confirms,
   then quote the swap and send its link right away. This holds even when you know the exact amount

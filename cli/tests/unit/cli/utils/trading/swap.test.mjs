@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { getSwapQuote, getSwapOffers, selectOffer, pickOffer, isQuoteExecutable } from "#zerion/utils/trading/swap.js";
+import { getSwapQuote, getSwapOffers, selectOffer, pickOffer, isQuoteExecutable, quoteOnlyResult } from "#zerion/utils/trading/swap.js";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.ZERION_API_KEY;
@@ -461,5 +461,30 @@ describe("getSwapQuote — /swap/quotes/ migration", () => {
     assert.equal(quote.preconditions.enough_balance, false);
     assert.equal(quote.blocking?.code, "not_enough_input_asset_balance");
     assert.equal(quote.transactionSwap, null);
+  });
+});
+
+// `swap --quote` prices tokens an earlier leg hasn't delivered yet, so it must
+// report — not reject — a short balance, and flag the price as indicative.
+describe("quoteOnlyResult", () => {
+  const summary = { swap: { chain: "base", input: "100 REGENT", output: "~1 USDC" } };
+
+  it("keeps the price and marks a short balance as indicative", () => {
+    const out = quoteOnlyResult(summary, {
+      preconditions: { enough_balance: false },
+      blocking: { code: "not_enough_input_asset_balance", message: "…", hint: "topup" },
+    });
+    assert.equal(out.quoteOnly, true);
+    assert.equal(out.enoughBalance, false);
+    assert.equal(out.swap.output, "~1 USDC");
+    assert.equal(out.blocking.code, "not_enough_input_asset_balance");
+    assert.match(out.note, /Indicative/);
+  });
+
+  it("adds no note when the wallet can execute the swap now", () => {
+    const out = quoteOnlyResult(summary, { preconditions: { enough_balance: true }, blocking: null });
+    assert.equal(out.enoughBalance, true);
+    assert.equal(out.note, undefined);
+    assert.equal(out.blocking, undefined);
   });
 });

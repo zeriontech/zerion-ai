@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,8 @@ import { runInteractiveAuth } from "../utils/api/interactive-auth.js";
 import { authenticateWithBrowser } from "../utils/api/oauth.js";
 
 const ZERION_AGENT_REPO = "zeriontech/zerion-ai";
+
+const PKG_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 const PKG_VERSION = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8")
@@ -49,22 +51,26 @@ function log(line = "") {
   process.stderr.write(line + "\n");
 }
 
-function isNpxTempInvocation() {
-  const path = process.argv[1] || "";
-  return path.includes("/_npx/") || path.includes("\\_npx\\");
-}
-
-// Version of the global zerion-cli install, or null when there is none.
+// The global zerion-cli install ({ dir, version }), or null when there is none.
 // `zerion --version` can't answer this: under npx the temp copy is first on
 // PATH, so it always reports npx's own version.
-function globalZerionVersion() {
+function globalZerion() {
   const root = spawnSync("npm", ["root", "-g"], { encoding: "utf8" });
   if (root.status !== 0) return null;
+  const dir = join(root.stdout.trim(), "zerion-cli");
   try {
-    const pkgPath = join(root.stdout.trim(), "zerion-cli", "package.json");
-    return JSON.parse(readFileSync(pkgPath, "utf8")).version;
+    return { dir, version: JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).version };
   } catch {
     return null;
+  }
+}
+
+// realpath on both sides, so an `npm link`ed checkout counts as the global copy.
+function isSameDir(a, b) {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return false;
   }
 }
 
@@ -135,14 +141,16 @@ export function skillTargets({ agent, env = process.env, home = homedir() } = {}
 }
 
 function ensureGlobalInstall() {
+  const global = globalZerion();
   // Running from the global install itself — nothing to do.
-  if (!isNpxTempInvocation()) {
-    log("  ✓ CLI already installed globally");
-    return { ok: true, skipped: true };
+  if (global && isSameDir(global.dir, PKG_ROOT)) {
+    log(`  ✓ CLI already installed globally (v${global.version})`);
+    return { ok: true, skipped: true, version: global.version };
   }
-  // From npx: install when missing, upgrade when older than this copy. An old
-  // global CLI would otherwise stay put and fail later on newer commands.
-  const installed = globalZerionVersion();
+  // Running from anywhere else — npx's temp dir, a project's node_modules:
+  // install when missing, upgrade when older than this copy. Judging by the
+  // path alone used to report a local copy as "installed globally".
+  const installed = global?.version;
   if (installed && !isOlderVersion(installed, PKG_VERSION)) {
     log(`  ✓ CLI already installed globally (v${installed})`);
     return { ok: true, skipped: true, version: installed };
