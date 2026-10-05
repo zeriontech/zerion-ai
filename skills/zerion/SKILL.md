@@ -14,11 +14,11 @@ Unified API + CLI for crypto wallets across 14 EVM chains and Solana. The `zerio
 Skills shell out to the `zerion` binary. Every setup step is idempotent, so probe first and do only what's missing:
 
 ```bash
-zerion --version     # needs 1.7.0+ — older CLIs can't hand a bundle to the web app for signing
+zerion --version     # needs 1.11.0+ — older CLIs ignore --quote and run the swap or bridge instead of pricing it
 zerion wallet list   # which wallets exist, and whether the user's address is one of them
 ```
 
-- **`zerion` not found, or older than 1.7.0** → `npx -y zerion-cli@latest init -y`. It installs or upgrades the CLI and this skill, keeps the existing login and wallets, and never blocks.
+- **`zerion` not found, or older than 1.11.0** → `npx -y zerion-cli@latest init -y`. It installs or upgrades the CLI and this skill, keeps the existing login and wallets, and never blocks.
 - **No API key** — `init` reports `"next": "zerion login --browser"`, or a command fails with `missing_api_key` → run `zerion login --browser` **in the background**: it waits up to 5 minutes for the user to approve. Show the user the URL it prints to stderr straight away, and keep doing read-only research while you wait.
 - **The user names an address `wallet list` doesn't show** → register it read-only: `zerion wallet add <address> --name <name>`. That needs no private key, passphrase or agent token — every transaction goes to app.zerion.io for the user to sign.
 - **A command fails with `unsupported_node`** → the user's Node.js is too old (minimum below). Tell them to upgrade, as the error's suggestion says; don't patch dependencies or build a workaround package.

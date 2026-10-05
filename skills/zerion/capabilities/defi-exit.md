@@ -11,8 +11,8 @@ no CLI command covers (you build it), then **conversion legs** that always go th
 
 ## Setup
 
-See the parent `SKILL.md` § "Setup — check before you do". An exit ends in a bundle handed to the
-web app, which needs CLI 1.7.0 or newer.
+See the parent `SKILL.md` § "Setup — check before you do". Pricing an exit relies on `--quote`,
+which needs CLI 1.11.0 or newer: older CLIs ignore the flag and run the swap or bridge instead.
 
 ## 1. Find the positions
 
