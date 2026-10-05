@@ -27,7 +27,7 @@ npm install -g zerion-cli
 
 The CLI is available as either `zerion` or `zerion-cli` — both run the same binary.
 
-Requires Node.js 20 or later.
+Requires Node.js 22.12+ (or 20.19+ on Node 20). Older versions exit with an `unsupported_node` error.
 
 ## Agent skill
 

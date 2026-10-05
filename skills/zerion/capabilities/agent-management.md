@@ -11,7 +11,7 @@ If a `zerion` command fails with `command not found`, install once:
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication). To execute trades after setup → `capabilities/trading.md`. To sign messages/typed-data → `capabilities/sign.md`.
+For auth see the parent `SKILL.md` (Setup + Authentication). To execute trades after setup → `capabilities/trading.md`. To sign messages/typed-data → `capabilities/sign.md`.
 
 ## When to use
 

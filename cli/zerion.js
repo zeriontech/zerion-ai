@@ -5,6 +5,10 @@
  * Routes argv to command handlers via the router.
  */
 
+// Must stay first: exits with a structured error on unsupported Node versions
+// before any dependency gets a chance to crash while loading.
+import "./utils/common/check-node.js";
+
 import { register, registerSingle, dispatch } from "./router.js";
 import { printError, setPrettyMode } from "./utils/common/output.js";
 import { migrateFromZerionCli } from "./utils/common/migrate.js";

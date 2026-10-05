@@ -11,7 +11,7 @@ If a `zerion` command fails with `command not found`, install once:
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication). Signing requires an agent token (used as the wallet passphrase). For setup → `capabilities/agent-management.md`.
+For auth see the parent `SKILL.md` (Setup + Authentication). Signing requires an agent token (used as the wallet passphrase). For setup → `capabilities/agent-management.md`.
 
 ## When to use
 

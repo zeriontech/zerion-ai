@@ -26,7 +26,7 @@ Use this for three or more agents that share one budget or outcome. A Yellow app
 
 ## Requirements
 
-- Node.js 20+ with an ESM project (`"type": "module"`)
+- An ESM project (`"type": "module"`)
 - npm 11.10+ (older npm silently ignores the cooldown flag below)
 - Yellow SDK: `npm install --min-release-age=15 @yellow-org/sdk decimal.js viem`
 - Zerion CLI: `npm install -g --min-release-age=15 zerion-cli`

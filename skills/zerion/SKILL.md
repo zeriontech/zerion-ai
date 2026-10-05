@@ -21,10 +21,11 @@ zerion wallet list   # which wallets exist, and whether the user's address is on
 - **`zerion` not found, or older than 1.7.0** → `npx -y zerion-cli@latest init -y`. It installs or upgrades the CLI and this skill, keeps the existing login and wallets, and never blocks.
 - **No API key** — `init` reports `"next": "zerion login --browser"`, or a command fails with `missing_api_key` → run `zerion login --browser` **in the background**: it waits up to 5 minutes for the user to approve. Show the user the URL it prints to stderr straight away, and keep doing read-only research while you wait.
 - **The user names an address `wallet list` doesn't show** → register it read-only: `zerion wallet add <address> --name <name>`. That needs no private key, passphrase or agent token — every transaction goes to app.zerion.io for the user to sign.
+- **A command fails with `unsupported_node`** → the user's Node.js is too old (minimum below). Tell them to upgrade, as the error's suggestion says; don't patch dependencies or build a workaround package.
 - **You can't run shell commands** → say so instead of guessing.
 - **Sandboxed agents** (e.g. Codex's default sandbox): `init` and `login` need network access and write outside the workspace (global npm install, `~/.zerion`), so ask for that permission rather than working around it.
 
-Requires Node.js ≥ 20. The npm package is `zerion-cli`; the installed binary is `zerion`.
+Requires Node.js ≥ 22.12 (or ≥ 20.19 on Node 20). The npm package is `zerion-cli`; the installed binary is `zerion`.
 
 ## Authentication
 

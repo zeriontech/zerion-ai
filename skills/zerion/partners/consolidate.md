@@ -11,7 +11,7 @@ If a `zerion` command fails with `command not found`, install once:
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication). **Trading needs an API key + agent token** (pay-per-call does NOT apply).
+For auth see the parent `SKILL.md` (Setup + Authentication). **Trading needs an API key + agent token** (pay-per-call does NOT apply).
 
 The direct `--execute` path signs **locally** and therefore needs a wallet with key material. To
 sweep a **read-only / watch-only wallet**, or to route a large sweep through **human review**, use

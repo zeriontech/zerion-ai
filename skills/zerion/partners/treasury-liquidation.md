@@ -15,7 +15,7 @@ If a `zerion` command fails with `command not found`, install once:
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. For auth see the parent `SKILL.md` (Setup + Authentication).
+For auth see the parent `SKILL.md` (Setup + Authentication).
 **Every phase here writes on-chain, so an API key + agent token is required** —
 pay-per-call does not apply.
 
