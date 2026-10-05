@@ -6,7 +6,6 @@
 ### Features
 
 * add Cursor Marketplace plugin manifest ([613d995](https://github.com/zeriontech/zerion-ai/commit/613d995923d23f6fa40cdbfeaba3ab3fb0b63aab))
-* add Cursor Marketplace plugin manifest ([525f562](https://github.com/zeriontech/zerion-ai/commit/525f5626fc13decd189759b2b292325d3fa5b44c))
 * use Cursor's own manifest format instead of the root one ([5cc29e1](https://github.com/zeriontech/zerion-ai/commit/5cc29e1a2f186c84645a9642ee0c908e170bc6b7))
 
 

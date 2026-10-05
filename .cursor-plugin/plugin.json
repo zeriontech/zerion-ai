@@ -1,7 +1,7 @@
 {
   "name": "zerion-agent",
   "displayName": "Zerion",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "description": "Give your agent a wallet. Analyze any address (portfolio, positions, history, PnL) and execute swaps, bridges and sends across 14 EVM chains and Solana, with agent-token policies for safe autonomous trading.",
   "author": {
     "name": "Zerion",
