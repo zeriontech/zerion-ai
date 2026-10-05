@@ -28,7 +28,7 @@ This skill calls the `zerion` CLI for live wallet/portfolio evidence. If a `zeri
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. Authentication for `zerion` analytics is optional (`--x402` works without a key). See the parent `SKILL.md` (Setup + Authentication) for auth details.
+Requires Node.js ≥ 22.12 (or ≥ 20.19 on Node 20). Authentication for `zerion` analytics is optional (`--x402` works without a key). See the parent `SKILL.md` (Setup + Authentication) for auth details.
 
 No additional setup, no telemetry, no external accounts.
 

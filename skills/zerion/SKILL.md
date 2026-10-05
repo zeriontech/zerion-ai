@@ -17,7 +17,7 @@ Skills shell out to the `zerion` binary. Don't pre-install — try the command f
 npm install -g zerion-cli
 ```
 
-Requires Node.js ≥ 20. The npm package is `zerion-cli`; the installed binary is `zerion`.
+Requires Node.js ≥ 22.12 (or ≥ 20.19 on Node 20). The npm package is `zerion-cli`; the installed binary is `zerion`.
 
 ## Authentication
 
