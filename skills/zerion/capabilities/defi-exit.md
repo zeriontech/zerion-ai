@@ -63,6 +63,11 @@ correct route for a position, say which one and why. Don't guess at calldata.
     }));"
   ```
 
+  For a longer script, keep the file in your working directory and point Node at the CLI's
+  packages: `NODE_PATH="$(npm root -g)/zerion-cli/node_modules" node script.js`. `require` resolves
+  from the script's location, not the current directory, and inside the CLI's own folder a `.js`
+  file can't use `require` at all, so don't write scripts there.
+
 - **Prove it moves value** — `eth_call` the exact call from the user's address before building
   anything: the claimable amount is within what the reserves can pay, the redeemable balance is above
   zero. A revert means the call or its arguments are wrong.
