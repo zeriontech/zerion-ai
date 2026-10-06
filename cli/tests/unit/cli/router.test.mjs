@@ -55,8 +55,7 @@ describe("CLI routing", () => {
     it("shows version with --version", async () => {
       const { code, stdout } = await run(["--version"]);
       assert.equal(code, 0);
-      // Allow prerelease suffixes: publish-next.yml bumps to e.g. 1.5.1-next.<ts>.g<sha>
-      // before `npm publish`, whose prepublishOnly hook re-runs this test
+      // Also accept prerelease versions (e.g. 2.0.0-rc.1)
       assert.match(stdout.trim(), /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
     });
   });
