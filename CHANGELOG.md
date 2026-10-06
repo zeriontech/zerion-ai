@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/zeriontech/zerion-ai/compare/v1.10.0...v1.11.0) (2026-10-06)
+
+
+### Features
+
+* let a one-line agent prompt set up Zerion via init + the skill ([#128](https://github.com/zeriontech/zerion-ai/issues/128)) ([488cdd0](https://github.com/zeriontech/zerion-ai/commit/488cdd0bbcf19ad08d30c79f99744a75008b2b92))
+
 ## [1.10.0](https://github.com/zeriontech/zerion-ai/compare/v1.9.1...v1.10.0) (2026-10-05)
 
 
