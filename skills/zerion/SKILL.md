@@ -215,7 +215,7 @@ Flags: `--json` (default), `--pretty` (auto-enabled for TTY), `--quiet`.
 
 ## Supported chains
 
-Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags) is the **source of truth**.
+Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags, plus each EVM chain's `chainId` and `chainIdHex`) is the **source of truth**.
 
 > ⚠️ **Never tell a user a chain is unsupported based on the static list below.** It is a snapshot and goes stale as chains are added. If a chain you need isn't listed here — or you're unsure whether it supports a given action — run `zerion chains` and check the flags **instead of stopping**. (This exact list, at 14 chains, once caused an agent to wrongly report that `robinhood`, `monad`, `hyperevm`, and ~20 other live chains "cannot be moved by Zerion.")
 

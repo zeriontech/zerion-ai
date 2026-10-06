@@ -48,9 +48,16 @@ correct route for a position, say which one and why. Don't guess at calldata.
 
 ## 3. Research the protocol call
 
-- **ABI and source** — Blockscout v2, keyless:
-  `https://<chain>.blockscout.com/api/v2/smart-contracts/<address>`. For a proxy, follow it to the
-  implementation.
+- **ABI and source** — Sourcify, keyless, looked up by the numeric `chainId` from `zerion chains`:
+  `https://sourcify.dev/server/v2/contract/<chainId>/<address>?fields=abi,proxyResolution`. Add
+  `sources` to the fields to read the code. If `proxyResolution.isProxy` is true, fetch each listed
+  implementation's ABI the same way.
+- **Fallback, only if the user has `ETHERSCAN_API_KEY` set** — Etherscan's V2 API, for contracts
+  verified there but not on Sourcify:
+  `https://api.etherscan.io/v2/api?chainid=<chainId>&module=contract&action=getabi&address=<address>&apikey=$ETHERSCAN_API_KEY`.
+  It doesn't work without a key.
+- **No verified ABI, or a proxy you can't resolve** (some older proxy designs aren't detected) → say
+  which contract and stop. Don't scrape explorer pages or guess the interface.
 - **Selectors and calldata** — compute them with viem, never from memory. `zerion-cli` ships viem:
 
   ```bash

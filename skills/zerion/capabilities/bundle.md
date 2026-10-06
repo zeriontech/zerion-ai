@@ -204,7 +204,8 @@ Get these wrong and the link opens on an error page:
   envelope's `address` exactly, or it fails with a from-mismatch.
 - **`chain` and `chainId` are different things.** `chain` (on the envelope) is a Zerion slug from
   `zerion chains` — `ethereum`, `base`, `polygon`. `chainId` (inside `evm`) is the numeric chain id
-  as hex — `0x1`, `0x2105`, `0x89`. A slug in `chainId` is rejected.
+  as hex — `0x1`, `0x2105`, `0x89`; `zerion chains` prints it as `chainIdHex`. A slug in `chainId`
+  is rejected.
 - `chainId`, `gas` and `value` are hex quantities; `data` defaults to `"0x"`. Leave the fee fields
   `null` — the wallet estimates them at signing. `nonce` is optional: the web app assigns it.
 - Write addresses in lowercase hex, copied from CLI or explorer output — never retyped or

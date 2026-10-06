@@ -87,7 +87,7 @@ function printUsage() {
       "analyze <name|address>": "Analyze wallet trading activity",
     },
     other: {
-      "chains": "List supported chains",
+      "chains": "List supported chains: Zerion id, EVM chain id (decimal + hex), and trade/bridge/send support",
       "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage)",
       "config unset <key>": "Remove a config value (resets to default)",
       "config list": "Show current configuration",

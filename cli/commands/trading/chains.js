@@ -1,6 +1,17 @@
 import * as api from "../../utils/api/client.js";
 import { print, printError } from "../../utils/common/output.js";
 import { formatChains } from "../../utils/common/format.js";
+import { isSolana } from "../../utils/chain/registry.js";
+
+// EVM chain id from the catalog's hex `external_id`: decimal for ABI lookups
+// (Sourcify, Etherscan), hex for a hand-built bundle envelope's `chainId`.
+// Solana's `external_id` isn't an EVM chain id, so it gets none.
+export function evmChainId(zerionId, externalId) {
+  if (isSolana(zerionId) || typeof externalId !== "string" || !/^0x[0-9a-f]+$/i.test(externalId)) {
+    return { chainId: null, chainIdHex: null };
+  }
+  return { chainId: Number.parseInt(externalId, 16), chainIdHex: externalId.toLowerCase() };
+}
 
 export default async function chains(_args, _flags) {
   try {
@@ -12,6 +23,7 @@ export default async function chains(_args, _flags) {
       return {
         id,
         name: attributes.name || id || "Unknown",
+        ...evmChainId(id, attributes.external_id),
         supportsTrading: flags.supports_trading ?? false,
         supportsBridge: flags.supports_bridge ?? false,
         supportsSending: flags.supports_sending ?? false,
