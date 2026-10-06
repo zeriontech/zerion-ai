@@ -52,6 +52,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | File | What it covers | Partner |
 |------|----------------|---------|
 | [`bankr.md`](./skills/zerion/partners/bankr.md) | Twitter/X-native trading bot patterns | [Bankr](https://bankr.bot) |
+| [`lido-stake.md`](./skills/zerion/partners/lido-stake.md) | Direct ETH → stETH/wstETH staking with referral attribution and Zerion verification | [Lido](https://lido.fi) |
 | [`lifi-earn.md`](./skills/zerion/partners/lifi-earn.md) | Cross-chain yield routing | [Li.Fi](https://li.fi) |
 | [`monad-addresses.md`](./skills/zerion/partners/monad-addresses.md) | Canonical Monad mainnet contract addresses for `zerion agent create-policy --allowlist` lockdown | [Monad](https://monad.xyz) |
 | [`moonpay-onramp.md`](./skills/zerion/partners/moonpay-onramp.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |

@@ -126,6 +126,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Partner | What it does | Read |
 |---------|--------------|------|
 | Bankr | Twitter/X-native trading bot patterns | `partners/bankr.md` |
+| Lido | Direct ETH → stETH/wstETH staking with referral attribution and Zerion verification | `partners/lido-stake.md` |
 | Li.Fi Earn | Cross-chain yield routing | `partners/lifi-earn.md` |
 | Monad addresses | Monad chain address tooling | `partners/monad-addresses.md` |
 | Moonpay (onramp) | Fiat → crypto onramp | `partners/moonpay-onramp.md` |
