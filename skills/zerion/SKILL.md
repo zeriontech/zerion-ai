@@ -102,7 +102,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 
 **Reading state**
 - The user's request sets the scope; the CLI is the source of truth for what exists inside it and how much. Don't act on positions or tokens the user didn't ask about just because a read returned them. If something they named isn't there, say so. Scope reads with `--chain`, `--defi` or `--positions` instead of dumping the whole portfolio.
-- For any amount you'll transact, read the exact raw balance on-chain (`eth_call` → `balanceOf`), never a rounded figure from `positions` — a rounded-up amount reverts on the last wei. Use `$ETH_RPC_URL` if it's set, otherwise a public RPC such as `https://<chain>.drpc.org`, with a browser-like `User-Agent` (public endpoints reject the default one).
+- For any amount you'll transact, read the exact raw balance on-chain (`eth_call` → `balanceOf`), never a rounded figure from `positions` — a rounded-up amount reverts on the last wei. Use `$ETH_RPC_URL` if it's set; otherwise try the chain's `rpcUrls` from `zerion chains --json` in order, skipping any that errors or whose `eth_chainId` doesn't match the chain's `chainIdHex`. These are public endpoints and need no key. Send a browser-like `User-Agent`, since some public endpoints reject the default one. If none answers, say you can't read that chain rather than picking an RPC yourself.
 - Check `zerion chains` before telling the user a chain can't do something.
 
 **Gas vs. proceeds — before any signing link**
@@ -215,7 +215,7 @@ Flags: `--json` (default), `--pretty` (auto-enabled for TTY), `--quiet`.
 
 ## Supported chains
 
-Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags, plus each EVM chain's `chainId` and `chainIdHex`) is the **source of truth**.
+Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags, plus each EVM chain's `chainId`, `chainIdHex` and public `rpcUrls`) is the **source of truth**.
 
 > ⚠️ **Never tell a user a chain is unsupported based on the static list below.** It is a snapshot and goes stale as chains are added. If a chain you need isn't listed here — or you're unsure whether it supports a given action — run `zerion chains` and check the flags **instead of stopping**. (This exact list, at 14 chains, once caused an agent to wrongly report that `robinhood`, `monad`, `hyperevm`, and ~20 other live chains "cannot be moved by Zerion.")
 
