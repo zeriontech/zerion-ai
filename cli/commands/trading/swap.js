@@ -1,4 +1,4 @@
-import { getSwapQuote, executeSwap, executeViaWebApp, buildSwapWebAppGroup } from "../../utils/trading/swap.js";
+import { getSwapQuote, executeSwap, executeViaWebApp, buildSwapWebAppGroup, quoteOnlyResult } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet } from "../../utils/wallet/resolve.js";
 import { reportHandoff } from "../../utils/web-app/handoff.js";
@@ -34,6 +34,13 @@ export default async function swap(args, flags) {
     process.exit(1);
   }
 
+  if (flags.quote && flags.prepare) {
+    printError("conflicting_flags", "--quote only prices the swap; --prepare builds an envelope. Pick one.", {
+      example: `zerion swap ${chain} ${amount} ${fromToken} ${toToken} --quote`,
+    });
+    process.exit(1);
+  }
+
   // Source wallet resolves against `chain` so Solana picks base58 and EVM
   // picks 0x.
   const { walletName, address } = resolveWallet({ ...flags, chain });
@@ -56,14 +63,6 @@ export default async function swap(args, flags) {
       slippage: parseSlippage(flags.slippage),
     });
 
-    // Balance precondition gate — runs regardless of signing route.
-    if (quote.preconditions.enough_balance === false) {
-      printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance for this swap`, {
-        suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}`,
-      });
-      process.exit(1);
-    }
-
     const quoteSummary = {
       swap: {
         chain,
@@ -76,6 +75,21 @@ export default async function swap(args, flags) {
         sender: address,
       },
     };
+
+    // --quote: price only, so it runs before the balance gate — the tokens may
+    // come from an earlier leg that hasn't confirmed. Builds and signs nothing.
+    if (flags.quote) {
+      print(quoteOnlyResult(quoteSummary, quote), formatSwapQuote);
+      return;
+    }
+
+    // Balance precondition gate — runs regardless of signing route.
+    if (quote.preconditions.enough_balance === false) {
+      printError("insufficient_funds", `Insufficient ${quote.from.symbol} balance for this swap`, {
+        suggestion: `Fund your wallet: zerion wallet fund --wallet ${walletName}, or price it without the balance check: --quote`,
+      });
+      process.exit(1);
+    }
 
     const timeout = parseTimeout(flags.timeout);
 

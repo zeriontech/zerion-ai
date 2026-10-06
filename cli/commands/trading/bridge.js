@@ -1,4 +1,4 @@
-import { getSwapOffers, pickOffer, isQuoteExecutable, executeSwap, executeViaWebApp, buildSwapWebAppGroup } from "../../utils/trading/swap.js";
+import { getSwapOffers, pickOffer, executeSwap, executeViaWebApp, buildSwapWebAppGroup, allOffersShortOfBalance, shouldListBridgeOffers, bridgeOffersResult } from "../../utils/trading/swap.js";
 import { requireAgentToken, parseTimeout, parseSlippage, handleTradingError } from "../../utils/trading/guards.js";
 import { resolveWallet, resolveDestination } from "../../utils/wallet/resolve.js";
 import { reportHandoff } from "../../utils/web-app/handoff.js";
@@ -17,6 +17,7 @@ import { validateTradingChainAsync } from "../../utils/common/validate.js";
  *   no flag  → list all offers and exit (multi-offer case); auto-execute single offer
  *   --fast   → execute lowest `estimated_time_seconds`
  *   --cheapest → execute highest net `output_amount` (matches API's default sort)
+ *   --quote  → always list and exit, even for a single offer or a short balance
  *
  * For Solana ↔ EVM, pass --to-wallet or --to-address so the destination
  * receiver matches the dest chain's address format. Otherwise we use the
@@ -76,6 +77,11 @@ export default async function bridge(args, flags) {
     process.exit(1);
   }
   const strategy = fastFlag ? "fast" : cheapestFlag ? "cheapest" : null;
+  const quoteOnly = coerceBoolFlag(flags.quote, "quote");
+  if (quoteOnly && flags.prepare) {
+    printError("conflicting_flags", "--quote only prices the bridge; --prepare builds an envelope. Pick one.");
+    process.exit(1);
+  }
 
   // Parse slippage up-front so a malformed value fails fast — before we hit
   // the chain catalog API or resolve a wallet. Otherwise an invalid slippage
@@ -132,59 +138,31 @@ export default async function bridge(args, flags) {
   try {
     const offers = await getSwapOffers(quoteInput);
 
-    // If every offer is blocked (insufficient balance, output too small,
-    // etc.), there is nothing the user can pick — bail out with the most
-    // common blocking reason rather than printing a list of unactionable
-    // routes. Agents can still re-fetch with --raw or inspect via the JSON
-    // path; this handles the human-typed-it case cleanly.
-    const executableOffers = offers.filter(isQuoteExecutable);
-    if (executableOffers.length === 0) {
-      const blockingCodes = new Set(offers.map((o) => o.blocking?.code).filter(Boolean));
-      const allInsufficientBalance =
-        blockingCodes.size === 1 && blockingCodes.has("not_enough_input_asset_balance");
-      if (allInsufficientBalance) {
-        const sym = offers[0].from?.symbol || fromToken;
-        printError(
-          "insufficient_funds",
-          `Insufficient ${sym} balance on ${fromChain} to bridge ${amount} ${fromToken}.`,
-          {
-            wallet: walletName,
-            address,
-            suggestion: `Fund the wallet (\`zerion wallet fund --wallet ${walletName}\`) or try a smaller amount.`,
-          },
-        );
-        process.exit(1);
-      }
-      // Mixed blocking reasons or no blocking codes at all — list the
-      // offers anyway so the user can read why each route failed; the
-      // table's status column shows the reason per row.
+    // If every offer is blocked by a short balance there is nothing to pick —
+    // bail out with that reason rather than printing unactionable routes.
+    // Not with --quote: pricing tokens an earlier leg hasn't delivered yet is
+    // the point, so the routes are listed and marked indicative instead.
+    // Mixed or missing blocking codes fall through to the list, whose status
+    // column shows the reason per row.
+    if (!quoteOnly && allOffersShortOfBalance(offers)) {
+      const sym = offers[0].from?.symbol || fromToken;
+      printError(
+        "insufficient_funds",
+        `Insufficient ${sym} balance on ${fromChain} to bridge ${amount} ${fromToken}.`,
+        {
+          wallet: walletName,
+          address,
+          suggestion: `Fund the wallet (\`zerion wallet fund --wallet ${walletName}\`), try a smaller amount, or price it without the balance check: --quote`,
+        },
+      );
+      process.exit(1);
     }
 
-    if (!strategy && offers.length > 1) {
-      const offerList = offers.map((q) => ({
-        provider: q.liquiditySource,
-        estimatedOutput: q.estimatedOutput,
-        estimatedSeconds: q.estimatedSeconds,
-        fee: q.fee,
-        // Match pickOffer's selection logic — an offer with no blocking
-        // error but missing transaction data would otherwise show as
-        // `ready` here and get silently skipped at execution.
-        executable: isQuoteExecutable(q),
-        blocking: q.blocking,
-      }));
-      print({
-        fromChain,
-        toChain,
-        fromToken,
-        toToken,
-        amount,
-        sender: address,
-        receiver,
-        offers: offerList,
-        count: offerList.length,
-        hint: "Re-run with --fast or --cheapest to execute. Use --cheapest for highest output, --fast for lowest time.",
-        executed: false,
-      }, formatBridgeOffers);
+    if (shouldListBridgeOffers({ quoteOnly, strategy, offerCount: offers.length })) {
+      print(
+        bridgeOffersResult({ fromChain, toChain, fromToken, toToken, amount, sender: address, receiver }, offers, { quoteOnly }),
+        formatBridgeOffers,
+      );
       return;
     }
 

@@ -10,7 +10,7 @@ CLI for [Zerion Wallet](https://zerion.io). Analyze wallets, sign, swap, and bri
 Set up everything in one command (install CLI globally, configure your API key, and add skills to your coding agents):
 
 ```bash
-npx zerion-cli init
+npx zerion-cli@latest init
 ```
 
 - authenticates in the browser via [dashboard.zerion.io](https://dashboard.zerion.io) and saves the key for you — no copy/paste
@@ -44,6 +44,7 @@ One skill, [`zerion`](./skills/zerion/SKILL.md), under [`./skills/zerion/`](./sk
 | [`wallet.md`](./skills/zerion/capabilities/wallet.md) | Wallet management — create, import, add read-only, list, fund, review threshold, backup, export-key, delete, sync |
 | [`agent-management.md`](./skills/zerion/capabilities/agent-management.md) | Agent tokens + policies (the autonomous-trading primitives) |
 | [`swap-0x.md`](./skills/zerion/capabilities/swap-0x.md) | Token swaps via 0x API v2 — AllowanceHolder, Permit2, and Gasless flows across 20+ EVM chains |
+| [`defi-exit.md`](./skills/zerion/capabilities/defi-exit.md) | Exit DeFi positions — withdraw, unstake, redeem, claim, repay — then convert the proceeds through `swap` / `bridge` |
 
 ### Partner integrations (`skills/zerion/partners/`)
 
@@ -381,7 +382,7 @@ Track wallets by name without exposing addresses in commands.
 |---------|-------------|---------|
 | `zerion login` | Authenticate — browser (dashboard) login, paste an API key, or pay-per-call | `zerion login` |
 | `zerion login --browser` | Browser auth: opens dashboard.zerion.io, captures the key via loopback | `zerion login --browser` |
-| `zerion init` | One-shot onboarding — install CLI globally, browser login, install agent skills | `npx zerion-cli init` |
+| `zerion init` | One-shot onboarding — install CLI globally, browser login, install agent skills | `npx zerion-cli@latest init` |
 | `zerion init -y` | Same, without prompts: browser login, then install every skill | `zerion init -y` |
 | `zerion init --no-open` | Print the authorize URL instead of opening a browser (remote / headless) | `zerion init --no-open` |
 | `zerion setup skills` | Install Zerion agent skills into detected coding agents | `zerion setup skills` |

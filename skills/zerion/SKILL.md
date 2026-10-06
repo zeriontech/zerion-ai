@@ -9,13 +9,21 @@ allowed-tools: Bash, Read
 
 Unified API + CLI for crypto wallets across 14 EVM chains and Solana. The `zerion` binary ships from npm; this skill is the entry point for **all** Zerion capabilities. Capability and partner docs live in nested files and are **loaded on demand**.
 
-## Setup
+## Setup — check before you do
 
-Skills shell out to the `zerion` binary. Don't pre-install — try the command first. If a `zerion` invocation fails with `command not found`, install once:
+Skills shell out to the `zerion` binary. Every setup step is idempotent, so probe first and do only what's missing:
 
 ```bash
-npm install -g zerion-cli
+zerion --version     # needs 1.11.0+ — older CLIs ignore --quote and run the swap or bridge instead of pricing it
+zerion wallet list   # which wallets exist, and whether the user's address is one of them
 ```
+
+- **`zerion` not found, or older than 1.11.0** → `npx -y zerion-cli@latest init -y`. It installs or upgrades the CLI and this skill, keeps the existing login and wallets, and never blocks.
+- **No API key** — `init` reports `"next": "zerion login --browser"`, or a command fails with `missing_api_key` → run `zerion login --browser` **in the background**: it waits up to 5 minutes for the user to approve. Show the user the URL it prints to stderr straight away, and keep doing read-only research while you wait.
+- **The user names an address `wallet list` doesn't show** → register it read-only: `zerion wallet add <address> --name <name>`. That needs no private key, passphrase or agent token — every transaction goes to app.zerion.io for the user to sign.
+- **A command fails with `unsupported_node`** → the user's Node.js is too old (minimum below). Tell them to upgrade, as the error's suggestion says; don't patch dependencies or build a workaround package.
+- **You can't run shell commands** → say so instead of guessing.
+- **Sandboxed agents** (e.g. Codex's default sandbox): `init` and `login` need network access and write outside the workspace (global npm install, `~/.zerion`), so ask for that permission rather than working around it.
 
 Requires Node.js ≥ 22.12 (or ≥ 20.19 on Node 20). The npm package is `zerion-cli`; the installed binary is `zerion`.
 
@@ -26,7 +34,8 @@ Three modes. Pick one for analytics; trading always uses an API key.
 ### A) API key (recommended)
 
 ```bash
-export ZERION_API_KEY="zk_dev_..."
+zerion login --browser               # approve in the browser; the key is saved to config
+export ZERION_API_KEY="zk_dev_..."   # or set one you already have
 ```
 
 Get yours at [dashboard.zerion.io](https://dashboard.zerion.io). Dev keys begin with `zk_dev_`. Limits: 120 req/min, 5K req/day.
@@ -63,7 +72,7 @@ zerion portfolio <address> --mpp
 export ZERION_MPP=true
 ```
 
-> Trading commands (`swap`, `bridge`, `send`) always use the API key + an agent token, regardless of `ZERION_X402` / `ZERION_MPP`.
+> Trading commands (`swap`, `bridge`, `send`) always use the API key, regardless of `ZERION_X402` / `ZERION_MPP`. Signing locally also needs an agent token; a read-only wallet signs in the web app and needs none.
 
 ## Capabilities — load on demand
 
@@ -79,10 +88,50 @@ Before executing any capability below, **Read the matching file** for the full c
 | Wallet management: create, import, add read-only, list, fund, review threshold, backup, export-key, delete | `capabilities/wallet.md` |
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
 | 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
+| Exit DeFi positions: withdraw, unstake, redeem, claim rewards, repay | `capabilities/defi-exit.md` |
+
+**Requests that combine several** — split them into legs and read each matching file. "Exit all my positions and sell my tokens on Blast, then move everything to Ethereum" is `analyze.md` (find what's there) → `defi-exit.md` (protocol legs) → `trading.md` (swaps on Blast, then a bridge) → `bundle.md` (one signing session per step).
 
 **Pairing rules:**
-- Trading + signing require an agent token → see `capabilities/agent-management.md` first if user has none.
+- Signing locally needs an agent token → see `capabilities/agent-management.md` first if the user has none. A read-only wallet (`wallet add`) signs every transaction in the web app and needs no token.
 - Run analysis before trading to verify balances and positions.
+
+## Rules for every on-chain task
+
+These apply to anything that ends in a transaction — one swap, a DeFi exit, or "sell everything on Blast and move it to Ethereum".
+
+**Reading state**
+- The user's request sets the scope; the CLI is the source of truth for what exists inside it and how much. Don't act on positions or tokens the user didn't ask about just because a read returned them. If something they named isn't there, say so. Scope reads with `--chain`, `--defi` or `--positions` instead of dumping the whole portfolio.
+- For any amount you'll transact, read the exact raw balance on-chain (`eth_call` → `balanceOf`), never a rounded figure from `positions` — a rounded-up amount reverts on the last wei. Use `$ETH_RPC_URL` if it's set; otherwise try the chain's `rpcUrls` from `zerion chains --json` in order, skipping any that errors or whose `eth_chainId` doesn't match the chain's `chainIdHex`. These are public endpoints and need no key. Send a browser-like `User-Agent`, since some public endpoints reject the default one. If none answers, say you can't read that chain rather than picking an RPC yourself.
+- Check `zerion chains` before telling the user a chain can't do something.
+
+**Gas vs. proceeds — before any signing link**
+- For each action, total the gas of every leg (an approve, a claim and a swap each pay gas): `eth_estimateGas` on the real call × the current fee × the native token's price from CLI output. Compare that with what actually lands back in the wallet after swap fees and price impact.
+- Price a conversion with `zerion swap <chain> <amount> <from> <to> --quote`, and a move between chains with `zerion bridge … --quote` (it lists every route and never executes, even when there's only one). Both work before the wallet holds the input token (e.g. tokens a claim will deliver): it reports `enoughBalance: false` and an indicative price that leaves out network gas and the protocol fee, so allow for both. Don't import CLI internals or quote with someone else's address to get a fuller number.
+- Proceeds comfortably above gas → go ahead. Gas at or near the proceeds → **stop and ask**: show each item's gas, proceeds and what's left, in dollars, all failing items in one message, then wait. Don't skip it quietly and don't proceed quietly.
+- Prove with `eth_call` that each transaction moves value, and skip no-ops (say which and why). A token with no venue: say so and stop — don't retry a quote that keeps failing.
+
+**Building transactions**
+- Swaps, bridges and transfers go through `zerion swap` / `bridge` / `send` — they quote, price, set slippage and handle the allowance. **Never** encode a swap, a transfer or an approve as raw calldata, and never call a DEX or aggregator API yourself: the quote and the transaction must come from the same route.
+- Only a protocol-specific call that no command covers (withdraw, unstake, redeem, claim, repay) is built by hand — see `capabilities/defi-exit.md`.
+- Pass `--wallet <name>` explicitly on every `swap`, `bridge` and `send`, including the `--prepare` runs that feed a bundle. Never rely on the default wallet. (`bundle` itself takes the signer from each group's `address`.)
+- Selling a whole balance: quote slightly below the exact on-chain amount (truncate, never round up) and accept the dust.
+- Slippage, unless the user says otherwise: `--slippage 0.3` stable-to-stable, `--slippage 1` for anything else.
+- Batch related transactions with `zerion bundle` so the user signs once (`capabilities/bundle.md`). A leg that spends tokens an earlier leg brings in can't join it: `--prepare` and `bundle` check the wallet's current balances, not future inflows. Send the earlier leg, wait for it to confirm on-chain, then prepare the next one.
+
+**Signing**
+- On the **web-app route** (read-only wallet, review threshold, `--review`) a signing link executes nothing — the user's signature is the approval. Show the plan and the link in the **same** message; don't stop to ask first. The gas check above is the one exception. On the **local route** the CLI signs and broadcasts immediately, so the plan must be right before you run it.
+- When you share a web-app link, tell the user what to expect: it opens app.zerion.io, which shows the full review (signing address, balance changes, fee, a security check) before they do anything, then asks them to connect a wallet if none is connected. It has to be the wallet that owns the signing address, since the transaction can only come from that address.
+- `swap`, `bridge`, `send` and `bundle` print the link to stderr, then block for up to 300 s waiting for the signature. Run them in the background, read the link within a few seconds, and show it straight away.
+- `swap`, `bridge` and `send` print `Signing route: <route> — <reason>` to stderr before signing; `bundle` prints `Bundle route: <route>`. No such line → the command never got that far; fix it.
+- `timeout` or `rejected` only means the CLI stopped watching — the user may have signed afterwards. Check on-chain (balances, allowances, recent transactions) before regenerating anything. Don't wait on Zerion's indexer; it lags by minutes.
+- A link belongs to the run that printed it. Once that run has ended, don't share its link again: the CLI is no longer listening for the result, but the transaction rides in the link, so it may still be signable. If the chain shows nothing went through, run the command again for a fresh link, and tell the user to sign only the new one — signing both could execute the action twice.
+- Multi-step flows: as soon as one leg confirms on-chain, quote the next and send its link without waiting to be asked.
+- **Never** write an `app.zerion.io` link yourself. Only the CLI can produce a working one — the transaction rides in the URL fragment. If a command fails, fix the command.
+
+**Scope**
+- Do what was asked. Anything else you notice — other positions worth exiting, idle balances — is a suggestion: list it, then wait. Don't generate a link for something the user didn't pick, and one pick doesn't cover the others.
+- Flag loans and leveraged positions separately: unwinding one moves the health factor and can put the rest at risk.
 
 ## Signing routes — trades don't always sign locally
 
@@ -166,7 +215,7 @@ Flags: `--json` (default), `--pretty` (auto-enabled for TTY), `--quiet`.
 
 ## Supported chains
 
-Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags) is the **source of truth**.
+Zerion supports **60+ chains**, and adds more over time. Per-chain capabilities differ — some support swap **and** bridge **and** send, others only sending or reads — so `zerion chains` (or `zerion chains --json` for the `supportsTrading` / `supportsBridge` / `supportsSending` flags, plus each EVM chain's `chainId`, `chainIdHex` and public `rpcUrls`) is the **source of truth**.
 
 > ⚠️ **Never tell a user a chain is unsupported based on the static list below.** It is a snapshot and goes stale as chains are added. If a chain you need isn't listed here — or you're unsure whether it supports a given action — run `zerion chains` and check the flags **instead of stopping**. (This exact list, at 14 chains, once caused an agent to wrongly report that `robinhood`, `monad`, `hyperevm`, and ~20 other live chains "cannot be moved by Zerion.")
 
