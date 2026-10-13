@@ -113,7 +113,7 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 
 **Building transactions**
 - Swaps, bridges and transfers go through `zerion swap` / `bridge` / `send` — they quote, price, set slippage and handle the allowance. **Never** encode a swap, a transfer or an approve as raw calldata, and never call a DEX or aggregator API yourself: the quote and the transaction must come from the same route.
-- Only a protocol-specific call that no command covers (withdraw, unstake, redeem, claim, repay) is built by hand — see `capabilities/defi-exit.md`.
+- Only a protocol-specific call that no command covers — an exit (withdraw, unstake, redeem, claim, repay) or an entry such as a staking deposit — is built by hand: `capabilities/bundle.md` § "Hand-built groups", and `capabilities/defi-exit.md` for exits.
 - Pass `--wallet <name>` explicitly on every `swap`, `bridge` and `send`, including the `--prepare` runs that feed a bundle. Never rely on the default wallet. (`bundle` itself takes the signer from each group's `address`.)
 - Selling a whole balance: quote slightly below the exact on-chain amount (truncate, never round up) and accept the dust.
 - Slippage, unless the user says otherwise: `--slippage 0.3` stable-to-stable, `--slippage 1` for anything else.
