@@ -63,6 +63,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | [`somnia-reactivity.md`](./skills/zerion/partners/somnia-reactivity.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |
 | [`trails-crosschainswap.md`](./skills/zerion/partners/trails-crosschainswap.md) | Cross-chain swaps to/from Polygon via Trails SDK (Widget / Headless / API) | [Trails](https://docs.trails.build) |
 | [`trails-deposit.md`](./skills/zerion/partners/trails-deposit.md) | Bridge + DeFi vault deposit on Polygon in one intent (Aave, Morpho, ERC-4626) | [Trails](https://docs.trails.build) |
+| [`true402-rugcheck.md`](./skills/zerion/partners/true402-rugcheck.md) | Rug/honeypot check (executed buy/sell simulation) gating `zerion swap` | [true402](https://true402.dev) |
 | [`umbra-privatetxn.md`](./skills/zerion/partners/umbra-privatetxn.md) | Private (stealth-address) transfers | [Umbra](https://umbra.cash) |
 | [`uniswap-lp.md`](./skills/zerion/partners/uniswap-lp.md) | Liquidity position management | [Uniswap](https://uniswap.org) |
 | [`uniswap-x402.md`](./skills/zerion/partners/uniswap-x402.md) | Swap with x402 pay-per-call | [Uniswap](https://uniswap.org) |
