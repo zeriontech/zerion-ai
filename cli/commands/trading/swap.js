@@ -101,7 +101,7 @@ export default async function swap(args, flags) {
     // --prepare: run the full build + gate pipeline but emit a nonce-free
     // prepared-group envelope instead of executing. Defers to `zerion bundle`.
     if (flags.prepare) {
-      const group = await buildSwapWebAppGroup(quote, { address, assignNonces: false });
+      const group = await buildSwapWebAppGroup(quote, { address, walletName, assignNonces: false });
       printPreparedGroup(buildPreparedGroup({
         ecosystem: group.ecosystem,
         chain: group.chain,
@@ -116,7 +116,7 @@ export default async function swap(args, flags) {
     }
 
     if (route === "web-app") {
-      const result = await executeViaWebApp(quote, { address, timeout });
+      const result = await executeViaWebApp(quote, { address, walletName, timeout });
       reportHandoff(quoteSummary, result);
       return;
     }

@@ -218,7 +218,7 @@ export default async function send(args, flags) {
 
     // Policy pre-filter — runs on BOTH signing routes, before a link is formed
     // or a tx is signed.
-    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data, chain });
+    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data, chain, walletName });
 
     const timeout = parseTimeout(flags.timeout);
 

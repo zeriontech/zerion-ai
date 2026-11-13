@@ -418,6 +418,8 @@ export async function executeSwap(quote, walletName, passphrase, { timeout, appr
  * @param {object} quote
  * @param {object} options
  * @param {string} options.address - the CLI's resolved signer address
+ * @param {string} [options.walletName] - the wallet that signs; its policies
+ *   are the ones enforced (defaults to the default wallet)
  * @param {boolean} [options.isBridge] - label the swap tx as a bridge
  * @param {boolean} [options.assignNonces=true] - assign sequential pending
  *   nonces (direct handoff). Pass `false` for a nonce-free prepared group / bundle
@@ -425,7 +427,7 @@ export async function executeSwap(quote, walletName, passphrase, { timeout, appr
  * @returns {Promise<{ ecosystem:"evm"|"solana", chain:string, from:string,
  *   transactions:Array, client:object, outflows:Array }>}
  */
-export async function buildSwapWebAppGroup(quote, { address, isBridge = false, assignNonces = true } = {}) {
+export async function buildSwapWebAppGroup(quote, { address, walletName, isBridge = false, assignNonces = true } = {}) {
   // API blocking gate — runs on the handoff route too, before a link is formed.
   if (quote.blocking) {
     const err = new Error(
@@ -493,6 +495,7 @@ export async function buildSwapWebAppGroup(quote, { address, isBridge = false, a
         value: approveTx.value || "0",
         data: approveTx.data,
         chain: zerionChainId,
+        walletName,
       });
       transactions.push({
         evm: toTransactionEVM(approveTx, { chainIdNum, from, nonce: nonce ?? undefined }),
@@ -508,6 +511,7 @@ export async function buildSwapWebAppGroup(quote, { address, isBridge = false, a
     value: swapTx.value || "0",
     data: swapTx.data,
     chain: zerionChainId,
+    walletName,
   });
   transactions.push({
     evm: toTransactionEVM(swapTx, { chainIdNum, from, nonce: nonce ?? undefined }),
@@ -531,9 +535,10 @@ export async function buildSwapWebAppGroup(quote, { address, isBridge = false, a
  * @param {boolean} [options.isBridge] - label the swap tx as a bridge
  * @returns {Promise<object>} the signViaWebApp result ({ status, hashes?, ... })
  */
-export async function executeViaWebApp(quote, { address, timeout, isBridge = false } = {}) {
+export async function executeViaWebApp(quote, { address, walletName, timeout, isBridge = false } = {}) {
   const { from, transactions, client } = await buildSwapWebAppGroup(quote, {
     address,
+    walletName,
     isBridge,
     assignNonces: true,
   });
@@ -588,6 +593,7 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
         to: approveTx.to,
         value: approveTx.value || "0",
         data: approveTx.data,
+        walletName,
       });
 
       process.stderr.write(`Approving ${quote.from.symbol} for swap...\n`);
@@ -627,6 +633,7 @@ async function executeEvmSwap(quote, walletName, passphrase, zerionChainId, { ti
     to: swapTx.to,
     value: swapTx.value || "0",
     data: swapTx.data,
+    walletName,
   });
 
   // When approval is needed, the swap's nonce is approvalNonce + 1. When the

@@ -7,17 +7,20 @@
  *                 --group "$(zerion send USDC 20 --to 0xBob --chain base --prepare)"
  *
  * Pipeline (docs/prd/cli-bundle.md §4): parse & validate shape → same-signer
- * invariant → re-validate (policies + aggregate balance + quote freshness) →
- * route (any web-app ⇒ whole queue web-app; else local) → execute → report
- * per-group. **Always exits 0** for execution outcomes (callers read per-group
- * `status`); pre-flight rejections (bad `--group`, mixed signer, aggregate
- * over-balance) exit non-zero because nothing was executed.
+ * invariant → route (any web-app ⇒ whole queue web-app; else local, which
+ * requires the named wallet to own the signer address) → re-validate (policies
+ * + aggregate balance + quote freshness) → execute → report per-group.
+ * **Always exits 0** for execution outcomes (callers read per-group `status`);
+ * pre-flight rejections (bad `--group`, mixed signer, a local signer that
+ * doesn't own the address, aggregate over-balance) exit non-zero because
+ * nothing was executed.
  *
  * Architecture: this is the CLI shell (network: policies, balances, handoff,
  * local signing). Pure logic lives in `cli/utils/trading/bundle.js`.
  */
 
 import * as api from "../../utils/api/client.js";
+import * as ows from "../../utils/wallet/keystore.js";
 import { parseTimeout, requireAgentToken, enforceExecutablePolicies } from "../../utils/trading/guards.js";
 import { print, printError } from "../../utils/common/output.js";
 import { signBundleViaWebApp } from "../../utils/web-app/handoff.js";
@@ -31,6 +34,7 @@ import { signAndBroadcastSolana } from "../../utils/chain/solana.js";
 import {
   normalizeGroupInputs,
   assertSameSigner,
+  assertLocalSigner,
   decideBundleRoute,
   aggregateOutflows,
   matchPositionBalance,
@@ -69,33 +73,54 @@ export default async function bundle(args, flags) {
   }
   const { address, ecosystem } = signer;
 
-  // 3a. Re-validate policies — the `--group` blobs are untrusted stdin, so run
-  // enforceExecutablePolicies again per EVM tx before a link forms or a tx signs.
-  for (const g of groups) {
-    for (const entry of g.transactions) {
-      if (!entry.evm) continue;
-      await enforceExecutablePolicies({
-        to: entry.evm.to,
-        value: entry.evm.value || "0",
-        data: entry.evm.data,
-        chain: g.chain,
-      });
+  // 3. Route the whole queue — strictest-wins. Decided before the re-validation
+  // below because the local route has its own invariant: the key is looked up
+  // by `walletName`, so that wallet must own the signer address. Without this
+  // check a mismatched envelope signs from a different wallet than it names.
+  const route = decideBundleRoute(groups);
+  let localWallet = null;
+  if (route === "local") {
+    try {
+      localWallet = assertLocalSigner(groups, (name, eco) =>
+        eco === "solana" ? ows.getSolAddress(name) : ows.getEvmAddress(name));
+    } catch (err) {
+      printError(err.code || "invalid_group", err.message, err.suggestion ? { suggestion: err.suggestion } : {});
+      process.exit(1);
     }
   }
 
-  // 3b. Quote freshness — warn (can't silently re-quote) when a group is stale.
+  // 4a. Re-validate policies — the `--group` blobs are untrusted stdin, so run
+  // enforceExecutablePolicies again per EVM tx before a link forms or a tx signs.
+  // Policies follow the signer: the validated wallet on the local route; on the
+  // web-app route whichever keystore wallets hold the signer address (none for
+  // a read-only or unknown address — those carry no agent token or policies).
+  const policyWallets = localWallet ? [localWallet] : ows.findWalletNamesByAddress(address, ecosystem);
+  for (const g of groups) {
+    for (const entry of g.transactions) {
+      if (!entry.evm) continue;
+      for (const walletName of policyWallets) {
+        await enforceExecutablePolicies({
+          to: entry.evm.to,
+          value: entry.evm.value || "0",
+          data: entry.evm.data,
+          chain: g.chain,
+          walletName,
+        });
+      }
+    }
+  }
+
+  // 4b. Quote freshness — warn (can't silently re-quote) when a group is stale.
   for (const w of quoteFreshnessWarnings(groups, { nowMs: Date.now() })) {
     process.stderr.write(`Warning: ${w}\n`);
   }
 
-  // 3c. Aggregate per-token outflow vs live balance — catches sums that each
+  // 4c. Aggregate per-token outflow vs live balance — catches sums that each
   // passed alone but overspend together. A definite over-balance is a pre-flight
   // rejection (exit non-zero, nothing executed); an undeterminable balance
   // degrades to a warning rather than a false refusal.
   await checkAggregateBalance(groups, address);
 
-  // 4. Route the whole queue — strictest-wins.
-  const route = decideBundleRoute(groups);
   process.stderr.write(
     `Bundle route: ${route} — ${route === "web-app"
       ? "at least one group requires human review"
@@ -108,7 +133,7 @@ export default async function bundle(args, flags) {
     await runWebAppRoute(groups, address, timeout);
     return;
   }
-  await runLocalRoute(groups, ecosystem, timeout);
+  await runLocalRoute(groups, localWallet, timeout);
 }
 
 /**
@@ -195,9 +220,9 @@ async function runWebAppRoute(groups, address, timeout) {
   // Always exit 0 — partial success is a normal batch outcome.
 }
 
-async function runLocalRoute(groups, ecosystem, timeout) {
+async function runLocalRoute(groups, walletName, timeout) {
   // Require the agent token ONCE for the whole batch (all groups share a signer).
-  const walletName = groups[0].walletName;
+  // `walletName` was checked against the signer address before we got here.
   const passphrase = await requireAgentToken("for bundle signing", walletName);
 
   const rows = [];

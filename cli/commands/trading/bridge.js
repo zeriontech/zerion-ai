@@ -212,7 +212,7 @@ export default async function bridge(args, flags) {
 
     // --prepare: emit a nonce-free prepared-group envelope instead of executing.
     if (flags.prepare) {
-      const group = await buildSwapWebAppGroup(quote, { address, isBridge: true, assignNonces: false });
+      const group = await buildSwapWebAppGroup(quote, { address, walletName, isBridge: true, assignNonces: false });
       printPreparedGroup(buildPreparedGroup({
         ecosystem: group.ecosystem,
         chain: group.chain,
@@ -227,7 +227,7 @@ export default async function bridge(args, flags) {
     }
 
     if (route === "web-app") {
-      const result = await executeViaWebApp(quote, { address, timeout, isBridge: true });
+      const result = await executeViaWebApp(quote, { address, walletName, timeout, isBridge: true });
       reportHandoff(quoteSummary, result);
       return;
     }

@@ -5,7 +5,7 @@
 
 import { Buffer } from "node:buffer";
 import * as ows from "@open-wallet-standard/core";
-import { getConfigValue, getActiveAgentToken } from "../config.js";
+import { getConfigValue, getActiveAgentToken, getAgentTokenForWallet } from "../config.js";
 
 function extractEvmAddress(wallet) {
   const evmAccount = wallet.accounts.find((a) =>
@@ -136,6 +136,22 @@ export function getSolAddress(walletName) {
   return extractSolAddress(ows.getWallet(walletName));
 }
 
+/**
+ * Names of the keystore wallets that hold `address` — normally none or one,
+ * two when the same key was imported under two names. EVM addresses compare
+ * case-insensitively; Solana base58 is case-sensitive.
+ */
+export function findWalletNamesByAddress(address, ecosystem = "evm") {
+  if (!address) return [];
+  const want = ecosystem === "evm" ? String(address).toLowerCase() : String(address);
+  return listWallets()
+    .filter((w) => {
+      const have = ecosystem === "evm" ? w.evmAddress?.toLowerCase() : w.solAddress;
+      return have === want;
+    })
+    .map((w) => w.name);
+}
+
 export function deleteWallet(nameOrId) {
   ows.deleteWallet(nameOrId);
 }
@@ -190,6 +206,30 @@ export function revokeAgentToken(idOrName) {
  */
 export function getAgentToken() {
   return process.env.ZERION_AGENT_TOKEN || getActiveAgentToken() || null;
+}
+
+/**
+ * The agent token that unlocks `walletName` for unattended signing.
+ * An explicit ZERION_AGENT_TOKEN always wins. Otherwise it is the token saved
+ * for that wallet and never another wallet's: OWS scopes a token to its
+ * wallet, so the default wallet's token would only fail later, at signing
+ * ("API key … does not have access to wallet"). With no wallet named, the
+ * default wallet's token.
+ * @param {string} [walletName] - wallet name; an OWS wallet id works too, as
+ *   it does for `--wallet`
+ * @returns {string|null}
+ */
+export function getAgentTokenFor(walletName) {
+  if (process.env.ZERION_AGENT_TOKEN) return process.env.ZERION_AGENT_TOKEN;
+  if (!walletName) return getActiveAgentToken() || null;
+  const saved = getAgentTokenForWallet(walletName);
+  if (saved) return saved;
+  // Tokens are saved under the wallet's name; `walletName` may be its id.
+  try {
+    return getAgentTokenForWallet(ows.getWallet(walletName).name) || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

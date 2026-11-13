@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import {
   normalizeGroupInputs,
   assertSameSigner,
+  assertLocalSigner,
   decideBundleRoute,
   aggregateOutflows,
   matchPositionBalance,
@@ -66,6 +67,56 @@ describe("decideBundleRoute (strictest-wins)", () => {
   });
   it("routes local only when ALL groups are local", () => {
     assert.equal(decideBundleRoute([evmGroup(), evmGroup()]), "local");
+  });
+});
+
+describe("assertLocalSigner", () => {
+  const OWNER = "0xAbCdEf0000000000000000000000000000000001";
+  const OTHER = "0x9999990000000000000000000000000000000009";
+  // A keystore with one wallet, "hot", holding OWNER.
+  const keystore = (name) => {
+    if (name !== "hot") throw new Error(`wallet not found: '${name}'`);
+    return OWNER.toLowerCase();
+  };
+  const codeOf = (fn) => {
+    try {
+      fn();
+    } catch (err) {
+      assert.ok(err.suggestion, "error carries a suggestion");
+      return err.code;
+    }
+    return null;
+  };
+
+  it("returns the wallet when it owns the signer address (EVM case-insensitive)", () => {
+    const groups = [evmGroup({ walletName: "hot" }), evmGroup({ walletName: "hot", chain: "arbitrum" })];
+    assert.equal(assertLocalSigner(groups, keystore), "hot");
+  });
+  it("rejects a group with no walletName", () => {
+    assert.equal(codeOf(() => assertLocalSigner([evmGroup()], keystore)), "missing_wallet_name");
+    assert.equal(
+      codeOf(() => assertLocalSigner([evmGroup({ walletName: "hot" }), evmGroup({ walletName: "" })], keystore)),
+      "missing_wallet_name",
+    );
+  });
+  it("rejects groups that name different wallets", () => {
+    const groups = [evmGroup({ walletName: "hot" }), evmGroup({ walletName: "cold" })];
+    assert.equal(codeOf(() => assertLocalSigner(groups, keystore)), "mixed_wallet");
+  });
+  it("rejects a wallet that is not in the keystore", () => {
+    assert.equal(codeOf(() => assertLocalSigner([evmGroup({ walletName: "cold" })], keystore)), "wallet_not_found");
+    assert.equal(codeOf(() => assertLocalSigner([evmGroup({ walletName: "hot" })], () => null)), "wallet_not_found");
+  });
+  it("rejects a wallet that does not own the signer address", () => {
+    // The envelope names OTHER as the signer but "hot" (which holds OWNER) as
+    // the key: signing would send from OWNER, not from the address it names.
+    const groups = [evmGroup({ walletName: "hot", address: OTHER })];
+    assert.equal(codeOf(() => assertLocalSigner(groups, keystore)), "wallet_address_mismatch");
+  });
+  it("compares Solana addresses case-sensitively", () => {
+    const sol = { ecosystem: "solana", chain: "solana", address: "So1AnaAddr", walletName: "hot", transactions: [{ solana: { raw: "AA==" } }] };
+    assert.equal(assertLocalSigner([sol], () => "So1AnaAddr"), "hot");
+    assert.equal(codeOf(() => assertLocalSigner([sol], () => "so1anaaddr")), "wallet_address_mismatch");
   });
 });
 
