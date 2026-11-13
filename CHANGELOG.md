@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/zeriontech/zerion-ai/compare/v1.11.0...v1.11.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **cli:** resolve read-only wallets as bridge destinations ([#140](https://github.com/zeriontech/zerion-ai/issues/140)) ([bfd5d26](https://github.com/zeriontech/zerion-ai/commit/bfd5d26a151c21e9416a95631a03bf4842846958))
+
 ## [1.11.0](https://github.com/zeriontech/zerion-ai/compare/v1.10.0...v1.11.0) (2026-10-06)
 
 
