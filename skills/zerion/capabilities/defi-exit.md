@@ -85,9 +85,9 @@ correct route for a position, say which one and why. Don't guess at calldata.
 
 Write it as a hand-built bundle group — `capabilities/bundle.md` § "Hand-built groups" has the
 envelope, how to pick its `route`, and every field rule (the six `evm` fields, slug vs. hex chain
-id). In short: use `"route":"web-app"` unless the wallet is a keystore wallet whose agent token is
-the active one, the exit can be priced and is within its review threshold, and the user has said
-yes to signing it locally — only then `"route":"local"`.
+id). In short: use `"route":"web-app"` unless the wallet is a keystore wallet with an agent token,
+the exit can be priced and is within its review threshold, and the user has said yes to signing it
+locally — only then `"route":"local"`.
 
 A conversion can't be prepared from tokens the wallet doesn't hold yet. `zerion swap --prepare`
 rejects an insufficient balance before it prints an envelope, and `bundle` checks outflows against

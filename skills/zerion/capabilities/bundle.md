@@ -98,13 +98,14 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
    **quote freshness** (warns when a prepared group is older than 120 s — bundle cannot re-quote).
 4. **Route the whole queue — strictest-wins.** If **any** group's `route` is `web-app`, the **entire**
    queue goes to the web app in **one** link. Only if **every** group is `local` does bundle sign
-   locally.
+   locally — and then every group must name the same keystore wallet in `walletName`, and that
+   wallet must own the signer `address`, or the run is rejected before anything is signed.
 5. **Execute.**
    - **Web-app route** — opens one link (URL also printed to stderr for headless use), waits for the
      per-group result stream, reports each group's outcome. Verification is **relaxed** for bundles
      (a bundle may span chains one client can't verify) — it trusts the web app's reported per-group
      outcome and notes it on stderr.
-   - **Local route** — reads the agent token **once**, then signs + broadcasts each group
+   - **Local route** — reads that wallet's agent token **once**, then signs + broadcasts each group
      sequentially (re-fetching the pending nonce per group). A throwing group is recorded as
      `failed` without gating the rest (partial success).
 
@@ -128,8 +129,9 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
 - **Execution outcomes always exit 0** — partial success is a normal batch outcome; the caller reads
   each group's `status` (and `hashes` / `error`). Do **not** rely on the exit code to detect a
   rejected/failed group.
-- **Pre-flight rejections exit non-zero** — malformed `--group`, mixed signer address, or a definite
-  aggregate over-balance mean nothing executed.
+- **Pre-flight rejections exit non-zero** — malformed `--group`, mixed signer address, a local
+  `walletName` that doesn't own the address, or a definite aggregate over-balance mean nothing
+  executed.
 
 ## Error codes
 
@@ -138,8 +140,13 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
 | `missing_groups` | `bundle` called with no `--group` | Pass at least one `--group "$(… --prepare)"` |
 | `invalid_group` | A `--group` value isn't valid JSON / isn't a prepared-group envelope / has a bad shape | Produce it with a `--prepare` command; for a protocol leg, follow "Hand-built groups" |
 | `mixed_address` | Groups name different signer addresses (or ecosystems) | All groups must be prepared from the **same wallet** |
+| `missing_wallet_name` | Local route, and a group has no `walletName` | Set it to the wallet's `name` from `zerion wallet list`, or use `"route":"web-app"` |
+| `wallet_not_found` | Local route, and `walletName` isn't a keystore wallet (e.g. it's read-only) | A read-only wallet signs in the web app: `"route":"web-app"` |
+| `wallet_address_mismatch` | Local route, and `walletName` holds a different address than the group's `address` | Copy `walletName` and `address` from the same `zerion wallet list` row |
+| `mixed_wallet` | Local route, and groups name different wallets | Prepare every group from the same wallet |
+| `no_agent_token` | Local route, and the signing wallet has no agent token | The user runs `zerion agent create-token --wallet <wallet>`, or use `"route":"web-app"` |
 | `insufficient_aggregate_balance` | Groups each pass alone but overspend a token **together** | Drop a group or lower an amount |
-| `policy_denied` | A group violates an active agent policy on re-validation | Check `zerion agent list-policies`; revise the token or the trade |
+| `policy_denied` | A group violates a policy of the signing wallet's agent token on re-validation | Check `zerion agent list-policies`; revise the token or the trade |
 | `conflicting_flags` | `consolidate --execute --prepare` (mutually exclusive) | Pick one: `--prepare` emits an envelope, `--execute` signs locally |
 | `consolidate_prepare_evm_only` | `consolidate --prepare` on Solana | Prepare individual Solana swaps: `zerion swap solana … --prepare` |
 | `no_ready_rows` | `consolidate --prepare` with no ready rows | Run consolidate without `--prepare` to see why rows are blocked/skipped |
@@ -179,14 +186,14 @@ else, so a wrong call is not rejected: on the web-app route it reaches the user 
 legitimate, and on the local route it's signed before anyone sees it.
 
 **Pick the route yourself.** `bundle` takes it from the envelope's `route` field alone — it doesn't
-check whether the wallet is read-only, what the call is worth or whose key will sign — so apply
-the rules `swap` / `bridge` / `send` use (`capabilities/trading.md` § "Signing routes & web-app
-handoff"). Read `zerion wallet list` (`type`, `reviewThresholdUsd`) and `zerion agent list-tokens`
-(`wallet`, `active`) first.
+work the route out for you and doesn't look at what the call is worth — so apply the rules `swap`
+/ `bridge` / `send` use (`capabilities/trading.md` § "Signing routes & web-app handoff"). Read
+`zerion wallet list` (`type`, `reviewThresholdUsd`) and `zerion agent list-tokens` (`wallet`)
+first.
 
 - **`"route":"local"`** only when all of these hold:
   - the wallet is a keystore wallet (`"type": "local"` — created or imported in the CLI);
-  - its agent token is the active one (`"active": true` in `list-tokens`);
+  - it has an agent token (`list-tokens` shows one for it; it needn't be the active one);
   - the USD value the call moves (what it deposits, withdraws or claims) isn't over the wallet's
     `reviewThresholdUsd`. No threshold means no limit; a threshold and a value you can't price
     means web-app;
@@ -200,28 +207,22 @@ handoff"). Read `zerion wallet list` (`type`, `reviewThresholdUsd`) and `zerion 
   (`zerion agent create-token`, which they run themselves) or sign in the web app, if they also
   hold that key in a browser wallet.
 
-**What `bundle` doesn't check on the local route.** Get these wrong and it signs anyway, or fails
-without falling back to the web app:
+**What `bundle` checks on the local route**, before anything is signed (each exits non-zero):
 
-- **`walletName` must be the wallet whose `evmAddress` is the envelope's `address`** — copy both
-  from the same `zerion wallet list` row. The key comes from `walletName` and the nonce from
-  `address`, and nothing compares them: a mismatch sends the call from the *other* wallet, or
-  leaves it queued on a wrong nonce. With several groups, the first group's `walletName` signs
-  them all. Without `walletName` the group comes back `failed` ("Failed to convert JavaScript
-  value `Undefined`…").
-- **Signing uses the active agent token** — `ZERION_AGENT_TOKEN` if it's set, otherwise the
-  default wallet's. For any other wallet the group fails with `API key '…' does not have access
-  to wallet`. Use the web-app route, or, if the user wants local signing, run `zerion agent
-  use-token --wallet <name>` first. That also makes the wallet the default for every later
-  command, so tell the user and switch back afterwards; it changes nothing while
-  `ZERION_AGENT_TOKEN` is set.
-- **A wrong `route` doesn't fall back.** Anything other than `"web-app"`, a missing field
-  included, signs locally. For a read-only wallet that ends in a `failed` group (`wallet not
-  found`) or `no_agent_token`, not a link.
+- **`walletName` must be the keystore wallet that owns the envelope's `address`** — copy both
+  from the same `zerion wallet list` row. No `walletName` → `missing_wallet_name`; a read-only or
+  unknown wallet → `wallet_not_found`; a wallet with a different address →
+  `wallet_address_mismatch`; groups that name different wallets → `mixed_wallet`.
+- **It signs with that wallet's own agent token**, whichever wallet is the default (a set
+  `ZERION_AGENT_TOKEN` overrides it). No token for the wallet → `no_agent_token`.
+- **Policies follow the signer**: the policies on that wallet's token. On the web-app route they
+  are the policies of a keystore wallet that holds the `address`; a read-only or unknown address
+  has none. A `policy_denied` stops the run before a link forms or a transaction signs.
 
-One web-app group sends the whole queue to the web app (step 4 above). On either route `bundle`
-first re-checks the default wallet's agent policies, so a `policy_denied` can stop a web-app
-bundle too.
+It still doesn't second-guess `route`: anything other than `"web-app"`, a missing field included,
+means local, and a local group is signed whatever it is worth. For a read-only wallet a missing
+`route` now ends in `wallet_not_found`, not a link. One web-app group sends the whole queue to
+the web app (step 4 above).
 
 Write the envelope to a file so shell quoting can't mangle it:
 
