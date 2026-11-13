@@ -89,6 +89,7 @@ Before executing any capability below, **Read the matching file** for the full c
 | Agent tokens + security policies for autonomous trading | `capabilities/agent-management.md` |
 | 0x Swap API v2 (direct integration, Permit2/AllowanceHolder, gasless) | `capabilities/swap-0x.md` |
 | Exit DeFi positions: withdraw, unstake, redeem, claim rewards, repay | `capabilities/defi-exit.md` |
+| Enter a protocol with a call no command covers (e.g. a staking deposit) | `capabilities/bundle.md` § "Hand-built groups" |
 
 **Requests that combine several** — split them into legs and read each matching file. "Exit all my positions and sell my tokens on Blast, then move everything to Ethereum" is `analyze.md` (find what's there) → `defi-exit.md` (protocol legs) → `trading.md` (swaps on Blast, then a bridge) → `bundle.md` (one signing session per step).
 
@@ -114,13 +115,13 @@ These apply to anything that ends in a transaction — one swap, a DeFi exit, or
 **Building transactions**
 - Swaps, bridges and transfers go through `zerion swap` / `bridge` / `send` — they quote, price, set slippage and handle the allowance. **Never** encode a swap, a transfer or an approve as raw calldata, and never call a DEX or aggregator API yourself: the quote and the transaction must come from the same route.
 - Only a protocol-specific call that no command covers — an exit (withdraw, unstake, redeem, claim, repay) or an entry such as a staking deposit — is built by hand: `capabilities/bundle.md` § "Hand-built groups", and `capabilities/defi-exit.md` for exits.
-- Pass `--wallet <name>` explicitly on every `swap`, `bridge` and `send`, including the `--prepare` runs that feed a bundle. Never rely on the default wallet. (`bundle` itself takes the signer from each group's `address`.)
+- Pass `--wallet <name>` explicitly on every `swap`, `bridge` and `send`, including the `--prepare` runs that feed a bundle. Never rely on the default wallet. (`bundle` has no `--wallet`: the signer is each group's `address`, and a local run signs with the first group's `walletName` and the active agent token — `capabilities/bundle.md`.)
 - Selling a whole balance: quote slightly below the exact on-chain amount (truncate, never round up) and accept the dust.
 - Slippage, unless the user says otherwise: `--slippage 0.3` stable-to-stable, `--slippage 1` for anything else.
 - Batch related transactions with `zerion bundle` so the user signs once (`capabilities/bundle.md`). A leg that spends tokens an earlier leg brings in can't join it: `--prepare` and `bundle` check the wallet's current balances, not future inflows. Send the earlier leg, wait for it to confirm on-chain, then prepare the next one.
 
 **Signing**
-- On the **web-app route** (read-only wallet, review threshold, `--review`) a signing link executes nothing — the user's signature is the approval. Show the plan and the link in the **same** message; don't stop to ask first. The gas check above is the one exception. On the **local route** the CLI signs and broadcasts immediately, so the plan must be right before you run it.
+- On the **web-app route** (read-only wallet, review threshold, `--review`) a signing link executes nothing — the user's signature is the approval. Show the plan and the link in the **same** message; don't stop to ask first. The gas check above is the one exception. On the **local route** the CLI signs and broadcasts immediately, so the plan must be right before you run it. A hand-built group on the local route needs the user's yes first (`capabilities/bundle.md` § "Hand-built groups").
 - When you share a web-app link, tell the user what to expect: it opens app.zerion.io, which shows the full review (signing address, balance changes, fee, a security check) before they do anything, then asks them to connect a wallet if none is connected. It has to be the wallet that owns the signing address, since the transaction can only come from that address.
 - `swap`, `bridge`, `send` and `bundle` print the link to stderr, then block for up to 300 s waiting for the signature. Run them in the background, read the link within a few seconds, and show it straight away.
 - `swap`, `bridge` and `send` print `Signing route: <route> — <reason>` to stderr before signing; `bundle` prints `Bundle route: <route>`. No such line → the command never got that far; fix it.

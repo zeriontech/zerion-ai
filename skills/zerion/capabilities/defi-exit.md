@@ -85,9 +85,9 @@ correct route for a position, say which one and why. Don't guess at calldata.
 
 Write it as a hand-built bundle group — `capabilities/bundle.md` § "Hand-built groups" has the
 envelope, how to pick its `route`, and every field rule (the six `evm` fields, slug vs. hex chain
-id). In short: a keystore wallet with an agent token, on an exit within its review threshold, signs
-locally (`"route":"local"`) once the user says yes; a read-only wallet, an exit over the threshold,
-or a user who wants to sign with another wallet goes through the web app (`"route":"web-app"`).
+id). In short: use `"route":"web-app"` unless the wallet is a keystore wallet whose agent token is
+the active one, the exit can be priced and is within its review threshold, and the user has said
+yes to signing it locally — only then `"route":"local"`.
 
 A conversion can't be prepared from tokens the wallet doesn't hold yet. `zerion swap --prepare`
 rejects an insufficient balance before it prints an envelope, and `bundle` checks outflows against
@@ -96,9 +96,11 @@ Pricing it is different: `zerion swap … --quote` works before the tokens arriv
 gas-vs-proceeds check up front (its price leaves out network gas and the protocol fee until the
 tokens are there). So:
 
-- **By default, the protocol leg goes alone.** Send it, watch the chain over RPC until it confirms,
-  then quote the swap and move straight on to it (on the web-app route, send its link right away). This holds even when you know the exact amount
-  in advance, e.g. a fixed reward claim.
+- **By default, the protocol leg goes alone**, even when you know the exact amount in advance
+  (e.g. a fixed reward claim). Send it, watch the chain over RPC until it confirms, then quote the
+  swap right away. On the web-app route, send its link without waiting to be asked. On the local
+  route, run it only if the user's yes covered the conversion and the quote is close to the one
+  they saw; otherwise show the new quote and ask.
 - **Same bundle only if the wallet already holds enough** of the token to cover the conversion
   before the protocol leg runs (check the raw on-chain balance). Then `zerion swap … --prepare` and
   add its group alongside the protocol leg so the user signs once.
