@@ -217,6 +217,9 @@ function readAddressFor(walletName, explicitChain) {
  *   - `toWalletName`   — local wallet whose corresponding account is used.
  *   - falls back to default wallet (when source wallet has the required account on dest chain).
  *
+ * Read-only wallets resolve to their stored address when it matches the
+ * target chain's ecosystem; otherwise this throws `readonly_chain_mismatch`.
+ *
  * Returns `{ address, source }` or throws with a helpful message.
  */
 export async function resolveDestination({ toAddressOrEns, toWalletName, fallbackWallet, targetChain }) {
@@ -246,6 +249,25 @@ export async function resolveDestination({ toAddressOrEns, toWalletName, fallbac
     throw new Error(
       `Cross-chain destination required. Pass --to-wallet <name> or --to-address <addr/ens>.`
     );
+  }
+
+  // Read-only wallets live outside the keystore and hold exactly one address,
+  // so they can receive only within their own ecosystem: an EVM address works
+  // for any EVM destination chain, but there is no Solana account to derive
+  // (and vice versa).
+  const ro = getReadonly(lookupWallet);
+  if (ro) {
+    if (isSolanaAddress(ro.address) !== wantsSolana) {
+      const kind = wantsSolana ? "an EVM" : "a Solana";
+      const target = wantsSolana ? "Solana" : `EVM chain "${targetChain}"`;
+      const err = new Error(
+        `Read-only wallet "${lookupWallet}" is ${kind} address; it has no account to receive on ${target}. ` +
+        `Pass --to-address <${wantsSolana ? "solana-pubkey" : "0x…"}> for the destination.`
+      );
+      err.code = "readonly_chain_mismatch";
+      throw err;
+    }
+    return { address: ro.address, source: "wallet", walletName: lookupWallet, readOnly: true };
   }
 
   // Existence check — keep error wording consistent with other commands.

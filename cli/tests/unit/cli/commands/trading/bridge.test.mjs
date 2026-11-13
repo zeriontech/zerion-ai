@@ -6,8 +6,11 @@
 // error from stderr — the same surface agent integrations rely on.
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { spawnSync } from "node:child_process";
+import { describe, it, before, after } from "node:test";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -166,5 +169,119 @@ describe("bridge — early-exit validation", () => {
     if (err) {
       assert.notEqual(err.code, "invalid_flag_value");
     }
+  });
+});
+
+// A read-only wallet has no keystore entry, so the destination lookup must
+// resolve it from the read-only registry instead of reporting it missing.
+// The CLI runs against a local stub of the Zerion API (chain catalog + swap
+// quotes) under a temp HOME holding only read-only wallets; the stub records
+// the quote request so we can assert which receiver the bridge asked for.
+describe("bridge — read-only source wallet destination", () => {
+  const RO_EVM = "0x1234567890abcdef1234567890abcdef12345678";
+  const RO_SOL = "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK";
+  const chain = (id, externalId) => ({
+    id,
+    attributes: {
+      name: id,
+      external_id: externalId,
+      flags: { supports_trading: true, supports_bridge: true, supports_sending: true },
+    },
+  });
+  const chains = { data: [chain("base", "0x2105"), chain("arbitrum", "0xa4b1"), chain("solana", "0x65")] };
+
+  let server;
+  let apiBase;
+  let tmpHome;
+  let quoteRequests;
+
+  before(async () => {
+    tmpHome = mkdtempSync(join(tmpdir(), "zerion-bridge-ro-"));
+    mkdirSync(join(tmpHome, ".zerion"), { recursive: true });
+    writeFileSync(
+      join(tmpHome, ".zerion", "readonly-wallets.json"),
+      JSON.stringify([
+        { name: "ro-evm", address: RO_EVM, createdAt: new Date().toISOString() },
+        { name: "ro-sol", address: RO_SOL, createdAt: new Date().toISOString() },
+      ]),
+    );
+
+    server = createServer((req, res) => {
+      const url = new URL(req.url, "http://localhost");
+      res.setHeader("Content-Type", "application/json");
+      if (url.pathname === "/chains/") return res.end(JSON.stringify(chains));
+      if (url.pathname === "/swap/quotes/") {
+        quoteRequests.push(Object.fromEntries(url.searchParams));
+        return res.end(JSON.stringify({ data: [] }));
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ errors: [{ title: "not stubbed" }] }));
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    apiBase = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  // spawnSync would block this process's event loop, and with it the stub
+  // server the CLI is calling, so run the CLI asynchronously here.
+  function runBridgeAsync(args) {
+    quoteRequests = [];
+    return new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [CLI_PATH, "bridge", ...args], {
+        env: { ...process.env, HOME: tmpHome, ZERION_API_KEY: "zk_unit_test", ZERION_API_BASE: apiBase },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += chunk; });
+      child.stderr.on("data", (chunk) => { stderr += chunk; });
+      const timer = setTimeout(() => child.kill(), 10_000);
+      child.on("error", reject);
+      child.on("close", (exitCode) => {
+        clearTimeout(timer);
+        resolve({ exitCode, stdout, stderr });
+      });
+    });
+  }
+
+  // The CLI can write progress lines to stderr ahead of the JSON error, so
+  // parse from the object that holds the last "error" key.
+  function lastError(stderr) {
+    const key = stderr.lastIndexOf('"error"');
+    return key === -1 ? null : parseError(stderr.slice(stderr.lastIndexOf("{", key)));
+  }
+
+  it("EVM → EVM defaults the receiver to the read-only wallet's own address", async () => {
+    const { stderr } = await runBridgeAsync([
+      "base", "ETH", "0.01", "arbitrum", "ETH", "--wallet", "ro-evm",
+    ]);
+    const err = lastError(stderr);
+    assert.notEqual(err?.code, "invalid_destination", `destination should resolve, got: ${stderr}`);
+    assert.equal(quoteRequests.length, 1, `expected one quote request, stderr: ${stderr}`);
+    assert.equal(quoteRequests[0].from, RO_EVM);
+    assert.equal(quoteRequests[0].to, RO_EVM);
+  });
+
+  it("EVM → Solana fails with readonly_chain_mismatch and asks for --to-address", async () => {
+    const { exitCode, stderr } = await runBridgeAsync([
+      "base", "ETH", "0.01", "solana", "SOL", "--wallet", "ro-evm",
+    ]);
+    assert.equal(exitCode, 1);
+    const err = lastError(stderr);
+    assert.equal(err.code, "readonly_chain_mismatch");
+    assert.match(err.message, /--to-address/);
+    assert.match(err.suggestion, /--to-address/);
+    assert.equal(quoteRequests.length, 0);
+  });
+
+  it("EVM → Solana goes through when --to-address supplies the Solana receiver", async () => {
+    const { stderr } = await runBridgeAsync([
+      "base", "ETH", "0.01", "solana", "SOL", "--wallet", "ro-evm", "--to-address", RO_SOL,
+    ]);
+    assert.equal(quoteRequests.length, 1, `expected one quote request, stderr: ${stderr}`);
+    assert.equal(quoteRequests[0].to, RO_SOL);
   });
 });

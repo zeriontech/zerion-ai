@@ -22,7 +22,8 @@ import { validateTradingChainAsync } from "../../utils/common/validate.js";
  * For Solana ↔ EVM, pass --to-wallet or --to-address so the destination
  * receiver matches the dest chain's address format. Otherwise we use the
  * source wallet's account on the target chain (mnemonic-derived wallets
- * have both EVM and Solana accounts).
+ * have both EVM and Solana accounts). A read-only source wallet receives at
+ * its own address within its ecosystem; across ecosystems it needs --to-address.
  */
 export default async function bridge(args, flags) {
   const [fromChain, fromToken, amount, toChain, toToken] = args;
@@ -109,8 +110,13 @@ export default async function bridge(args, flags) {
     });
     receiver = dest.address;
   } catch (err) {
-    printError("invalid_destination", err.message, {
-      suggestion: "Pass --to-wallet <name> or --to-address <addr>",
+    // A read-only wallet has one address, so only --to-address can supply a
+    // receiver in the other ecosystem.
+    const readonlyMismatch = err.code === "readonly_chain_mismatch";
+    printError(readonlyMismatch ? err.code : "invalid_destination", err.message, {
+      suggestion: readonlyMismatch
+        ? "Pass --to-address <addr> for the destination chain."
+        : "Pass --to-wallet <name> or --to-address <addr>",
     });
     process.exit(1);
   }
