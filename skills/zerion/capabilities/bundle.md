@@ -185,15 +185,15 @@ say so rather than hand-encoding an approve. `bundle` checks the envelope's shap
 else, so a wrong call is not rejected: on the web-app route it reaches the user looking
 legitimate, and on the local route it's signed before anyone sees it.
 
-**Pick the route yourself.** `bundle` takes it from the envelope's `route` field alone — it doesn't
-work the route out for you and doesn't look at what the call is worth — so apply the rules `swap`
-/ `bridge` / `send` use (`capabilities/trading.md` § "Signing routes & web-app handoff"). Read
-`zerion wallet list` (`type`, `reviewThresholdUsd`) and `zerion agent list-tokens` (`wallet`)
-first.
+**Pick the route yourself.** `bundle` takes it from the envelope's `route` field alone: anything
+other than `"web-app"`, a missing field included, means local, and a local group is signed
+whatever it is worth. So apply the rules `swap` / `bridge` / `send` use (`capabilities/trading.md`
+§ "Signing routes & web-app handoff"). Read `zerion wallet list` (`type`, `reviewThresholdUsd`) and
+`zerion agent list-tokens` (`wallet`) first.
 
 - **`"route":"local"`** only when all of these hold:
   - the wallet is a keystore wallet (`"type": "local"` — created or imported in the CLI);
-  - it has an agent token (`list-tokens` shows one for it; it needn't be the active one);
+  - it has an agent token (`list-tokens` shows one for it);
   - the USD value the call moves (what it deposits, withdraws or claims) isn't over the wallet's
     `reviewThresholdUsd`. No threshold means no limit; a threshold and a value you can't price
     means web-app;
@@ -202,27 +202,21 @@ first.
   one you can't price, or a user who asks to review in the browser or sign with another wallet.
   For an address the CLI doesn't know yet, add it read-only with `zerion wallet add <address|ens>
   --name <name>` and copy its `evmAddress` from `zerion wallet list` into the envelope — never an
-  ENS name. Show the plan and the link in the same message.
-- A keystore wallet with **no agent token** fits neither: ask the user. They create a token
-  (`zerion agent create-token`, which they run themselves) or sign in the web app, if they also
-  hold that key in a browser wallet.
+  ENS name. Show the plan and the link in the same message. A keystore wallet with **no agent
+  token** is the one case to ask about first: the user creates a token (`zerion agent
+  create-token`, which they run themselves) or signs in the web app, if that key is also in a
+  browser wallet.
 
-**What `bundle` checks on the local route**, before anything is signed (each exits non-zero):
+**What `bundle` checks on the local route**, before anything is signed (each failure exits
+non-zero; codes are in "Error codes" above):
 
 - **`walletName` must be the keystore wallet that owns the envelope's `address`** — copy both
-  from the same `zerion wallet list` row. No `walletName` → `missing_wallet_name`; a read-only or
-  unknown wallet → `wallet_not_found`; a wallet with a different address →
-  `wallet_address_mismatch`; groups that name different wallets → `mixed_wallet`.
+  from the same `zerion wallet list` row, and use one wallet for every group.
 - **It signs with that wallet's own agent token**, whichever wallet is the default (a set
-  `ZERION_AGENT_TOKEN` overrides it). No token for the wallet → `no_agent_token`.
+  `ZERION_AGENT_TOKEN` overrides it).
 - **Policies follow the signer**: the policies on that wallet's token. On the web-app route they
   are the policies of a keystore wallet that holds the `address`; a read-only or unknown address
   has none. A `policy_denied` stops the run before a link forms or a transaction signs.
-
-It still doesn't second-guess `route`: anything other than `"web-app"`, a missing field included,
-means local, and a local group is signed whatever it is worth. For a read-only wallet a missing
-`route` now ends in `wallet_not_found`, not a link. One web-app group sends the whole queue to
-the web app (step 4 above).
 
 Write the envelope to a file so shell quoting can't mangle it:
 

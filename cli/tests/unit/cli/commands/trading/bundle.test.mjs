@@ -75,23 +75,11 @@ describe("zerion bundle — local-route signer check", () => {
     assert.equal(res.stdout, "");
   });
 
-  it("rejects an envelope with no walletName", async () => {
-    const res = await bundle(envelope({ walletName: undefined }));
-    assert.equal(res.code, 1, res.stderr);
-    assert.equal(res.error?.code, "missing_wallet_name", res.stderr);
-  });
-
   it("rejects a walletName that is not in the keystore, pointing at the web-app route", async () => {
     const res = await bundle(envelope({ walletName: "some-read-only-wallet" }));
     assert.equal(res.code, 1, res.stderr);
     assert.equal(res.error?.code, "wallet_not_found", res.stderr);
     assert.match(res.error.suggestion, /"route":"web-app"/);
-  });
-
-  it("rejects groups that name different wallets", async () => {
-    const res = await bundle(envelope(), envelope({ walletName: "someone-else" }));
-    assert.equal(res.code, 1, res.stderr);
-    assert.equal(res.error?.code, "mixed_wallet", res.stderr);
   });
 
   it("lets a matching envelope through to the agent-token check for that wallet", async () => {

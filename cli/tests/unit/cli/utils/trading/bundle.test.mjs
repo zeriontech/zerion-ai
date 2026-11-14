@@ -8,6 +8,7 @@ import {
   normalizeGroupInputs,
   assertSameSigner,
   assertLocalSigner,
+  walletNamesOwning,
   decideBundleRoute,
   aggregateOutflows,
   matchPositionBalance,
@@ -78,45 +79,48 @@ describe("assertLocalSigner", () => {
     if (name !== "hot") throw new Error(`wallet not found: '${name}'`);
     return OWNER.toLowerCase();
   };
-  const codeOf = (fn) => {
-    try {
-      fn();
-    } catch (err) {
-      assert.ok(err.suggestion, "error carries a suggestion");
-      return err.code;
-    }
-    return null;
-  };
+  const rejects = (groups, code, resolve = keystore) =>
+    assert.throws(() => assertLocalSigner(groups, resolve), (err) => err.code === code && Boolean(err.suggestion));
 
-  it("returns the wallet when it owns the signer address (EVM case-insensitive)", () => {
-    const groups = [evmGroup({ walletName: "hot" }), evmGroup({ walletName: "hot", chain: "arbitrum" })];
-    assert.equal(assertLocalSigner(groups, keystore), "hot");
+  it("accepts groups that name the wallet owning the signer address (EVM case-insensitive)", () => {
+    assertLocalSigner([evmGroup({ walletName: "hot" }), evmGroup({ walletName: "hot", chain: "arbitrum" })], keystore);
   });
   it("rejects a group with no walletName", () => {
-    assert.equal(codeOf(() => assertLocalSigner([evmGroup()], keystore)), "missing_wallet_name");
-    assert.equal(
-      codeOf(() => assertLocalSigner([evmGroup({ walletName: "hot" }), evmGroup({ walletName: "" })], keystore)),
-      "missing_wallet_name",
-    );
+    rejects([evmGroup()], "missing_wallet_name");
+    rejects([evmGroup({ walletName: "hot" }), evmGroup({ walletName: "" })], "missing_wallet_name");
   });
   it("rejects groups that name different wallets", () => {
-    const groups = [evmGroup({ walletName: "hot" }), evmGroup({ walletName: "cold" })];
-    assert.equal(codeOf(() => assertLocalSigner(groups, keystore)), "mixed_wallet");
+    rejects([evmGroup({ walletName: "hot" }), evmGroup({ walletName: "cold" })], "mixed_wallet");
   });
   it("rejects a wallet that is not in the keystore", () => {
-    assert.equal(codeOf(() => assertLocalSigner([evmGroup({ walletName: "cold" })], keystore)), "wallet_not_found");
-    assert.equal(codeOf(() => assertLocalSigner([evmGroup({ walletName: "hot" })], () => null)), "wallet_not_found");
+    rejects([evmGroup({ walletName: "cold" })], "wallet_not_found");
+    rejects([evmGroup({ walletName: "hot" })], "wallet_not_found", () => null);
   });
   it("rejects a wallet that does not own the signer address", () => {
     // The envelope names OTHER as the signer but "hot" (which holds OWNER) as
     // the key: signing would send from OWNER, not from the address it names.
-    const groups = [evmGroup({ walletName: "hot", address: OTHER })];
-    assert.equal(codeOf(() => assertLocalSigner(groups, keystore)), "wallet_address_mismatch");
+    rejects([evmGroup({ walletName: "hot", address: OTHER })], "wallet_address_mismatch");
   });
   it("compares Solana addresses case-sensitively", () => {
     const sol = { ecosystem: "solana", chain: "solana", address: "So1AnaAddr", walletName: "hot", transactions: [{ solana: { raw: "AA==" } }] };
-    assert.equal(assertLocalSigner([sol], () => "So1AnaAddr"), "hot");
-    assert.equal(codeOf(() => assertLocalSigner([sol], () => "so1anaaddr")), "wallet_address_mismatch");
+    assertLocalSigner([sol], () => "So1AnaAddr");
+    rejects([sol], "wallet_address_mismatch", () => "so1anaaddr");
+  });
+});
+
+describe("walletNamesOwning", () => {
+  const wallets = [
+    { name: "a", evmAddress: "0xAbCdEf0000000000000000000000000000000001", solAddress: "So1AnaAddr" },
+    { name: "a-again", evmAddress: "0xabcdef0000000000000000000000000000000001", solAddress: null },
+    { name: "b", evmAddress: "0x9999990000000000000000000000000000000009", solAddress: "OtherSol" },
+  ];
+  it("finds every wallet holding an EVM address, whatever its case", () => {
+    assert.deepEqual(walletNamesOwning(wallets, "0xABCDEF0000000000000000000000000000000001", "evm"), ["a", "a-again"]);
+  });
+  it("matches Solana addresses exactly and returns nothing for an unknown address", () => {
+    assert.deepEqual(walletNamesOwning(wallets, "So1AnaAddr", "solana"), ["a"]);
+    assert.deepEqual(walletNamesOwning(wallets, "so1anaaddr", "solana"), []);
+    assert.deepEqual(walletNamesOwning(wallets, "0x0000000000000000000000000000000000000000", "evm"), []);
   });
 });
 

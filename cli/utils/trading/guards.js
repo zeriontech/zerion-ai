@@ -5,7 +5,7 @@
 
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, relative, dirname, join } from "node:path";
-import { getAgentToken, getAgentTokenFor, listAgentTokens, getPolicy, getWallet, listWallets } from "../wallet/keystore.js";
+import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById, listWallets } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../common/output.js";
 import { confirm } from "../common/prompt.js";
@@ -16,34 +16,28 @@ const POLICIES_DIR = resolve(join(__dirname, "..", "..", "policies"));
 
 /**
  * Require a valid agent token for unattended signing (trading, message signing).
- * The token is the one saved for `targetWallet` — the wallet that will sign —
- * not the default wallet's (see `getAgentTokenFor`). If that wallet has none
- * and stderr is a TTY, prompts the user to set one up inline — runs
- * `agent create-token` then returns the freshly-saved token so the caller can
- * continue. In non-TTY contexts, errors and exits.
+ * If none is configured and stderr is a TTY, prompts the user to set one up
+ * inline — runs `agent create-token` then returns the freshly-saved token so
+ * the caller can continue. In non-TTY contexts, errors and exits.
  * @param {string} [context] - what the token is needed for, e.g. "for signing"
- * @param {string} [targetWallet] - wallet the caller will sign with (from
- *   --wallet or the default). Selects that wallet's token, and binds an
- *   inline-created token to it. Omit only when the default wallet signs.
+ * @param {string} [targetWallet] - wallet the caller will sign with. Selects
+ *   that wallet's token (never the default wallet's), and binds an
+ *   inline-created token to it.
  * @returns {Promise<string>} The agent token (used as OWS passphrase)
  */
 export async function requireAgentToken(context = "", targetWallet) {
-  const token = getAgentTokenFor(targetWallet);
+  const token = getAgentToken(targetWallet);
   if (token) return token;
 
   const suffix = context ? ` ${context}` : "";
 
   // Non-interactive: error and exit like before
   if (!process.stderr.isTTY) {
-    printError(
-      "no_agent_token",
-      `Agent token required${suffix}${targetWallet ? ` — wallet "${targetWallet}" has none` : ""}`,
-      {
-        suggestion:
-          `Create one: zerion agent create-token --name <name> --wallet ${targetWallet || "<wallet>"}\n` +
-          "It will be saved to your config automatically.",
-      },
-    );
+    printError("no_agent_token", `Agent token required${suffix}${targetWallet ? ` — wallet "${targetWallet}" has none` : ""}`, {
+      suggestion:
+        `Create one: zerion agent create-token --name <name> --wallet ${targetWallet || "<wallet>"}\n` +
+        "It will be saved to your config automatically.",
+    });
     process.exit(1);
   }
 
@@ -70,7 +64,7 @@ export async function requireAgentToken(context = "", targetWallet) {
 
   await agentCreateToken([], { name: `${walletName}-agent`, wallet: walletName });
 
-  const freshToken = getAgentTokenFor(walletName);
+  const freshToken = getAgentToken(walletName);
   if (!freshToken) {
     printError("no_agent_token", `Agent token creation did not complete${suffix}`);
     process.exit(1);
@@ -79,42 +73,26 @@ export async function requireAgentToken(context = "", targetWallet) {
 }
 
 /**
- * Policy ids attached to `walletName`'s newest agent token — the token a local
- * signature for that wallet uses. Empty when the wallet has no token, which
- * is always the case for a read-only wallet.
- * @param {string} [walletName]
- * @returns {string[]}
- */
-export function policyIdsForWallet(walletName) {
-  if (!walletName) return [];
-  // Match tokens by wallet id, so a wallet named by its id (which `--wallet`
-  // accepts) can't sidestep its policies.
-  let walletId;
-  try {
-    walletId = getWallet(walletName).id;
-  } catch (err) {
-    if (/not found/i.test(err.message || "")) return []; // not a keystore wallet
-    throw err;
-  }
-  const newest = listAgentTokens()
-    .filter((t) => t.walletIds?.includes(walletId))
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-  return newest?.policyIds || [];
-}
-
-/**
- * Enforce the executable policies of the wallet that signs.
- * OWS enforces native rules (allowed_chains, expires_at) and runs these
- * scripts again when it signs. This pre-check runs them earlier: before a
- * web-app link is formed, which OWS never sees, and before anything is signed.
- * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName?: string }} txInfo
- *   - `walletName` is the signing wallet. Policies follow the signer, so a
- *   caller that resolved one (--wallet, a prepared group) must pass it;
- *   without it the default wallet is assumed to sign.
+ * Enforce executable policies attached to the signing wallet's agent token.
+ * OWS enforces native rules (allowed_chains, expires_at) but does NOT run
+ * executable scripts — we must do it here before signing.
+ * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName: string }} txInfo
+ *   - `walletName` is the wallet that signs (name or OWS id). Required: policies
+ *   follow the signer, never the default wallet.
  */
 export async function enforceExecutablePolicies(txInfo) {
-  const policyIds = policyIdsForWallet(txInfo.walletName || getConfigValue("defaultWallet"));
-  if (!policyIds.length) return;
+  const { walletName } = txInfo;
+  if (!walletName) throw new Error("enforceExecutablePolicies: walletName is required");
+
+  // Find the newest API key for the signing wallet
+  const tokens = listAgentTokens();
+  const activeKey = tokens
+    .filter((t) => {
+      const wid = t.walletIds?.[0];
+      return wid && (wid === walletName || getWalletNameById(wid) === walletName);
+    })
+    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
+  if (!activeKey?.policyIds?.length) return;
 
   const ctx = {
     transaction: {
@@ -124,7 +102,7 @@ export async function enforceExecutablePolicies(txInfo) {
     },
   };
 
-  for (const pid of policyIds) {
+  for (const pid of activeKey.policyIds) {
     let policy;
     try {
       policy = getPolicy(pid);

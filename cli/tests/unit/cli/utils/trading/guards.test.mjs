@@ -25,7 +25,7 @@ let guards;
 let tmpHome;
 let tokenA;
 let tokenB;
-let tokenD;
+let idB;
 const origHome = process.env.HOME;
 const origEnvToken = process.env.ZERION_AGENT_TOKEN;
 
@@ -46,20 +46,15 @@ before(async () => {
   config = await import("#zerion/utils/config.js");
   guards = await import("#zerion/utils/trading/guards.js");
 
-  // Keystore wallets, each with its own token and its own policy. "g-a" is the
-  // default wallet; "g-c" has no token at all. "g-d" carries a native rule
-  // rather than an executable one so its token can be used to sign here.
+  // "g-a" is the default wallet. "g-a" and "g-b" each have their own token and
+  // their own policy; "g-c" has no token at all.
   ows.createWallet("g-a", "pass-a");
-  ows.createWallet("g-b", "pass-b");
+  idB = ows.createWallet("g-b", "pass-b").id;
   ows.createWallet("g-c", "pass-c");
-  ows.createWallet("g-d", "pass-d");
-  ows.createPolicy("eth-only", "eth-only", [{ type: "allowed_chains", chain_ids: ["eip155:1"] }]);
   tokenA = ows.createAgentToken("tok-a", "g-a", "pass-a", undefined, [allowlistPolicy("only-a1", ALLOWED_A)]).token;
   tokenB = ows.createAgentToken("tok-b", "g-b", "pass-b", undefined, [allowlistPolicy("only-b2", ALLOWED_B)]).token;
-  tokenD = ows.createAgentToken("tok-d", "g-d", "pass-d", undefined, ["eth-only"]).token;
   config.saveAgentToken("g-a", tokenA);
   config.saveAgentToken("g-b", tokenB);
-  config.saveAgentToken("g-d", tokenD);
   config.setConfigValue("defaultWallet", "g-a");
 });
 
@@ -102,29 +97,19 @@ async function runExpectingExit(fn) {
   }
 }
 
-describe("getAgentTokenFor", () => {
-  it("returns the named wallet's token, not the default wallet's", () => {
-    assert.equal(ows.getAgentTokenFor("g-b"), tokenB);
-    assert.notEqual(tokenA, tokenB);
-  });
-
-  it("returns null for a wallet with no saved token instead of borrowing the default's", () => {
-    assert.equal(ows.getAgentTokenFor("g-c"), null);
-  });
-
+describe("getAgentToken", () => {
   it("accepts the wallet's id as well as its name, as --wallet does", () => {
-    assert.equal(ows.getAgentTokenFor(ows.getWallet("g-b").id), tokenB);
+    assert.equal(ows.getAgentToken(idB), tokenB);
   });
 
-  it("falls back to the default wallet's token when no wallet is named", () => {
-    assert.equal(ows.getAgentTokenFor(), tokenA);
+  it("returns the default wallet's token when no wallet is named", () => {
+    assert.equal(ows.getAgentToken(), tokenA);
   });
 
   it("lets an explicit ZERION_AGENT_TOKEN win", () => {
     process.env.ZERION_AGENT_TOKEN = "env-token";
     try {
-      assert.equal(ows.getAgentTokenFor("g-b"), "env-token");
-      assert.equal(ows.getAgentTokenFor(), "env-token");
+      assert.equal(ows.getAgentToken("g-b"), "env-token");
     } finally {
       delete process.env.ZERION_AGENT_TOKEN;
     }
@@ -133,22 +118,22 @@ describe("getAgentTokenFor", () => {
 
 describe("requireAgentToken", () => {
   it("returns the signing wallet's token, which is the one OWS accepts for it", async () => {
-    const token = await guards.requireAgentToken("for trading", "g-d");
-    assert.equal(token, tokenD);
+    const token = await guards.requireAgentToken("for trading", "g-b");
+    assert.equal(token, tokenB);
 
     const unsigned = serializeTransaction({
       type: "eip1559", chainId: 1, nonce: 0, to: ALLOWED_B, value: 0n,
       gas: 21000n, maxFeePerGas: 1n, maxPriorityFeePerGas: 1n,
     });
-    assert.ok(ows.signEvmTransaction("g-d", unsigned, token, "eip155:1").signature);
-    // The default wallet's token — what used to be returned — cannot sign for g-d.
+    assert.ok(ows.signEvmTransaction("g-b", unsigned, token, "eip155:1").signature);
+    // The default wallet's token — what used to be returned — cannot sign for g-b.
     assert.throws(
-      () => ows.signEvmTransaction("g-d", unsigned, tokenA, "eip155:1"),
+      () => ows.signEvmTransaction("g-b", unsigned, tokenA, "eip155:1"),
       /does not have access to wallet/,
     );
   });
 
-  it("exits no_agent_token naming the wallet when it has none (non-interactive)", async () => {
+  it("exits no_agent_token naming the wallet when it has none, instead of borrowing the default's", async () => {
     const result = await runExpectingExit(() => guards.requireAgentToken("for trading", "g-c"));
     assert.equal(result.exited, true);
     assert.equal(result.code, 1);
@@ -158,25 +143,8 @@ describe("requireAgentToken", () => {
   });
 });
 
-describe("policyIdsForWallet", () => {
-  it("returns the policies of that wallet's token", () => {
-    assert.deepEqual(guards.policyIdsForWallet("g-a"), ["only-a1"]);
-    assert.deepEqual(guards.policyIdsForWallet("g-b"), ["only-b2"]);
-  });
-
-  it("finds them when the wallet is named by its id", () => {
-    assert.deepEqual(guards.policyIdsForWallet(ows.getWallet("g-b").id), ["only-b2"]);
-  });
-
-  it("is empty for a wallet with no token, an unknown wallet, or none", () => {
-    assert.deepEqual(guards.policyIdsForWallet("g-c"), []);
-    assert.deepEqual(guards.policyIdsForWallet("read-only-wallet"), []);
-    assert.deepEqual(guards.policyIdsForWallet(undefined), []);
-  });
-});
-
 describe("enforceExecutablePolicies", () => {
-  const tx = (to, walletName) => ({ to, value: "0", data: "0x", chain: "ethereum", ...(walletName && { walletName }) });
+  const tx = (to, walletName) => ({ to, value: "0", data: "0x", chain: "ethereum", walletName });
 
   it("applies the signing wallet's policy, not the default wallet's", async () => {
     // ALLOWED_B is outside the default wallet's allowlist but inside g-b's.
@@ -190,17 +158,20 @@ describe("enforceExecutablePolicies", () => {
     assert.equal(denied.error.policy, "only-b2");
   });
 
-  it("assumes the default wallet signs when none is named", async () => {
-    const allowed = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_A)));
-    assert.equal(allowed.exited, false);
-
-    const denied = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_B)));
+  it("finds the wallet's policy when the wallet is named by its id", async () => {
+    const denied = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_A, idB)));
     assert.equal(denied.exited, true);
-    assert.equal(denied.error.policy, "only-a1");
+    assert.equal(denied.error.policy, "only-b2");
   });
 
-  it("enforces nothing for a wallet with no agent token", async () => {
-    const result = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_B, "g-c")));
-    assert.equal(result.exited, false);
+  it("refuses to guess a wallet: the signer must be named", async () => {
+    await assert.rejects(() => guards.enforceExecutablePolicies(tx(ALLOWED_A)), /walletName is required/);
+  });
+
+  it("enforces nothing for a wallet with no agent token, or one outside the keystore", async () => {
+    for (const wallet of ["g-c", "a-read-only-wallet"]) {
+      const result = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_B, wallet)));
+      assert.equal(result.exited, false, wallet);
+    }
   });
 });

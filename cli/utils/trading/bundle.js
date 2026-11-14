@@ -65,29 +65,22 @@ export function decideBundleRoute(groups) {
 }
 
 /**
- * Local-route invariant: the key that signs is looked up by `walletName`, not
- * by the envelope's `address`, and `--group` blobs are untrusted input. So
- * before anything is signed, every group must name the **same keystore wallet**
- * and that wallet must **own the signer address** — otherwise a mismatched
- * envelope signs from a different wallet than the one it names.
+ * Local-route invariant: the signing key is looked up by `walletName`, not by
+ * the envelope's `address`, and `--group` blobs are untrusted. So every group
+ * must name the same keystore wallet and that wallet must own the signer
+ * address — otherwise the queue is signed from a different wallet than it names.
  *
  * @param {object[]} groups - parsed prepared groups (already same-signer)
- * @param {(walletName: string, ecosystem: "evm"|"solana") => string|null} resolveAddress
- *   - the keystore address of `walletName` for that ecosystem; throws or returns
- *   null when the wallet isn't in the keystore (a read-only wallet isn't)
- * @returns {string} the wallet name that signs the whole queue
- * @throws Error with `code` `missing_wallet_name` | `mixed_wallet` |
- *   `wallet_not_found` | `wallet_address_mismatch`, and a `suggestion`
+ * @param {(walletName: string, ecosystem: string) => string|null} resolveAddress
+ *   - the wallet's keystore address; throws or returns null when it has none
+ * @throws Error with `code` (`missing_wallet_name` | `mixed_wallet` |
+ *   `wallet_not_found` | `wallet_address_mismatch`) and a `suggestion`
  */
 export function assertLocalSigner(groups, resolveAddress) {
   const fail = (code, message, suggestion) => {
-    const err = new Error(message);
-    err.code = code;
-    err.suggestion = suggestion;
-    throw err;
+    throw Object.assign(new Error(message), { code, suggestion });
   };
-
-  const first = groups[0];
+  const { walletName, address, ecosystem } = groups[0];
   groups.forEach((g, i) => {
     if (typeof g.walletName !== "string" || g.walletName.length === 0) {
       fail(
@@ -96,20 +89,19 @@ export function assertLocalSigner(groups, resolveAddress) {
         'Set "walletName" to the wallet\'s name from `zerion wallet list`, or set "route":"web-app" to sign in the browser.',
       );
     }
-    if (g.walletName !== first.walletName) {
+    if (g.walletName !== walletName) {
       fail(
         "mixed_wallet",
         `All --group envelopes must name one wallet to sign locally. ` +
-        `Group #1 names "${first.walletName}"; group #${i + 1} names "${g.walletName}".`,
+        `Group #1 names "${walletName}"; group #${i + 1} names "${g.walletName}".`,
         "Prepare every group from the same wallet.",
       );
     }
   });
 
-  const walletName = first.walletName;
   let owned = null;
   try {
-    owned = resolveAddress(walletName, first.ecosystem);
+    owned = resolveAddress(walletName, ecosystem);
   } catch {
     // not in the keystore — reported below
   }
@@ -120,15 +112,28 @@ export function assertLocalSigner(groups, resolveAddress) {
       'Check `zerion wallet list`. A read-only wallet signs in the web app: set "route":"web-app" on the group.',
     );
   }
-  if (normAddress(owned, first.ecosystem) !== normAddress(first.address, first.ecosystem)) {
+  if (normAddress(owned, ecosystem) !== normAddress(address, ecosystem)) {
     fail(
       "wallet_address_mismatch",
-      `Wallet "${walletName}" holds ${owned}, but the group's signer address is ${first.address}. ` +
+      `Wallet "${walletName}" holds ${owned}, but the group's signer address is ${address}. ` +
       `Refusing to sign from a different wallet than the envelope names.`,
       'Copy "walletName" and "address" from the same `zerion wallet list` row.',
     );
   }
-  return walletName;
+}
+
+/**
+ * Names of the wallets in `wallets` that hold `address` — normally none or one,
+ * two when the same key was imported under two names.
+ */
+export function walletNamesOwning(wallets, address, ecosystem) {
+  const want = normAddress(address, ecosystem);
+  return wallets
+    .filter((w) => {
+      const have = ecosystem === "evm" ? w.evmAddress : w.solAddress;
+      return have && normAddress(have, ecosystem) === want;
+    })
+    .map((w) => w.name);
 }
 
 /**

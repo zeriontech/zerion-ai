@@ -418,8 +418,8 @@ export async function executeSwap(quote, walletName, passphrase, { timeout, appr
  * @param {object} quote
  * @param {object} options
  * @param {string} options.address - the CLI's resolved signer address
- * @param {string} [options.walletName] - the wallet that signs; its policies
- *   are the ones enforced (defaults to the default wallet)
+ * @param {string} options.walletName - the wallet that signs; its policies
+ *   are the ones enforced
  * @param {boolean} [options.isBridge] - label the swap tx as a bridge
  * @param {boolean} [options.assignNonces=true] - assign sequential pending
  *   nonces (direct handoff). Pass `false` for a nonce-free prepared group / bundle
