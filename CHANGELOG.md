@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.2](https://github.com/zeriontech/zerion-ai/compare/v1.11.1...v1.11.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **cli:** let a token with an allowlist policy sign transactions to allowlisted addresses ([193ce42](https://github.com/zeriontech/zerion-ai/commit/193ce424fa7dddb58464db9add18ed8bcf092721))
+* **cli:** stop every signature under a policy script from taking four extra seconds ([193ce42](https://github.com/zeriontech/zerion-ai/commit/193ce424fa7dddb58464db9add18ed8bcf092721))
+
 ## [1.11.1](https://github.com/zeriontech/zerion-ai/compare/v1.11.0...v1.11.1) (2026-11-13)
 
 
