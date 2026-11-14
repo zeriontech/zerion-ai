@@ -66,6 +66,8 @@ zerion agent create-token --name <bot> --wallet <wallet> --policy <id>
 zerion agent create-token --name <bot> --wallet <wallet> --policy <id1>,<id2>
 ```
 
+Add `--expires 24h` or `--expires 7d` to limit the token's lifetime. Absolute ISO dates and timestamps are also accepted, for example `--expires 2099-06-01` (midnight UTC) or `--expires 2099-06-01T12:00:00Z`. The CLI stores and reports the normalized UTC timestamp; omitting `--expires` leaves the token without an expiry.
+
 The token is auto-saved to `~/.zerion/config.json` under `agentTokens` and (if no token was active before) becomes the default. Trading commands (`capabilities/trading.md`) and signing commands (`capabilities/sign.md`) read it from config.
 
 ### Non-interactive token creation (`--passphrase-file`)

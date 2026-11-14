@@ -4,9 +4,31 @@ import { getConfigValue, setConfigValue, saveAgentToken } from "../../utils/conf
 import { readPassphrase, readPassphraseFromFile } from "../../utils/common/prompt.js";
 import { pickPolicyInteractive } from "../../utils/wallet/policy-picker.js";
 
+function parseExpires(input) {
+  if (typeof input !== "string") return null;
+
+  const relative = input.match(/^(\d+)([hd])$/i);
+  let timestamp;
+  if (relative) {
+    const unit = relative[2].toLowerCase() === "h" ? 3600_000 : 86400_000;
+    timestamp = Date.now() + Number(relative[1]) * unit;
+  } else {
+    // Require a timezone for timestamps; date-only values mean midnight UTC.
+    const absolute = input.match(/^(\d{4}-\d{2}-\d{2})(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$/i);
+    if (!absolute) return null;
+    const day = new Date(`${absolute[1]}T00:00:00.000Z`);
+    if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== absolute[1]) return null;
+    timestamp = Date.parse(input);
+  }
+
+  const date = new Date(timestamp);
+  // OWS expects RFC 3339, whose year is four digits, even for large durations.
+  if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < 0 || date.getUTCFullYear() > 9999) return null;
+  return date.toISOString();
+}
+
 export default async function agentCreateToken(args, flags) {
   const name = flags.name || args[0];
-  const walletName = flags.wallet || getConfigValue("defaultWallet");
 
   if (!name) {
     printError("missing_args", "Token name required", {
@@ -15,6 +37,18 @@ export default async function agentCreateToken(args, flags) {
     process.exit(1);
   }
 
+  let expiresAt;
+  if (Object.prototype.hasOwnProperty.call(flags, "expires")) {
+    expiresAt = parseExpires(flags.expires);
+    if (!expiresAt) {
+      printError("invalid_expires", "--expires requires a valid duration or ISO date", {
+        suggestion: "Use 24h, 7d, YYYY-MM-DD (midnight UTC), or an ISO timestamp with a timezone",
+      });
+      process.exit(1);
+    }
+  }
+
+  const walletName = flags.wallet || getConfigValue("defaultWallet");
   if (!walletName) {
     printError("no_wallet", "No wallet specified", {
       suggestion: "Use --wallet <name> or set default: zerion config set defaultWallet <name>",
@@ -98,7 +132,7 @@ export default async function agentCreateToken(args, flags) {
   }
 
   try {
-    const result = ows.createAgentToken(name, walletName, passphrase, flags.expires, policyIds);
+    const result = ows.createAgentToken(name, walletName, passphrase, expiresAt, policyIds);
     saveAgentToken(walletName, result.token);
     setConfigValue("defaultWallet", walletName);
 
@@ -111,7 +145,7 @@ export default async function agentCreateToken(args, flags) {
         name: result.name,
         wallet: result.wallet,
         policies: policyIds,
-        expiresAt: flags.expires || "never",
+        expiresAt: expiresAt || "never",
         saved: true,
       },
       created: true,
