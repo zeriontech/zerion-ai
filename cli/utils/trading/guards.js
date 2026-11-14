@@ -104,9 +104,9 @@ export function policyIdsForWallet(walletName) {
 
 /**
  * Enforce the executable policies of the wallet that signs.
- * OWS enforces native rules (allowed_chains, expires_at) itself. The
- * executable scripts check the decoded to/value/data, which only the CLI has
- * at this point, so they run here before signing.
+ * OWS enforces native rules (allowed_chains, expires_at) and runs these
+ * scripts again when it signs. This pre-check runs them earlier: before a
+ * web-app link is formed, which OWS never sees, and before anything is signed.
  * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName?: string }} txInfo
  *   - `walletName` is the signing wallet. Policies follow the signer, so a
  *   caller that resolved one (--wallet, a prepared group) must pass it;
