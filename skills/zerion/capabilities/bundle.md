@@ -98,13 +98,14 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
    **quote freshness** (warns when a prepared group is older than 120 s — bundle cannot re-quote).
 4. **Route the whole queue — strictest-wins.** If **any** group's `route` is `web-app`, the **entire**
    queue goes to the web app in **one** link. Only if **every** group is `local` does bundle sign
-   locally.
+   locally — and then every group must name the same keystore wallet in `walletName`, and that
+   wallet must own the signer `address`, or the run is rejected before anything is signed.
 5. **Execute.**
    - **Web-app route** — opens one link (URL also printed to stderr for headless use), waits for the
      per-group result stream, reports each group's outcome. Verification is **relaxed** for bundles
      (a bundle may span chains one client can't verify) — it trusts the web app's reported per-group
      outcome and notes it on stderr.
-   - **Local route** — reads the agent token **once**, then signs + broadcasts each group
+   - **Local route** — reads that wallet's agent token **once**, then signs + broadcasts each group
      sequentially (re-fetching the pending nonce per group). A throwing group is recorded as
      `failed` without gating the rest (partial success).
 
@@ -128,8 +129,9 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
 - **Execution outcomes always exit 0** — partial success is a normal batch outcome; the caller reads
   each group's `status` (and `hashes` / `error`). Do **not** rely on the exit code to detect a
   rejected/failed group.
-- **Pre-flight rejections exit non-zero** — malformed `--group`, mixed signer address, or a definite
-  aggregate over-balance mean nothing executed.
+- **Pre-flight rejections exit non-zero** — malformed `--group`, mixed signer address, a local
+  `walletName` that doesn't own the address, or a definite aggregate over-balance mean nothing
+  executed.
 
 ## Error codes
 
@@ -138,8 +140,13 @@ command covers, a hand-built one — see "Hand-built groups" below). Pipeline:
 | `missing_groups` | `bundle` called with no `--group` | Pass at least one `--group "$(… --prepare)"` |
 | `invalid_group` | A `--group` value isn't valid JSON / isn't a prepared-group envelope / has a bad shape | Produce it with a `--prepare` command; for a protocol leg, follow "Hand-built groups" |
 | `mixed_address` | Groups name different signer addresses (or ecosystems) | All groups must be prepared from the **same wallet** |
+| `missing_wallet_name` | Local route, and a group has no `walletName` | Set it to the wallet's `name` from `zerion wallet list`, or use `"route":"web-app"` |
+| `wallet_not_found` | Local route, and `walletName` isn't a keystore wallet (e.g. it's read-only) | A read-only wallet signs in the web app: `"route":"web-app"` |
+| `wallet_address_mismatch` | Local route, and `walletName` holds a different address than the group's `address` | Copy `walletName` and `address` from the same `zerion wallet list` row |
+| `mixed_wallet` | Local route, and groups name different wallets | Prepare every group from the same wallet |
+| `no_agent_token` | Local route, and the signing wallet has no agent token | The user runs `zerion agent create-token --wallet <wallet>`, or use `"route":"web-app"` |
 | `insufficient_aggregate_balance` | Groups each pass alone but overspend a token **together** | Drop a group or lower an amount |
-| `policy_denied` | A group violates an active agent policy on re-validation | Check `zerion agent list-policies`; revise the token or the trade |
+| `policy_denied` | A group violates a policy of the signing wallet's agent token on re-validation | Check `zerion agent list-policies`; revise the token or the trade |
 | `conflicting_flags` | `consolidate --execute --prepare` (mutually exclusive) | Pick one: `--prepare` emits an envelope, `--execute` signs locally |
 | `consolidate_prepare_evm_only` | `consolidate --prepare` on Solana | Prepare individual Solana swaps: `zerion swap solana … --prepare` |
 | `no_ready_rows` | `consolidate --prepare` with no ready rows | Run consolidate without `--prepare` to see why rows are blocked/skipped |
@@ -164,21 +171,59 @@ zerion bundle --group "$(zerion consolidate base USDC --prepare)"
 zerion bundle --timeout 600 --group "$(zerion swap base 100 USDC ETH --prepare)"
 ```
 
-## Hand-built groups — protocol legs only
+## Hand-built groups — protocol calls only
 
-A withdraw, unstake, redeem, claim or repay call that no CLI command covers has no `--prepare`, so
-you build its envelope yourself (`capabilities/defi-exit.md` covers finding the call). **Swaps,
-bridges, transfers and approvals never go here** — use `zerion swap` / `bridge` / `send`, and the
-only swap that may appear in a group is an `evm` object copied verbatim out of `zerion swap
---prepare`. `bundle` checks the envelope's shape and nothing else, so a wrong call is not rejected:
-it reaches the user looking legitimate.
+A protocol call that no CLI command covers has no `--prepare`, so you build its envelope yourself:
+an exit — withdraw, unstake, redeem, claim, repay — or an entry such as a staking deposit (e.g.
+Lido's `submit(referral)`). Find and prove the call first, entries included:
+`capabilities/defi-exit.md` §3 (verified ABI, viem-encoded calldata, an `eth_call` from the user's
+address, `eth_estimateGas`). **Swaps, bridges, transfers and approvals never go here** — use
+`zerion swap` / `bridge` / `send`, and the only swap that may appear in a group is an `evm` object
+copied verbatim out of `zerion swap --prepare`. So an entry that needs a token allowance can only
+be built once the allowance is already there (check with `eth_call` → `allowance`); if it isn't,
+say so rather than hand-encoding an approve. `bundle` checks the envelope's shape and nothing
+else, so a wrong call is not rejected: on the web-app route it reaches the user looking
+legitimate, and on the local route it's signed before anyone sees it.
+
+**Pick the route yourself.** `bundle` takes it from the envelope's `route` field alone: anything
+other than `"web-app"`, a missing field included, means local, and a local group is signed
+whatever it is worth. So apply the rules `swap` / `bridge` / `send` use (`capabilities/trading.md`
+§ "Signing routes & web-app handoff"). Read `zerion wallet list` (`type`, `reviewThresholdUsd`) and
+`zerion agent list-tokens` (`wallet`) first.
+
+- **`"route":"local"`** only when all of these hold:
+  - the wallet is a keystore wallet (`"type": "local"` — created or imported in the CLI);
+  - it has an agent token (`list-tokens` shows one for it);
+  - the USD value the call moves (what it deposits, withdraws or claims) isn't over the wallet's
+    `reviewThresholdUsd`. No threshold means no limit; a threshold and a value you can't price
+    means web-app;
+  - the user has seen the plan and said yes — `bundle` signs and broadcasts at once.
+- **`"route":"web-app"`** for everything else: a read-only wallet, a call over the threshold or
+  one you can't price, or a user who asks to review in the browser or sign with another wallet.
+  For an address the CLI doesn't know yet, add it read-only with `zerion wallet add <address|ens>
+  --name <name>` and copy its `evmAddress` from `zerion wallet list` into the envelope — never an
+  ENS name. Show the plan and the link in the same message. A keystore wallet with **no agent
+  token** is the one case to ask about first: the user creates a token (`zerion agent
+  create-token`, which they run themselves) or signs in the web app, if that key is also in a
+  browser wallet.
+
+**What `bundle` checks on the local route**, before anything is signed (each failure exits
+non-zero; codes are in "Error codes" above):
+
+- **`walletName` must be the keystore wallet that owns the envelope's `address`** — copy both
+  from the same `zerion wallet list` row, and use one wallet for every group.
+- **It signs with that wallet's own agent token**, whichever wallet is the default (a set
+  `ZERION_AGENT_TOKEN` overrides it).
+- **Policies follow the signer**: the policies on that wallet's token. On the web-app route they
+  are the policies of a keystore wallet that holds the `address`; a read-only or unknown address
+  has none. A `policy_denied` stops the run before a link forms or a transaction signs.
 
 Write the envelope to a file so shell quoting can't mangle it:
 
 ```bash
 cat > exit-1.json <<'JSON'
 {"kind":"zerion-prepared-group","version":1,"ecosystem":"evm",
- "chain":"base","address":"0xuser…","route":"web-app",
+ "chain":"base","address":"0xuser…","walletName":"<name>","route":"web-app",
  "summary":{},"outflows":[],
  "transactions":[{"label":"Withdraw from <protocol>","evm":{
    "type":"0x2",
@@ -191,14 +236,12 @@ cat > exit-1.json <<'JSON'
    "gasPrice":null,"maxFee":null,"maxPriorityFee":null,"customData":null}}]}
 JSON
 
-zerion bundle --group "$(cat exit-1.json)"   # the signer comes from each envelope's address
+zerion bundle --group "$(cat exit-1.json)"   # no --wallet: the signer comes from the envelope
 ```
 
-Get these wrong and the link opens on an error page:
+The same envelope works on both routes; only `route` changes. Get these wrong and the web-app link
+opens on an error page:
 
-- **`"route":"web-app"` is required.** `bundle` picks its route from this field alone — it doesn't
-  look at whether the wallet is read-only — so without it the run tries to sign locally and fails
-  on a missing agent token.
 - **Every `evm` object needs all six of `from`, `to`, `value`, `data`, `chainId` and `gas`.** The
   web app rejects the whole link, naming the first one it can't find. `from` must equal the
   envelope's `address` exactly, or it fails with a from-mismatch.
@@ -207,10 +250,16 @@ Get these wrong and the link opens on an error page:
   as hex — `0x1`, `0x2105`, `0x89`; `zerion chains` prints it as `chainIdHex`. A slug in `chainId`
   is rejected.
 - `chainId`, `gas` and `value` are hex quantities; `data` defaults to `"0x"`. Leave the fee fields
-  `null` — the wallet estimates them at signing. `nonce` is optional: the web app assigns it.
+  `null` — they're estimated at signing, by the wallet or (locally) the CLI. `nonce` is optional:
+  the web app assigns it, and the local route re-fetches it.
 - Write addresses in lowercase hex, copied from CLI or explorer output — never retyped or
   re-checksummed by hand.
-- Repeat `--group` once per file to review everything in one browser session.
+- **`outflows` lists what the call spends from the wallet**, so `bundle`'s overspend check counts
+  it with the other groups: `{"chain":"ethereum","symbol":"ETH","native":true,"amount":"0.01"}`
+  for native value, `{"chain":"ethereum","symbol":"USDC","tokenAddress":"0xa0b8…","amount":"10"}`
+  for a token. Amounts are in token units, not wei. A call that spends nothing (most exits) keeps
+  `[]`; a deposit left at `[]` is invisible to the check.
+- Repeat `--group` once per file to sign everything in one session.
 
 Easiest way to get the shape exactly right: run any real command with `--prepare` once (e.g.
 `zerion swap base 1 USDC ETH --prepare`) and copy its `evm` object, swapping in your own `to`,

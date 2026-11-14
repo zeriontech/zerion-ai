@@ -10,14 +10,16 @@
  * invariant → re-validate (policies + aggregate balance + quote freshness) →
  * route (any web-app ⇒ whole queue web-app; else local) → execute → report
  * per-group. **Always exits 0** for execution outcomes (callers read per-group
- * `status`); pre-flight rejections (bad `--group`, mixed signer, aggregate
- * over-balance) exit non-zero because nothing was executed.
+ * `status`); pre-flight rejections (bad `--group`, mixed signer, a local wallet
+ * that doesn't own the signer address, aggregate over-balance) exit non-zero
+ * because nothing was executed.
  *
  * Architecture: this is the CLI shell (network: policies, balances, handoff,
  * local signing). Pure logic lives in `cli/utils/trading/bundle.js`.
  */
 
 import * as api from "../../utils/api/client.js";
+import * as ows from "../../utils/wallet/keystore.js";
 import { parseTimeout, requireAgentToken, enforceExecutablePolicies } from "../../utils/trading/guards.js";
 import { print, printError } from "../../utils/common/output.js";
 import { signBundleViaWebApp } from "../../utils/web-app/handoff.js";
@@ -31,6 +33,8 @@ import { signAndBroadcastSolana } from "../../utils/chain/solana.js";
 import {
   normalizeGroupInputs,
   assertSameSigner,
+  assertLocalSigner,
+  walletNamesOwning,
   decideBundleRoute,
   aggregateOutflows,
   matchPositionBalance,
@@ -69,17 +73,39 @@ export default async function bundle(args, flags) {
   }
   const { address, ecosystem } = signer;
 
+  // 2b. Local route — the key is looked up by `walletName`, so that wallet must
+  // own the signer address (`--group` is untrusted). Reject before anything signs.
+  const route = decideBundleRoute(groups);
+  if (route === "local") {
+    try {
+      assertLocalSigner(groups, (name, eco) =>
+        eco === "solana" ? ows.getSolAddress(name) : ows.getEvmAddress(name));
+    } catch (err) {
+      printError(err.code, err.message, { suggestion: err.suggestion });
+      process.exit(1);
+    }
+  }
+
   // 3a. Re-validate policies — the `--group` blobs are untrusted stdin, so run
   // enforceExecutablePolicies again per EVM tx before a link forms or a tx signs.
+  // Policies follow the signer: the wallet checked above on the local route, the
+  // keystore wallets that hold the signer address on the web-app route (none for
+  // a read-only or unknown address).
+  const policyWallets = route === "local"
+    ? [groups[0].walletName]
+    : walletNamesOwning(ows.listWallets(), address, ecosystem);
   for (const g of groups) {
     for (const entry of g.transactions) {
       if (!entry.evm) continue;
-      await enforceExecutablePolicies({
-        to: entry.evm.to,
-        value: entry.evm.value || "0",
-        data: entry.evm.data,
-        chain: g.chain,
-      });
+      for (const walletName of policyWallets) {
+        await enforceExecutablePolicies({
+          to: entry.evm.to,
+          value: entry.evm.value || "0",
+          data: entry.evm.data,
+          chain: g.chain,
+          walletName,
+        });
+      }
     }
   }
 
@@ -94,8 +120,7 @@ export default async function bundle(args, flags) {
   // degrades to a warning rather than a false refusal.
   await checkAggregateBalance(groups, address);
 
-  // 4. Route the whole queue — strictest-wins.
-  const route = decideBundleRoute(groups);
+  // 4. Route the whole queue — strictest-wins (decided in 2b).
   process.stderr.write(
     `Bundle route: ${route} — ${route === "web-app"
       ? "at least one group requires human review"

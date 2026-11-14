@@ -5,7 +5,7 @@
 
 import { Buffer } from "node:buffer";
 import * as ows from "@open-wallet-standard/core";
-import { getConfigValue, getActiveAgentToken } from "../config.js";
+import { getConfigValue, getActiveAgentToken, getAgentTokenForWallet } from "../config.js";
 
 function extractEvmAddress(wallet) {
   const evmAccount = wallet.accounts.find((a) =>
@@ -184,12 +184,17 @@ export function revokeAgentToken(idOrName) {
 }
 
 /**
- * Get the agent token from environment (for unattended agent signing).
+ * Get the agent token for unattended signing: ZERION_AGENT_TOKEN if set, else
+ * the token saved for `walletName` (a name or OWS id) — never another wallet's,
+ * since OWS scopes a token to its wallet. With no wallet, the default wallet's.
  * Returns the token string or null if not set.
  * OWS validates the token at signing time — if revoked, signing will fail.
  */
-export function getAgentToken() {
-  return process.env.ZERION_AGENT_TOKEN || getActiveAgentToken() || null;
+export function getAgentToken(walletName) {
+  if (process.env.ZERION_AGENT_TOKEN) return process.env.ZERION_AGENT_TOKEN;
+  if (!walletName) return getActiveAgentToken() || null;
+  // Tokens are saved under the wallet's name; `walletName` may be its id.
+  return getAgentTokenForWallet(walletName) || getAgentTokenForWallet(getWalletNameById(walletName)) || null;
 }
 
 /**

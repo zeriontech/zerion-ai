@@ -84,7 +84,8 @@ correct route for a position, say which one and why. Don't guess at calldata.
 ## 4. Build and send the protocol leg
 
 Write it as a hand-built bundle group — `capabilities/bundle.md` § "Hand-built groups" has the
-envelope and every field rule (`"route":"web-app"`, the six `evm` fields, slug vs. hex chain id).
+envelope, how to pick its `route`, and every field rule (the six `evm` fields, slug vs. hex chain
+id). Default to `"route":"web-app"`; use `"route":"local"` only under the conditions listed there.
 
 A conversion can't be prepared from tokens the wallet doesn't hold yet. `zerion swap --prepare`
 rejects an insufficient balance before it prints an envelope, and `bundle` checks outflows against
@@ -95,7 +96,9 @@ tokens are there). So:
 
 - **By default, the protocol leg goes alone.** Send it, watch the chain over RPC until it confirms,
   then quote the swap and send its link right away. This holds even when you know the exact amount
-  in advance, e.g. a fixed reward claim.
+  in advance, e.g. a fixed reward claim. On the local route there is no link: run the swap only if
+  the user's yes covered the conversion and the quote is close to the one they saw; otherwise
+  show the new quote and ask.
 - **Same bundle only if the wallet already holds enough** of the token to cover the conversion
   before the protocol leg runs (check the raw on-chain balance). Then `zerion swap … --prepare` and
   add its group alongside the protocol leg so the user signs once.

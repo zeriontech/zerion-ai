@@ -341,7 +341,7 @@ export default async function consolidate(args, flags) {
       const transactions = [];
       const outflows = [];
       for (const row of readyRows) {
-        const group = await buildSwapWebAppGroup(row.quote, { address, assignNonces: false });
+        const group = await buildSwapWebAppGroup(row.quote, { address, walletName, assignNonces: false });
         transactions.push(...group.transactions);
         outflows.push(...group.outflows);
       }
