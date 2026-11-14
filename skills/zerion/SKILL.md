@@ -185,6 +185,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Somnia (reactivity) | Somnia reactive smart contracts | `partners/somnia-reactivity.md` |
 | Trails (cross-chain swap) | Cross-chain swap routing | `partners/trails-crosschainswap.md` |
 | Trails (deposit) | Cross-chain deposit flows | `partners/trails-deposit.md` |
+| true402 | Rug/honeypot check before `zerion swap` | `partners/true402-rugcheck.md` |
 | Umbra | Private (stealth-address) transfers | `partners/umbra-privatetxn.md` |
 | Uniswap LP | Liquidity position management | `partners/uniswap-lp.md` |
 | Uniswap x402 | Swap with x402 pay-per-call | `partners/uniswap-x402.md` |
