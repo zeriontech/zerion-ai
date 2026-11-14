@@ -3,23 +3,30 @@
  * Policy dispatcher — runs multiple policy scripts in sequence.
  * If any script denies, the whole policy denies (AND semantics).
  *
- * Reads PolicyContext from stdin. Supports both:
+ * Reads PolicyContext from stdin. The wallet library passes a transaction as
+ * raw bytes, so the dispatcher decodes it first (see decode.mjs) and hands the
+ * scripts `transaction.to` / `value` / `data`.
+ *
+ * Supports both:
  * - ESM modules that export a check(ctx) function (in-process, with timeout)
  * - Standalone scripts that read stdin JSON and write stdout (child process)
  */
 
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { withDecodedTransaction } from "./decode.mjs";
 
 const POLICY_TIMEOUT_MS = 4000;
 
 function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Policy timed out after ${ms}ms`)), ms)
-    ),
-  ]);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Policy timed out after ${ms}ms`)), ms);
+  });
+  // Clear the timer once the policy answers. A pending timer keeps the process
+  // alive, and the wallet library waits for the process to exit — so every
+  // signature would take the full timeout.
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function runLegacyScript(script, inputJson) {
@@ -56,13 +63,14 @@ let input = "";
 process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", async () => {
   try {
-    const ctx = JSON.parse(input);
+    const ctx = withDecodedTransaction(JSON.parse(input));
+    const decodedInput = JSON.stringify(ctx);
     const config = ctx.policy_config || {};
     const scripts = config.scripts || [];
 
     for (const script of scripts) {
       try {
-        const result = await runPolicy(script, ctx, input);
+        const result = await runPolicy(script, ctx, decodedInput);
         if (!result.allow) {
           console.log(JSON.stringify(result));
           return;
