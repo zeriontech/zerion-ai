@@ -102,7 +102,8 @@ export async function enforceExecutablePolicies(txInfo) {
 
   const policyIds = [...new Set(
     listAgentTokens()
-      .filter((t) => t.walletIds?.[0] === walletId)
+      // A key may cover several wallets (`ows key create --wallet a --wallet b`).
+      .filter((t) => t.walletIds?.includes(walletId))
       .flatMap((t) => t.policyIds || [])
   )];
   if (policyIds.length === 0) return;

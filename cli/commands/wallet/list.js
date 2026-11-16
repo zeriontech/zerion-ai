@@ -21,7 +21,7 @@ function getWalletPolicies(walletName) {
   }
   const policyIds = [...new Set(
     ows.listAgentTokens()
-      .filter((t) => t.walletIds?.[0] === walletId)
+      .filter((t) => t.walletIds?.includes(walletId))
       .flatMap((t) => t.policyIds || [])
   )];
   return policyIds.map((pid) => {

@@ -58,6 +58,12 @@ before(async () => {
   tokenB = ows.createAgentToken("tok-b", "g-b", "pass-b", undefined, [allowlistPolicy("only-b2", ALLOWED_B)]).token;
   ows.createAgentToken("tok-d1", "g-d", "pass-d", undefined, [allowlistPolicy("only-d1", ALLOWED_A)]);
   ows.createAgentToken("tok-d2", "g-d", "pass-d", undefined, [allowlistPolicy("only-d2", ALLOWED_C)]);
+  // One key that covers two wallets, as `ows key create --wallet g-e --wallet g-f`
+  // makes. Its policy applies to both wallets, not only to the first one.
+  const idE = ows.createWallet("g-e", "pass-ef").id;
+  const idF = ows.createWallet("g-f", "pass-ef").id;
+  const core = await import("@open-wallet-standard/core");
+  core.createApiKey("tok-ef", [idE, idF], [allowlistPolicy("only-ef", ALLOWED_A)], "pass-ef");
   config.saveAgentToken("g-a", tokenA);
   config.saveAgentToken("g-b", tokenB);
   config.setConfigValue("defaultWallet", "g-a");
@@ -173,6 +179,14 @@ describe("enforceExecutablePolicies", () => {
     const deniedByFirst = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_C, "g-d")));
     assert.equal(deniedByFirst.exited, true);
     assert.equal(deniedByFirst.error.policy, "only-d1");
+  });
+
+  it("enforces a key's policy for every wallet the key covers, not only the first", async () => {
+    for (const wallet of ["g-e", "g-f"]) {
+      const denied = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_B, wallet)));
+      assert.equal(denied.exited, true, wallet);
+      assert.equal(denied.error.policy, "only-ef", wallet);
+    }
   });
 
   it("finds the wallet's policy when the wallet is named by its id", async () => {
