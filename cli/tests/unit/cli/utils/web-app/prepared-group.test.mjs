@@ -34,8 +34,13 @@ describe("buildPreparedGroup", () => {
   });
 
   it("rejects an invalid ecosystem / empty transactions", () => {
-    assert.throws(() => buildPreparedGroup({ ecosystem: "btc", chain: "base", address: "0x", transactions: [EVM_TX] }), /ecosystem/);
-    assert.throws(() => buildPreparedGroup({ ecosystem: "evm", chain: "base", address: "0x", transactions: [] }), /non-empty/);
+    assert.throws(() => buildPreparedGroup({ ecosystem: "btc", chain: "base", address: "0x", route: "local", transactions: [EVM_TX] }), /ecosystem/);
+    assert.throws(() => buildPreparedGroup({ ecosystem: "evm", chain: "base", address: "0x", route: "local", transactions: [] }), /non-empty/);
+  });
+
+  it("requires an explicit route", () => {
+    assert.throws(() => buildPreparedGroup({ ecosystem: "evm", chain: "base", address: "0x", transactions: [EVM_TX] }), /invalid route/);
+    assert.throws(() => buildPreparedGroup({ ecosystem: "evm", chain: "base", address: "0x", route: "browser", transactions: [EVM_TX] }), /invalid route/);
   });
 });
 
@@ -74,10 +79,22 @@ describe("parsePreparedGroup", () => {
   });
 
   it("rejects empty or malformed transaction entries", () => {
-    const empty = JSON.stringify({ kind: PREPARED_GROUP_KIND, ecosystem: "evm", chain: "base", address: "0x", transactions: [] });
+    const empty = JSON.stringify({ kind: PREPARED_GROUP_KIND, ecosystem: "evm", chain: "base", address: "0x", route: "local", transactions: [] });
     assert.throws(() => parsePreparedGroup(empty), /no transactions/);
-    const noPayload = JSON.stringify({ kind: PREPARED_GROUP_KIND, ecosystem: "evm", chain: "base", address: "0x", transactions: [{ label: "x" }] });
+    const noPayload = JSON.stringify({ kind: PREPARED_GROUP_KIND, ecosystem: "evm", chain: "base", address: "0x", route: "local", transactions: [{ label: "x" }] });
     assert.throws(() => parsePreparedGroup(noPayload), /without an evm\/solana/);
+  });
+
+  it("rejects a missing or unknown route instead of defaulting to local", () => {
+    const base = { kind: PREPARED_GROUP_KIND, ecosystem: "evm", chain: "base", address: "0x", transactions: [EVM_TX] };
+    assert.throws(
+      () => parsePreparedGroup(JSON.stringify(base)),
+      (err) => err.code === "invalid_group" && /no route/.test(err.message),
+    );
+    assert.throws(
+      () => parsePreparedGroup(JSON.stringify({ ...base, route: "browser" })),
+      (err) => err.code === "invalid_group" && /invalid route "browser"/.test(err.message),
+    );
   });
 
   it("carries the group index into the error message", () => {

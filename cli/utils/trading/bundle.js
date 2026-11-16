@@ -66,60 +66,58 @@ export function decideBundleRoute(groups) {
 
 /**
  * Local-route invariant: the signing key is looked up by `walletName`, not by
- * the envelope's `address`, and `--group` blobs are untrusted. So every group
- * must name the same keystore wallet and that wallet must own the signer
- * address — otherwise the queue is signed from a different wallet than it names.
+ * the envelope's `address`, and `--group` blobs are untrusted. Every group must
+ * therefore name a keystore wallet that owns that group's signer address —
+ * otherwise the queue is signed from a different wallet than it names. Groups
+ * may name the same wallet by its name or its OWS id.
  *
  * @param {object[]} groups - parsed prepared groups (already same-signer)
  * @param {(walletName: string, ecosystem: string) => string|null} resolveAddress
- *   - the wallet's keystore address; throws or returns null when it has none
- * @throws Error with `code` (`missing_wallet_name` | `mixed_wallet` |
- *   `wallet_not_found` | `wallet_address_mismatch`) and a `suggestion`
+ *   - the wallet's keystore address; throws when the wallet is not in the
+ *   keystore, returns null when it has no account for that ecosystem
+ * @throws Error with `code` (`missing_wallet_name` | `wallet_not_found` |
+ *   `wallet_address_mismatch`) and a `suggestion`
  */
 export function assertLocalSigner(groups, resolveAddress) {
   const fail = (code, message, suggestion) => {
     throw Object.assign(new Error(message), { code, suggestion });
   };
-  const { walletName, address, ecosystem } = groups[0];
   groups.forEach((g, i) => {
+    const where = `Group #${i + 1}`;
     if (typeof g.walletName !== "string" || g.walletName.length === 0) {
       fail(
         "missing_wallet_name",
-        `Group #${i + 1} has no walletName, so there is no key to sign it with locally.`,
+        `${where} has no walletName, so there is no key to sign it with locally.`,
         'Set "walletName" to the wallet\'s name from `zerion wallet list`, or set "route":"web-app" to sign in the browser.',
       );
     }
-    if (g.walletName !== walletName) {
+
+    let owned = null;
+    try {
+      owned = resolveAddress(g.walletName, g.ecosystem);
+    } catch {
       fail(
-        "mixed_wallet",
-        `All --group envelopes must name one wallet to sign locally. ` +
-        `Group #1 names "${walletName}"; group #${i + 1} names "${g.walletName}".`,
-        "Prepare every group from the same wallet.",
+        "wallet_not_found",
+        `Wallet "${g.walletName}" is not in the CLI keystore, so it can't sign locally.`,
+        'Check `zerion wallet list`. A read-only wallet signs in the web app: set "route":"web-app" on the group.',
+      );
+    }
+    if (!owned) {
+      fail(
+        "wallet_not_found",
+        `Wallet "${g.walletName}" has no ${g.ecosystem === "solana" ? "Solana" : "EVM"} account, so it can't sign this group locally.`,
+        'Use a wallet with an account on that chain, or set "route":"web-app" to sign in the browser.',
+      );
+    }
+    if (normAddress(owned, g.ecosystem) !== normAddress(g.address, g.ecosystem)) {
+      fail(
+        "wallet_address_mismatch",
+        `${where} names wallet "${g.walletName}", which holds ${owned}, but its signer address is ${g.address}. ` +
+        `Refusing to sign from a different wallet than the envelope names.`,
+        'Copy "walletName" and "address" from the same `zerion wallet list` row.',
       );
     }
   });
-
-  let owned = null;
-  try {
-    owned = resolveAddress(walletName, ecosystem);
-  } catch {
-    // not in the keystore — reported below
-  }
-  if (!owned) {
-    fail(
-      "wallet_not_found",
-      `Wallet "${walletName}" is not in the CLI keystore, so it can't sign locally.`,
-      'Check `zerion wallet list`. A read-only wallet signs in the web app: set "route":"web-app" on the group.',
-    );
-  }
-  if (normAddress(owned, ecosystem) !== normAddress(address, ecosystem)) {
-    fail(
-      "wallet_address_mismatch",
-      `Wallet "${walletName}" holds ${owned}, but the group's signer address is ${address}. ` +
-      `Refusing to sign from a different wallet than the envelope names.`,
-      'Copy "walletName" and "address" from the same `zerion wallet list` row.',
-    );
-  }
 }
 
 /**

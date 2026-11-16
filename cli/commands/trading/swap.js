@@ -131,6 +131,6 @@ export default async function swap(args, flags) {
       executed: true,
     }, formatSwapQuote);
   } catch (err) {
-    handleTradingError(err, "swap_error");
+    handleTradingError(err, "swap_error", walletName);
   }
 }

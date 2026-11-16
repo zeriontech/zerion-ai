@@ -178,7 +178,7 @@ export default async function bridge(args, flags) {
       process.exit(1);
     }
   } catch (err) {
-    handleTradingError(err, "bridge_error");
+    handleTradingError(err, "bridge_error", walletName);
     return;
   }
 
@@ -249,6 +249,6 @@ export default async function bridge(args, flags) {
       executed: true,
     });
   } catch (err) {
-    handleTradingError(err, "bridge_error");
+    handleTradingError(err, "bridge_error", walletName);
   }
 }

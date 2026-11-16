@@ -10,9 +10,9 @@
  * invariant → re-validate (policies + aggregate balance + quote freshness) →
  * route (any web-app ⇒ whole queue web-app; else local) → execute → report
  * per-group. **Always exits 0** for execution outcomes (callers read per-group
- * `status`); pre-flight rejections (bad `--group`, mixed signer, a local wallet
- * that doesn't own the signer address, aggregate over-balance) exit non-zero
- * because nothing was executed.
+ * `status`); pre-flight rejections (bad `--group`, a missing/invalid route, mixed
+ * signer address, a local wallet that doesn't own the signer address, aggregate
+ * over-balance) exit non-zero because nothing was executed.
  *
  * Architecture: this is the CLI shell (network: policies, balances, handoff,
  * local signing). Pure logic lives in `cli/utils/trading/bundle.js`.
@@ -73,8 +73,9 @@ export default async function bundle(args, flags) {
   }
   const { address, ecosystem } = signer;
 
-  // 2b. Local route — the key is looked up by `walletName`, so that wallet must
-  // own the signer address (`--group` is untrusted). Reject before anything signs.
+  // 2b. Local route — the key is looked up by `walletName`, so every group's
+  // named wallet must own its signer address (`--group` is untrusted). Reject
+  // before anything signs. The queue signs with the first group's wallet.
   const route = decideBundleRoute(groups);
   if (route === "local") {
     try {
