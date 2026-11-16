@@ -8,19 +8,23 @@ import { fromCaip2 } from "../../utils/chain/registry.js";
 const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 
 /**
- * Find the newest agent token for a wallet and resolve policy details.
- * Returns array of { name, summary } for compact display.
+ * Resolve all executable/native policies attached to a wallet's live agent
+ * tokens. Enforcement runs every one of them (fail-closed), so the display must
+ * show the same set rather than only the newest token's policies.
  */
-function getActivePolicies(walletName) {
-  const tokens = ows.listAgentTokens();
-  const active = tokens
-    .filter((t) => {
-      const wid = t.walletIds?.[0];
-      return wid && ows.getWalletNameById(wid) === walletName;
-    })
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-  if (!active?.policyIds?.length) return [];
-  return active.policyIds.map((pid) => {
+function getWalletPolicies(walletName) {
+  let walletId;
+  try {
+    walletId = ows.getWallet(walletName).id;
+  } catch {
+    return [];
+  }
+  const policyIds = [...new Set(
+    ows.listAgentTokens()
+      .filter((t) => t.walletIds?.[0] === walletId)
+      .flatMap((t) => t.policyIds || [])
+  )];
+  return policyIds.map((pid) => {
     try {
       const p = ows.getPolicy(pid);
       return { name: p.name || pid, summary: summarizePolicy(p) };
@@ -50,7 +54,7 @@ export default async function walletList(_args, flags) {
       name: w.name,
       ...getWalletAddresses(w, getWalletOrigin(w.name)),
       type: "local",
-      policies: getActivePolicies(w.name),
+      policies: getWalletPolicies(w.name),
     }));
 
     // Read-only "my wallets" — address only, no key material. They sign via the

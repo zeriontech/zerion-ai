@@ -65,6 +65,9 @@ export function buildPreparedGroup({
   if (!Array.isArray(transactions) || transactions.length === 0) {
     throw new Error("prepared group: transactions must be a non-empty array");
   }
+  if (route !== "local" && route !== "web-app") {
+    throw new Error(`prepared group: invalid route "${route}" (expected "local" or "web-app")`);
+  }
   return {
     kind: PREPARED_GROUP_KIND,
     version: PREPARED_GROUP_VERSION,
@@ -137,6 +140,17 @@ export function parsePreparedGroup(raw, index) {
       err.code = "invalid_group";
       throw err;
     }
+  }
+  // No silent local default: a missing or unknown route would otherwise sign
+  // the group immediately. Hand-built groups must state which route they chose.
+  if (obj.route !== "local" && obj.route !== "web-app") {
+    const err = new Error(
+      `--group${where} has ${obj.route === undefined ? "no route" : `an invalid route "${obj.route}"`}. ` +
+      'Set "route" to "local" (keystore wallet, agent token, under the review threshold, user approved) ' +
+      'or "web-app" (human review in the browser).'
+    );
+    err.code = "invalid_group";
+    throw err;
   }
   return obj;
 }

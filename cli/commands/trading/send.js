@@ -275,7 +275,7 @@ export default async function send(args, flags) {
       executed: true,
     }, formatSwapQuote);
   } catch (err) {
-    handleTradingError(err, "send_error");
+    handleTradingError(err, "send_error", walletName);
   }
 }
 
@@ -377,6 +377,6 @@ async function sendOnSolana({ token, amount, to, flags }) {
       executed: true,
     });
   } catch (err) {
-    handleTradingError(err, "send_error");
+    handleTradingError(err, "send_error", walletName);
   }
 }

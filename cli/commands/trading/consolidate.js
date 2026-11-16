@@ -310,7 +310,7 @@ export default async function consolidate(args, flags) {
       concurrency,
     });
   } catch (err) {
-    handleTradingError(err, "consolidate_error");
+    handleTradingError(err, "consolidate_error", walletName);
     return;
   }
 
@@ -373,7 +373,7 @@ export default async function consolidate(args, flags) {
         outflows,
       }));
     } catch (err) {
-      handleTradingError(err, "consolidate_error");
+      handleTradingError(err, "consolidate_error", walletName);
     }
     return;
   }
@@ -413,7 +413,7 @@ export default async function consolidate(args, flags) {
   try {
     passphrase = await requireAgentToken("for consolidation", walletName);
   } catch (err) {
-    handleTradingError(err, "consolidate_error");
+    handleTradingError(err, "consolidate_error", walletName);
     return;
   }
   const timeout = parseTimeout(flags.timeout);

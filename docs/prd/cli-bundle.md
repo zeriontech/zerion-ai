@@ -63,7 +63,7 @@ type PreparedGroup = {
   chain: string;                    // single-chain per group
   address: string;                  // signer (0x for EVM, base58 for Solana)
   walletName: string;               // needed for the local-signing path
-  route: "local" | "web-app";       // the per-group gate decision (decideSigningRoute)
+  route: "local" | "web-app";       // required: the per-group gate decision (decideSigningRoute)
   summary: object;                  // the command's human summary (for bundle's final report)
   transactions: Array<              // one group; swap → [approve, swap]; consolidate → all pairs
     { evm: TransactionEVM } | { solana: { raw: string } } & { label?: string }
@@ -76,6 +76,8 @@ type PreparedGroup = {
   is unchanged — it still sets nonce; see [cli-web-app-handoff.md](./cli-web-app-handoff.md) §6.2.)
 - **`route`** is the ordinary `decideSigningRoute` decision (read-only wallet / value-over-threshold
   / `--review`), computed at prepare time and carried so `bundle` can aggregate without re-deriving.
+  It is **required**: `bundle` rejects an envelope without `local`/`web-app` rather than assuming
+  local, so a hand-built group cannot silently auto-sign.
 - `--prepare` **does not execute** and **does not open the browser** — it only prints the envelope.
 
 ---
@@ -90,18 +92,19 @@ zerion bundle --group "$(zerion swap base 100 USDC ETH --prepare)" \
 Pipeline:
 
 1. **Parse & validate shape** — each `--group` value must be a `kind: "zerion-prepared-group"`
-   envelope; reject anything else.
+   envelope with an explicit `route`; reject anything else.
 2. **Cross-group invariant** — enforce **same `address`** across all groups (⇒ same ecosystem).
    Chains **may differ** (cross-chain bundle). Reject mixed-address sets with a clear error.
 3. **Re-validate** (defense: `--group` blobs are untrusted stdin) —
-   - `enforceExecutablePolicies` per group;
+   - `enforceExecutablePolicies` for the signing wallet (every live agent token's policies);
    - **aggregate per-token outflow** vs live balance (three 10-USDC sends that each passed
      alone but sum to 30 > balance are caught here);
    - **quote freshness** — warn/refuse when a swap's quote deadline has passed (bundle cannot
      silently re-quote).
 4. **Route the whole queue (strictest-wins)** — if **any** group's `route === "web-app"`, the
    **entire** queue is delegated to the web app; only if **all** groups are `local` does bundle
-   sign locally.
+   sign locally, after checking that each group's `walletName` is a keystore wallet owning that
+   group's `address` (the queue signs with the first group's wallet).
 5a. **Web-app route** — build the **v2 queue** payload `{ version: 2, groups: [[…],[…]] }` (nonces
    omitted; web app assigns), open **one** link, wait for the per-group stream + final `summary`.
    Verification is **relaxed** (ADR-0004): trust the per-group outcome, warn on stderr.

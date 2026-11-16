@@ -288,8 +288,11 @@ The handoff fires when any trigger hits:
 Messages have no USD value, so `sign-message` / `sign-typed-data` ignore the threshold — only the
 read-only and `--review` triggers apply there.
 
-Both routes run the same pre-flight (balance gates, blocking-quote checks, agent policies), and every
-trade prints `Signing route: <route> — <reason>` to stderr plus `signedVia: "local" | "web-app"` in its
+Both routes run the same pre-flight (balance gates, blocking-quote checks, agent policies). Policies
+come from the signing wallet, not the default wallet: the CLI runs the executable policies of every
+live agent token for the wallet named by `--wallet` / the prepared group (`ZERION_AGENT_TOKEN`
+still selects its token). A read-only address has no local policies — the browser wallet owns that
+signature. Every trade prints `Signing route: <route> — <reason>` to stderr plus `signedVia: "local" | "web-app"` in its
 JSON output. If a threshold is set but the value can't be priced, the trade **fails closed** to review.
 A handoff ends `completed` / `rejected` / `failed` / `timeout` (or `aborted` on Ctrl-C), reported as
 `status` in that same JSON — only `completed` exits 0.
@@ -340,8 +343,8 @@ Scoped API tokens for unattended trading. Token auto-saves to config; required f
 |---------|-------------|---------|
 | `zerion agent create-token --name <bot> --wallet <wallet>` | Create scoped token (interactive passphrase) | `zerion agent create-token --name dca-bot --wallet trading-bot` |
 | `zerion agent create-token … --passphrase-file <path>` | Non-interactive: passphrase read from a `chmod 600` file (CI / headless) | `zerion agent create-token --name dca-bot --wallet trading-bot --policy <id> --passphrase-file /run/zerion/pass` |
-| `zerion agent list-tokens` | List active agent tokens | `zerion agent list-tokens` |
-| `zerion agent use-token --wallet <wallet>` | Switch active token by wallet | `zerion agent use-token --wallet trading-bot` |
+| `zerion agent list-tokens` | List agent tokens (wallet, policies, active flag) | `zerion agent list-tokens` |
+| `zerion agent use-token --wallet <wallet>` | Set the default wallet (used when `--wallet` is omitted) | `zerion agent use-token --wallet trading-bot` |
 | `zerion agent revoke-token --name <bot>` | Revoke a token | `zerion agent revoke-token --name dca-bot` |
 
 ### Agent Policies

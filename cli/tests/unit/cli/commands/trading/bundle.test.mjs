@@ -1,7 +1,8 @@
-// `zerion bundle` on the local route must refuse — before anything is signed —
-// an envelope whose `walletName` doesn't own its signer `address`. The key is
-// looked up by name and `--group` blobs are untrusted, so without the check a
-// mismatched envelope signed from a different wallet than the one it named.
+// `zerion bundle` pre-flight checks that need a real keystore: no silent local
+// default for a missing `route`; a local envelope whose `walletName` doesn't own
+// its signer `address`; and per-wallet policy enforcement on the web-app route.
+// `--group` blobs are untrusted, so all of this runs before a link forms or a
+// transaction signs.
 //
 // Runs the real CLI in a subprocess against a temp HOME (so neither ~/.zerion
 // nor ~/.ows is touched). Every case here ends before any network call.
@@ -11,14 +12,16 @@ import { describe, it, before, after } from "node:test";
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BIN = fileURLToPath(import.meta.resolve("#zerion/zerion.js"));
+const POLICIES_DIR = dirname(fileURLToPath(import.meta.resolve("#zerion/policies/allowlist.mjs")));
 const OTHER = "0x9999990000000000000000000000000000000009";
 
 let tmpHome;
 let owned; // address of the keystore wallet "b-own"
+let policyOwned; // address of "b-allow", whose token allows only OTHER
 const origHome = process.env.HOME;
 
 before(async () => {
@@ -26,6 +29,15 @@ before(async () => {
   process.env.HOME = tmpHome;
   const ows = await import("#zerion/utils/wallet/keystore.js");
   owned = ows.createWallet("b-own", "pass").evmAddress;
+
+  // A second wallet with a token whose executable policy allows only OTHER.
+  // The web-app route must find it by the envelope's address and run it.
+  policyOwned = ows.createWallet("b-allow", "pass").evmAddress;
+  ows.createPolicy("only-other", "only-other", [], join(POLICIES_DIR, "run-policies.mjs"), {
+    scripts: [join(POLICIES_DIR, "allowlist.mjs")],
+    allowed_addresses: [OTHER],
+  });
+  ows.createAgentToken("tok-allow", "b-allow", "pass", undefined, ["only-other"]);
 });
 
 after(() => {
@@ -67,7 +79,7 @@ function bundle(...groups) {
   });
 }
 
-describe("zerion bundle — local-route signer check", () => {
+describe("zerion bundle — keystore pre-flight checks", () => {
   it("rejects a walletName that does not own the signer address", async () => {
     const res = await bundle(envelope({ address: OTHER }));
     assert.equal(res.code, 1, res.stderr);
@@ -90,5 +102,21 @@ describe("zerion bundle — local-route signer check", () => {
     assert.equal(res.error?.code, "no_agent_token", res.stderr);
     assert.match(res.error.message, /wallet "b-own" has none/);
     assert.match(res.stderr, /Bundle route: local/);
+  });
+
+  it("rejects a group with no route instead of signing it locally", async () => {
+    const res = await bundle(envelope({ route: undefined }));
+    assert.equal(res.code, 1, res.stderr);
+    assert.equal(res.error?.code, "invalid_group", res.stderr);
+    assert.match(res.error.message, /no route/);
+    assert.equal(res.stdout, "");
+  });
+
+  it("runs the address-holder's policies on the web-app route", async () => {
+    const res = await bundle(envelope({ address: policyOwned, walletName: "b-allow", route: "web-app" }));
+    assert.equal(res.code, 1, res.stderr);
+    assert.equal(res.error?.code, "policy_denied", res.stderr);
+    assert.equal(res.error.policy, "only-other");
+    assert.equal(res.stdout, "");
   });
 });

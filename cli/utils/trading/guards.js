@@ -5,7 +5,7 @@
 
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, relative, dirname, join } from "node:path";
-import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById, listWallets } from "../wallet/keystore.js";
+import { getAgentToken, listAgentTokens, getPolicy, getWallet, listWallets } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../common/output.js";
 import { confirm } from "../common/prompt.js";
@@ -73,26 +73,39 @@ export async function requireAgentToken(context = "", targetWallet) {
 }
 
 /**
- * Enforce executable policies attached to the signing wallet's agent token.
+ * Enforce executable policies attached to the signing wallet's agent tokens.
  * OWS enforces native rules (allowed_chains, expires_at) but does NOT run
  * executable scripts — we must do it here before signing.
+ *
+ * OWS does not expose which key a token belongs to, so this enforces the
+ * policies of **every live key** for the signing wallet (fail-closed): the
+ * signing token may be the config-saved one, a ZERION_AGENT_TOKEN override, or
+ * a key created outside the CLI, and a policy must never be skipped because a
+ * different key for the same wallet happens to be newer.
+ *
  * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName: string }} txInfo
  *   - `walletName` is the wallet that signs (name or OWS id). Required: policies
- *   follow the signer, never the default wallet.
+ *     follow the signer, never the default wallet.
  */
 export async function enforceExecutablePolicies(txInfo) {
   const { walletName } = txInfo;
   if (!walletName) throw new Error("enforceExecutablePolicies: walletName is required");
 
-  // Find the newest API key for the signing wallet
-  const tokens = listAgentTokens();
-  const activeKey = tokens
-    .filter((t) => {
-      const wid = t.walletIds?.[0];
-      return wid && (wid === walletName || getWalletNameById(wid) === walletName);
-    })
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-  if (!activeKey?.policyIds?.length) return;
+  // Resolve the wallet once; a read-only or unknown address has no keystore key
+  // and therefore no policies to run (the browser owns that signature).
+  let walletId;
+  try {
+    walletId = getWallet(walletName).id;
+  } catch {
+    return;
+  }
+
+  const policyIds = [...new Set(
+    listAgentTokens()
+      .filter((t) => t.walletIds?.[0] === walletId)
+      .flatMap((t) => t.policyIds || [])
+  )];
+  if (policyIds.length === 0) return;
 
   const ctx = {
     transaction: {
@@ -102,7 +115,7 @@ export async function enforceExecutablePolicies(txInfo) {
     },
   };
 
-  for (const pid of activeKey.policyIds) {
+  for (const pid of policyIds) {
     let policy;
     try {
       policy = getPolicy(pid);
@@ -219,9 +232,10 @@ export function parseSlippage(value) {
  * Detects revoked agent tokens and falls back to a generic error.
  * @param {Error} err
  * @param {string} fallbackCode - error code when not an agent-token issue (e.g. "swap_error")
+ * @param {string} [walletName] - the wallet that was signing; its token is the one checked
  */
-export function handleTradingError(err, fallbackCode) {
-  if (getAgentToken() && err.message?.includes("API key not found")) {
+export function handleTradingError(err, fallbackCode, walletName) {
+  if (getAgentToken(walletName) && err.message?.includes("API key not found")) {
     printError("invalid_agent_token", "Agent token is revoked or invalid", {
       suggestion: "Create a new one: zerion agent create-token --name <name> --wallet <wallet>",
     });

@@ -531,6 +531,8 @@ export async function buildSwapWebAppGroup(quote, { address, walletName, isBridg
  * @param {object} quote
  * @param {object} options
  * @param {string} options.address - the CLI's resolved signer address
+ * @param {string} options.walletName - the wallet that signs; its policies are
+ *   the ones enforced
  * @param {number} [options.timeout] - callback wait timeout in seconds
  * @param {boolean} [options.isBridge] - label the swap tx as a bridge
  * @returns {Promise<object>} the signViaWebApp result ({ status, hashes?, ... })
