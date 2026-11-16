@@ -7,7 +7,10 @@ export default async function agentListTokens(_args, _flags) {
     const tokens = ows.listAgentTokens();
     const defaultWallet = getConfigValue("defaultWallet");
 
-    // Resolve wallet names once, find newest token per wallet (only that one is usable).
+    // Resolve wallet names once; the newest token per wallet is shown as active
+    // when that wallet is the default. Signing itself uses the token saved for
+    // the signing wallet (normally the newest), and the policies of every live
+    // token for that wallet are enforced.
     const walletNames = new Map();
     const newestByWallet = new Map();
     for (const t of tokens) {

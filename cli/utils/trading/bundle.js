@@ -65,6 +65,76 @@ export function decideBundleRoute(groups) {
 }
 
 /**
+ * Local-route invariant: the signing key is looked up by `walletName`, not by
+ * the envelope's `address`, and `--group` blobs are untrusted. Every group must
+ * therefore name a keystore wallet that owns that group's signer address —
+ * otherwise the queue is signed from a different wallet than it names. Groups
+ * may name the same wallet by its name or its OWS id.
+ *
+ * @param {object[]} groups - parsed prepared groups (already same-signer)
+ * @param {(walletName: string, ecosystem: string) => string|null} resolveAddress
+ *   - the wallet's keystore address; throws when the wallet is not in the
+ *   keystore, returns null when it has no account for that ecosystem
+ * @throws Error with `code` (`missing_wallet_name` | `wallet_not_found` |
+ *   `wallet_address_mismatch`) and a `suggestion`
+ */
+export function assertLocalSigner(groups, resolveAddress) {
+  const fail = (code, message, suggestion) => {
+    throw Object.assign(new Error(message), { code, suggestion });
+  };
+  groups.forEach((g, i) => {
+    const where = `Group #${i + 1}`;
+    if (typeof g.walletName !== "string" || g.walletName.length === 0) {
+      fail(
+        "missing_wallet_name",
+        `${where} has no walletName, so there is no key to sign it with locally.`,
+        'Set "walletName" to the wallet\'s name from `zerion wallet list`, or set "route":"web-app" to sign in the browser.',
+      );
+    }
+
+    let owned = null;
+    try {
+      owned = resolveAddress(g.walletName, g.ecosystem);
+    } catch {
+      fail(
+        "wallet_not_found",
+        `Wallet "${g.walletName}" is not in the CLI keystore, so it can't sign locally.`,
+        'Check `zerion wallet list`. A read-only wallet signs in the web app: set "route":"web-app" on the group.',
+      );
+    }
+    if (!owned) {
+      fail(
+        "wallet_not_found",
+        `Wallet "${g.walletName}" has no ${g.ecosystem === "solana" ? "Solana" : "EVM"} account, so it can't sign this group locally.`,
+        'Use a wallet with an account on that chain, or set "route":"web-app" to sign in the browser.',
+      );
+    }
+    if (normAddress(owned, g.ecosystem) !== normAddress(g.address, g.ecosystem)) {
+      fail(
+        "wallet_address_mismatch",
+        `${where} names wallet "${g.walletName}", which holds ${owned}, but its signer address is ${g.address}. ` +
+        `Refusing to sign from a different wallet than the envelope names.`,
+        'Copy "walletName" and "address" from the same `zerion wallet list` row.',
+      );
+    }
+  });
+}
+
+/**
+ * Names of the wallets in `wallets` that hold `address` — normally none or one,
+ * two when the same key was imported under two names.
+ */
+export function walletNamesOwning(wallets, address, ecosystem) {
+  const want = normAddress(address, ecosystem);
+  return wallets
+    .filter((w) => {
+      const have = ecosystem === "evm" ? w.evmAddress : w.solAddress;
+      return have && normAddress(have, ecosystem) === want;
+    })
+    .map((w) => w.name);
+}
+
+/**
  * Aggregate sell-side outflows across all groups, keyed by (chain, token). The
  * three-10-USDC-sends case (each fine alone, 30 > balance together) is caught
  * by comparing these sums to live balances in the CLI shell.
