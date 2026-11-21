@@ -58,6 +58,7 @@ Ecosystem partners that combine their product with the Zerion CLI. See [`partner
 | [`moonpay-onramp.md`](./skills/zerion/partners/moonpay-onramp.md) | Buy crypto with card or bank transfer via MoonPay, then trade with Zerion | [MoonPay](https://moonpay.com) |
 | [`moonpay-iron.md`](./skills/zerion/partners/moonpay-iron.md) | USD bank-wire to Iron virtual account (IBAN/ACH) → USDC → DCA via Zerion | [MoonPay](https://moonpay.com) |
 | [`moonpay-predict.md`](./skills/zerion/partners/moonpay-predict.md) | Trade prediction markets (Polymarket, Kalshi) via MoonPay CLI | [MoonPay](https://moonpay.com) |
+| [`rozo-pay-invoice.md`](./skills/zerion/partners/rozo-pay-invoice.md) | Pay an OpenRouter, Stripe crypto or your own Bitrefill invoice from the stablecoin you hold, via a one-time Rozo deposit address and `zerion send` | [Rozo](https://rozo.ai) |
 | [`sendai-ideas.md`](./skills/zerion/partners/sendai-ideas.md) | Crypto idea discovery, validation, competitive landscape, DeFi TVL research | [SendAI](https://github.com/sendaifun/solana-new) (MIT) |
 | [`somnia-blockchain.md`](./skills/zerion/partners/somnia-blockchain.md) | Somnia L1 reference — network info, gas model, deployment guidance | [Somnia](https://somnia.network) |
 | [`somnia-reactivity.md`](./skills/zerion/partners/somnia-reactivity.md) | Somnia Reactivity — event-driven pub/sub, WebSocket + Solidity handlers | [Somnia](https://somnia.network) |

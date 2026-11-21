@@ -180,6 +180,7 @@ These cover specialized flows on top of the core CLI. User must **name the partn
 | Moonpay (onramp) | Fiat → crypto onramp | `partners/moonpay-onramp.md` |
 | Moonpay (Iron) | Iron stablecoin flows | `partners/moonpay-iron.md` |
 | Moonpay (Predict) | Prediction market integration | `partners/moonpay-predict.md` |
+| Rozo | Pay an invoice link (OpenRouter, Stripe crypto, your own Bitrefill invoice) from the stablecoin you hold | `partners/rozo-pay-invoice.md` |
 | Sendai ideas | Crypto idea discovery + validation, competitor mapping, DeFi TVL research | `partners/sendai-ideas.md` |
 | Somnia (blockchain) | Somnia L1 ops | `partners/somnia-blockchain.md` |
 | Somnia (reactivity) | Somnia reactive smart contracts | `partners/somnia-reactivity.md` |
