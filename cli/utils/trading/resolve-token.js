@@ -7,9 +7,13 @@ import { NATIVE_ASSET_ADDRESS } from "../common/constants.js";
 import { rerankByRelevance } from "./rank-fungibles.js";
 import { getNativeFungible } from "../chain/catalog.js";
 
-// Hardcoded aliases for the most common tokens — avoids API call for basic swaps
+// Hardcoded aliases for the most common tokens — avoids API call for basic swaps.
+// ETH deliberately carries no `address`: whether ETH is the chain's native coin
+// is decided by the catalog lookup below (step 1a). On chains whose native coin
+// is something else (polygon → POL, bsc → BNB, …) "ETH" must resolve to that
+// chain's ETH token contract, not to a native transfer of the other coin.
 const NATIVE_ALIASES = new Map([
-  ["ETH", { fungibleId: "eth", symbol: "ETH", decimals: 18, address: NATIVE_ASSET_ADDRESS }],
+  ["ETH", { fungibleId: "eth", symbol: "ETH", decimals: 18 }],
   ["SOL", { fungibleId: "11111111111111111111111111111111", symbol: "SOL", decimals: 9, address: "So11111111111111111111111111111111111111112" }],
   ["WETH", { fungibleId: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", symbol: "WETH", decimals: 18 }],
   ["USDC", { fungibleId: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", symbol: "USDC", decimals: 6 }],
