@@ -94,7 +94,7 @@ export default async function walletSignTypedData(args, flags) {
   }
 
   if (isSafeWallet(walletName)) {
-    const err = safeUnsupportedCommandError(walletName, "wallet sign-typed-data");
+    const err = safeUnsupportedCommandError(walletName, "sign-typed-data");
     printError(err.code, err.message, { suggestion: err.suggestion });
     process.exit(1);
   }

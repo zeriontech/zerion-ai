@@ -169,6 +169,7 @@ async function assertRefused(name, [args, flags]) {
   const { code, error, stdout, stderr } = await run(commands[name], args, flags);
   assert.equal(code, 1, stderr);
   assert.equal(error?.code, "safe_unsupported_command", stderr);
+  assert.ok(error.message.includes(`\`zerion ${name}\``), error.message);
   assert.deepEqual(requests, []);
   assert.equal(stdout, "");
   assert.doesNotMatch(stderr, /\/cli\/(transaction|message)|Signing route/);

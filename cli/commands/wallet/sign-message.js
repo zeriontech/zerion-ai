@@ -55,7 +55,7 @@ export default async function walletSignMessage(args, flags) {
   const caip2 = chainCheck.caip2;
 
   if (isSafeWallet(walletName)) {
-    const err = safeUnsupportedCommandError(walletName, "wallet sign-message");
+    const err = safeUnsupportedCommandError(walletName, "sign-message");
     printError(err.code, err.message, { suggestion: err.suggestion });
     process.exit(1);
   }
