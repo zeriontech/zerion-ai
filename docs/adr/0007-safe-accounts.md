@@ -33,8 +33,9 @@ Otherwise it **proposes**. A signer that is also the executor signs once, in the
 
 The executor never adds its own approval. An executor whose agent token silently counted as a
 second owner would turn "pays gas" into "co-signs", which must stay an explicit opt-in. Merging
-confirmations that other owners already gave on the tx-service, and co-approval by the executor,
-are deferred to a later `safe execute` command behind that opt-in.
+confirmations that other owners already gave on the tx-service is deferred to a later
+`safe execute` command. Co-approval by an executor that is also an owner is deferred to the same
+phase, behind the explicit co-signing opt-in.
 
 ### No simulation in the CLI
 
