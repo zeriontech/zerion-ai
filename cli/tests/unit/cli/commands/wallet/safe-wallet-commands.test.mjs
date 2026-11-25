@@ -99,7 +99,7 @@ beforeEach(() => {
     address: SAFE,
     signers: ["hot", "cold"],
     executor: "ks",
-    chains: { base: chainCache(8453, 2, [HOT, COLD]), ethereum: chainCache(1, 1, [HOT]) },
+    chains: { base: chainCache(8453, 2, [HOT, COLD]), ethereum: chainCache(1, 1, [HOT, COLD]) },
   });
   registry.addSafe({ name: "spare", address: OTHER_SAFE, signers: ["hot"] });
 });
@@ -120,7 +120,7 @@ describe("Safe wallets in the wallet commands", () => {
       type: "safe",
       signers: ["hot", "cold"],
       executor: "ks",
-      chains: { base: "2/2", ethereum: "1/1" },
+      chains: { base: "2/2", ethereum: "1/2" },
       policies: [],
       isDefault: false,
     }]);
