@@ -143,7 +143,10 @@ async function startTxService({ onPost = () => ({ status: 201, store: true }), q
         return send(reply.status, reply.body);
       }
       if (url.pathname === `/api/v1/safes/${SAFE}/multisig-transactions/`) {
-        return send(200, { results: queued });
+        const nonceGte = Number(url.searchParams.get("nonce__gte") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? 20);
+        const page = queued.filter((tx) => tx.nonce >= nonceGte).sort((a, b) => a.nonce - b.nonce).slice(0, limit);
+        return send(200, { results: page });
       }
       const match = url.pathname.match(/^\/api\/v1\/multisig-transactions\/(0x[0-9a-fA-F]+)\/$/);
       if (match && state.stored.has(match[1])) return send(200, state.stored.get(match[1]));
@@ -477,6 +480,34 @@ describe("submitSafeCalls Path B: propose", () => {
     install({ client: twoOfThree(), txServiceUrl: service.baseUrl });
     const { stderr } = await submit({ flags: { nonce: "78" } });
     assert.match(stderr, new RegExp(`WARNING: nonce 78 .*${conflicting}`));
+  });
+
+  const queuedTx = (nonce, i) => ({ safeTxHash: toHex(BigInt(i) + 1n, { size: 32 }), nonce, confirmations: [] });
+
+  it("120 stale queue entries ahead of the live one do not hide the highest queued nonce", async () => {
+    const stale = Array.from({ length: 120 }, (_, i) => queuedTx(i % 78, i));
+    const service = await startTxService({ queued: [...stale, queuedTx(78, 500)] });
+    install({ client: twoOfThree(), txServiceUrl: service.baseUrl });
+    const { value: result } = await submit();
+    assert.equal(result.nonce, "79");
+  });
+
+  it("a full queue page at or above the on-chain nonce fails pre-flight with safe_queue_truncated", async () => {
+    const live = Array.from({ length: 100 }, (_, i) => queuedTx(78 + i, i));
+    const service = await startTxService({ queued: live });
+    const spies = install({ client: twoOfThree(), txServiceUrl: service.baseUrl });
+    await assert.rejects(submit(), (err) => err.code === "safe_queue_truncated");
+    assert.equal(spies.signer.length, 0);
+    assert.equal(service.posts.length, 0);
+  });
+
+  it("--nonce bypasses the truncated-queue refusal", async () => {
+    const live = Array.from({ length: 100 }, (_, i) => queuedTx(78 + i, i));
+    const service = await startTxService({ queued: live });
+    install({ client: twoOfThree(), txServiceUrl: service.baseUrl });
+    const { value: result } = await submit({ flags: { nonce: "next" } });
+    assert.equal(result.nonce, "78");
+    assert.equal(result.status, "proposed");
   });
 
   it("a propose error the service actually stored is reported as proposed after a GET", async () => {

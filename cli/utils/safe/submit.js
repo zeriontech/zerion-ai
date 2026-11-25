@@ -9,7 +9,7 @@ import { estimateGasWithFallback, NATIVE_TRANSFER_GAS, ERC20_TRANSFER_GAS } from
 import { signViaWebApp, toTransactionEVM } from "../web-app/handoff.js";
 import { getSafeChainInfo } from "./chain-info.js";
 import { readSafeState, assertSupportedVersion, getOnchainSafeTxHash } from "./contracts.js";
-import { requireSafeApiKey, createTxServiceClient } from "./tx-service.js";
+import { requireSafeApiKey, createTxServiceClient, QUEUE_PAGE_LIMIT } from "./tx-service.js";
 import { selectNonce, isStale } from "./nonce.js";
 import { buildSafeTxMessage, toSafeTypedData, hashSafeTx, assertHashMatches, ZERO_ADDRESS } from "./safe-tx.js";
 import { encodeSignatures, preApprovedSignature } from "./signatures.js";
@@ -253,6 +253,14 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
   await deps.enforceExecutablePolicies({ ...call, chain, walletName: signer.walletName });
 
   const queued = txService ? await txService.listQueued(safeAddress, { nonceGte: state.nonce }) : [];
+  if (flags.nonce === undefined && queued.length >= QUEUE_PAGE_LIMIT) {
+    throw submitError(
+      "safe_queue_truncated",
+      `Safe ${safeAddress} has at least ${QUEUE_PAGE_LIMIT} queued transactions at or above nonce ${state.nonce}, ` +
+        "so the next free nonce cannot be read from one page.",
+      { suggestion: "Pick the nonce yourself with --nonce N, or --nonce next to replace the on-chain nonce." }
+    );
+  }
   const { nonce, conflict } = selectNonce({ onchainNonce: state.nonce, queued, requested: flags.nonce });
   if (conflict) {
     process.stderr.write(

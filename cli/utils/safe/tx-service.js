@@ -3,6 +3,7 @@ import { getSafeApiKey } from "../config.js";
 const BODY_LIMIT = 500;
 const REQUEST_TIMEOUT_MS = 30_000;
 const ALREADY_EXISTS = /already exists/i;
+export const QUEUE_PAGE_LIMIT = 100;
 
 function safeTxServiceError(status, body) {
   const err = new Error(
@@ -81,7 +82,7 @@ export function createTxServiceClient({
 
   async function listQueued(safeAddress, { nonceGte = 0 } = {}) {
     const json = await getJson(
-      `/api/v1/safes/${safeAddress}/multisig-transactions/?executed=false&nonce__gte=${nonceGte}&ordering=nonce&limit=100`
+      `/api/v1/safes/${safeAddress}/multisig-transactions/?executed=false&nonce__gte=${nonceGte}&ordering=nonce&limit=${QUEUE_PAGE_LIMIT}`
     );
     return (json?.results ?? []).map((tx) => ({
       safeTxHash: tx.safeTxHash,
