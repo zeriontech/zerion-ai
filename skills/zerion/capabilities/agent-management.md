@@ -46,8 +46,14 @@ policy can deny what a threshold would otherwise send to review.
 zerion agent list-tokens              # Tokens, attached policies, active flag, wallet binding
 zerion agent list-policies            # All policies with rules summary
 zerion agent show-policy <id>         # Full policy details
-zerion agent use-token --wallet <wallet>   # Switch the active token (config edit, no passphrase)
+zerion agent use-token --wallet <wallet>   # Make <wallet> the default wallet (config edit, no passphrase)
 ```
+
+Signing uses the token of the wallet that signs — the one named with `--wallet`, or the default
+wallet when the flag is omitted. Before signing, the CLI runs the executable policies of **every
+live token** for that wallet (fail-closed), so an older restrictive token keeps applying until it
+is revoked. `use-token` only changes which wallet is the default; you don't need it to sign from
+another wallet.
 
 ## Token + policy management
 
@@ -245,9 +251,9 @@ zerion agent create-token --name agent-bot \
 
 | Code | Cause | Fix |
 |------|-------|-----|
-| `no_agent_token` | No active token for wallet | `agent create-token --wallet <wallet>` |
+| `no_agent_token` | The signing wallet has no agent token | `agent create-token --wallet <wallet>` |
 | `agent_token_expired` | Policy `--expires` lapsed | Create a fresh token |
-| `policy_denied` | Action blocked by policy | `agent show-policy <id>` to see rules; revise or use a different token |
+| `policy_denied` | Action blocked by a policy on one of the signing wallet's live agent tokens | `agent show-policy <id>` to see rules; revise the token/policy or use a different wallet |
 | `policy_not_found` | Policy ID doesn't exist | `agent list-policies` to find valid IDs |
 | `policy_no_rules` | `create-policy` with no flags | Add at least one rule (`--chains`, `--expires`, `--deny-*`, `--allowlist`) |
 | `token_name_exists` | Duplicate `--name` | Choose another name or `agent revoke-token --name <bot>` first |

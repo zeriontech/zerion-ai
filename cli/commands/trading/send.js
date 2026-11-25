@@ -218,7 +218,7 @@ export default async function send(args, flags) {
 
     // Policy pre-filter — runs on BOTH signing routes, before a link is formed
     // or a tx is signed.
-    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data, chain });
+    await enforceExecutablePolicies({ to: tx.to, value: tx.value, data: tx.data, chain, walletName });
 
     const timeout = parseTimeout(flags.timeout);
 
@@ -275,7 +275,7 @@ export default async function send(args, flags) {
       executed: true,
     }, formatSwapQuote);
   } catch (err) {
-    handleTradingError(err, "send_error");
+    handleTradingError(err, "send_error", walletName);
   }
 }
 
@@ -377,6 +377,6 @@ async function sendOnSolana({ token, amount, to, flags }) {
       executed: true,
     });
   } catch (err) {
-    handleTradingError(err, "send_error");
+    handleTradingError(err, "send_error", walletName);
   }
 }

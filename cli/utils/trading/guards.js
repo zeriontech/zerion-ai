@@ -5,7 +5,7 @@
 
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { resolve, relative, dirname, join } from "node:path";
-import { getAgentToken, listAgentTokens, getPolicy, getWalletNameById, listWallets } from "../wallet/keystore.js";
+import { getAgentToken, listAgentTokens, getPolicy, getWallet, listWallets } from "../wallet/keystore.js";
 import { getConfigValue } from "../config.js";
 import { printError } from "../common/output.js";
 import { confirm } from "../common/prompt.js";
@@ -20,23 +20,22 @@ const POLICIES_DIR = resolve(join(__dirname, "..", "..", "policies"));
  * inline — runs `agent create-token` then returns the freshly-saved token so
  * the caller can continue. In non-TTY contexts, errors and exits.
  * @param {string} [context] - what the token is needed for, e.g. "for signing"
- * @param {string} [targetWallet] - wallet the caller intends to use; binds the
- *   inline-created token to this wallet instead of the default. Required when
- *   the caller resolved a wallet via --wallet so the token isn't bound to the
- *   wrong account.
+ * @param {string} [targetWallet] - wallet the caller will sign with. Selects
+ *   that wallet's token (never the default wallet's), and binds an
+ *   inline-created token to it.
  * @returns {Promise<string>} The agent token (used as OWS passphrase)
  */
 export async function requireAgentToken(context = "", targetWallet) {
-  const token = getAgentToken();
+  const token = getAgentToken(targetWallet);
   if (token) return token;
 
   const suffix = context ? ` ${context}` : "";
 
   // Non-interactive: error and exit like before
   if (!process.stderr.isTTY) {
-    printError("no_agent_token", `Agent token required${suffix}`, {
+    printError("no_agent_token", `Agent token required${suffix}${targetWallet ? ` — wallet "${targetWallet}" has none` : ""}`, {
       suggestion:
-        "Create one: zerion agent create-token --name <name> --wallet <wallet>\n" +
+        `Create one: zerion agent create-token --name <name> --wallet ${targetWallet || "<wallet>"}\n` +
         "It will be saved to your config automatically.",
     });
     process.exit(1);
@@ -65,7 +64,7 @@ export async function requireAgentToken(context = "", targetWallet) {
 
   await agentCreateToken([], { name: `${walletName}-agent`, wallet: walletName });
 
-  const freshToken = getAgentToken();
+  const freshToken = getAgentToken(walletName);
   if (!freshToken) {
     printError("no_agent_token", `Agent token creation did not complete${suffix}`);
     process.exit(1);
@@ -74,24 +73,40 @@ export async function requireAgentToken(context = "", targetWallet) {
 }
 
 /**
- * Enforce executable policies attached to the active agent token.
+ * Enforce executable policies attached to the signing wallet's agent tokens.
  * OWS enforces native rules (allowed_chains, expires_at) but does NOT run
  * executable scripts — we must do it here before signing.
- * @param {{ to: string, value: string|bigint, data: string, chain: string }} txInfo
+ *
+ * OWS does not expose which key a token belongs to, so this enforces the
+ * policies of **every live key** for the signing wallet (fail-closed): the
+ * signing token may be the config-saved one, a ZERION_AGENT_TOKEN override, or
+ * a key created outside the CLI, and a policy must never be skipped because a
+ * different key for the same wallet happens to be newer.
+ *
+ * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName: string }} txInfo
+ *   - `walletName` is the wallet that signs (name or OWS id). Required: policies
+ *     follow the signer, never the default wallet.
  */
 export async function enforceExecutablePolicies(txInfo) {
-  const walletName = getConfigValue("defaultWallet");
-  if (!walletName) return;
+  const { walletName } = txInfo;
+  if (!walletName) throw new Error("enforceExecutablePolicies: walletName is required");
 
-  // Find the newest API key for the default wallet
-  const tokens = listAgentTokens();
-  const activeKey = tokens
-    .filter((t) => {
-      const wid = t.walletIds?.[0];
-      return wid && getWalletNameById(wid) === walletName;
-    })
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-  if (!activeKey?.policyIds?.length) return;
+  // Resolve the wallet once; a read-only or unknown address has no keystore key
+  // and therefore no policies to run (the browser owns that signature).
+  let walletId;
+  try {
+    walletId = getWallet(walletName).id;
+  } catch {
+    return;
+  }
+
+  const policyIds = [...new Set(
+    listAgentTokens()
+      // A key may cover several wallets (`ows key create --wallet a --wallet b`).
+      .filter((t) => t.walletIds?.includes(walletId))
+      .flatMap((t) => t.policyIds || [])
+  )];
+  if (policyIds.length === 0) return;
 
   const ctx = {
     transaction: {
@@ -101,7 +116,7 @@ export async function enforceExecutablePolicies(txInfo) {
     },
   };
 
-  for (const pid of activeKey.policyIds) {
+  for (const pid of policyIds) {
     let policy;
     try {
       policy = getPolicy(pid);
@@ -218,9 +233,10 @@ export function parseSlippage(value) {
  * Detects revoked agent tokens and falls back to a generic error.
  * @param {Error} err
  * @param {string} fallbackCode - error code when not an agent-token issue (e.g. "swap_error")
+ * @param {string} [walletName] - the wallet that was signing; its token is the one checked
  */
-export function handleTradingError(err, fallbackCode) {
-  if (getAgentToken() && err.message?.includes("API key not found")) {
+export function handleTradingError(err, fallbackCode, walletName) {
+  if (getAgentToken(walletName) && err.message?.includes("API key not found")) {
     printError("invalid_agent_token", "Agent token is revoked or invalid", {
       suggestion: "Create a new one: zerion agent create-token --name <name> --wallet <wallet>",
     });
