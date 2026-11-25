@@ -2,6 +2,7 @@ import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAddress } from "../../utils/wallet/resolve.js";
 import { addReadonly, getReadonly } from "../../utils/wallet/readonly.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
@@ -43,6 +44,12 @@ export default async function walletAdd(args, flags) {
   }
   if (keystoreClash) {
     printError("name_in_use", `A wallet named "${name}" already exists (keystore).`, {
+      suggestion: "Pick a different --name for the read-only wallet.",
+    });
+    process.exit(1);
+  }
+  if (isSafeWallet(name)) {
+    printError("name_in_use", `A wallet named "${name}" already exists (Safe).`, {
       suggestion: "Pick a different --name for the read-only wallet.",
     });
     process.exit(1);

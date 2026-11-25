@@ -599,7 +599,7 @@ async function buildCandidateRow(c, ctx) {
  * fetches (dev-tier API keys, the existing in-order test) get the original
  * behaviour exactly.
  */
-async function runWithConcurrency(items, concurrency, work) {
+export async function runWithConcurrency(items, concurrency, work) {
   const n = items.length;
   const results = new Array(n);
   const limit = Math.max(1, Math.floor(concurrency) || 1);

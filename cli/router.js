@@ -26,6 +26,7 @@ function printUsage() {
       "wallet import --name <name> --sol-key": "Import from Solana private key (interactive)",
       "wallet import --name <name> --mnemonic": "Import from seed phrase (all chains)",
       "wallet add <address|ens> --name <name>": "Add a read-only wallet — address only, no keys (0x, ENS, or Solana base58). Reads work normally; ALL signing hands off to the web app, so trades can't run unattended",
+      "wallet add-safe <address> --name <name> --signer <wallet>[,<wallet>…] [--executor <wallet>] [--chains <a,b>]": "Add a Safe multisig — no keys stored. Signers must be EVM keystore or read-only wallets that own the Safe; probes the catalog's EVM chains (or --chains) and caches version, owners and threshold per chain",
       "wallet set-review-threshold <wallet> <usd|off>": "Route transactions whose sell-side value is over <usd> to the web app for human review instead of auto-signing ('off' clears it; fails closed when value is unknown)",
       "wallet list": "List all wallets (keystore + read-only)",
       "wallet fund": "Show deposit addresses for funding",

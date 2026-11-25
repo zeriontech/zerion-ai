@@ -68,6 +68,15 @@ describe("CLI routing", () => {
       assert.ok(json);
       assert.ok(Array.isArray(json.wallets));
     });
+
+    it("wallet add-safe is listed in usage and dispatched to its handler", async () => {
+      const help = parseJSON((await run([])).stdout);
+      assert.ok(Object.keys(help.wallet_management).some((usage) => usage.startsWith("wallet add-safe ")));
+
+      const { code, stderr } = await run(["wallet", "add-safe"], { HOME: "/tmp/zerion-test-nonexistent" });
+      assert.equal(code, 1);
+      assert.equal(parseJSON(stderr).error.code, "missing_args");
+    });
   });
 
   describe("error routing", () => {
