@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.12.0](https://github.com/zeriontech/zerion-ai/compare/v1.11.1...v1.12.0) (2026-11-25)
+
+
+### Features
+
+* **skills:** let hand-built bundle groups sign locally or in the web app ([06ec093](https://github.com/zeriontech/zerion-ai/commit/06ec093d08074ffc39f9524afe995b1e41ba86e6))
+
+
+### Bug Fixes
+
+* **cli:** enforce the policies of every agent token for the signing wallet ([06ec093](https://github.com/zeriontech/zerion-ai/commit/06ec093d08074ffc39f9524afe995b1e41ba86e6))
+* **cli:** let a token with an allowlist policy sign transactions to allowlisted addresses ([193ce42](https://github.com/zeriontech/zerion-ai/commit/193ce424fa7dddb58464db9add18ed8bcf092721))
+* **cli:** reject a local bundle whose walletName doesn't own the signer address ([06ec093](https://github.com/zeriontech/zerion-ai/commit/06ec093d08074ffc39f9524afe995b1e41ba86e6))
+* **cli:** require an explicit route on every bundle group ([06ec093](https://github.com/zeriontech/zerion-ai/commit/06ec093d08074ffc39f9524afe995b1e41ba86e6))
+* **cli:** sign with the signing wallet's own agent token and policies ([06ec093](https://github.com/zeriontech/zerion-ai/commit/06ec093d08074ffc39f9524afe995b1e41ba86e6))
+* **cli:** stop every signature under a policy script from taking four extra seconds ([193ce42](https://github.com/zeriontech/zerion-ai/commit/193ce424fa7dddb58464db9add18ed8bcf092721))
+
 ## [1.11.1](https://github.com/zeriontech/zerion-ai/compare/v1.11.0...v1.11.1) (2026-11-13)
 
 
