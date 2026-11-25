@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { concat, decodeFunctionData, getAddress, hashTypedData, keccak256, parseAbi, parseTransaction, toHex } from "viem";
@@ -122,7 +122,7 @@ function stubClient({
   return client;
 }
 
-async function startTxService({ onPost = () => ({ status: 201, store: true }), queued = [] } = {}) {
+async function startTxService({ onPost = () => ({ status: 201, store: true }), queued = [], getTxStatus } = {}) {
   const state = { posts: [], stored: new Map(), authHeaders: [] };
   const srv = createServer((req, res) => {
     state.authHeaders.push(req.headers.authorization);
@@ -149,6 +149,7 @@ async function startTxService({ onPost = () => ({ status: 201, store: true }), q
         return send(200, { results: page });
       }
       const match = url.pathname.match(/^\/api\/v1\/multisig-transactions\/(0x[0-9a-fA-F]+)\/$/);
+      if (match && getTxStatus) return send(getTxStatus, "Service Unavailable");
       if (match && state.stored.has(match[1])) return send(200, state.stored.get(match[1]));
       return send(404, { detail: "Not found." });
     });
@@ -388,6 +389,34 @@ describe("submitSafeCalls Path A: execute", () => {
     assert.equal(result.txHash, `0x${"ab".repeat(32)}`);
   });
 
+  it("a receipt write that fails after the broadcast warns and still returns the executed result", async () => {
+    mkdirSync(join(tmpHome, ".zerion"), { recursive: true });
+    writeFileSync(join(tmpHome, ".zerion", "safe-pending"), "not a directory");
+    const client = stubClient();
+    install({ client });
+    const { value: result, stderr } = await submit();
+    assert.equal(client.calls.broadcasts.length, 1);
+    assert.equal(result.status, "executed");
+    assert.equal(result.txHash, keccak256(client.calls.broadcasts[0]));
+    assert.match(stderr, /WARNING: the Safe transaction was executed, but its local receipt could not be written to .*safe-pending/);
+  });
+
+  it("prices execTransaction with fees read after the owner signature, not the pre-flight fees", async () => {
+    const client = stubClient();
+    let feeReads = 0;
+    client.estimateFeesPerGas = async () => {
+      feeReads += 1;
+      return feeReads === 1
+        ? { maxFeePerGas: 1_000_000_000n, maxPriorityFeePerGas: 1_000_000n }
+        : { maxFeePerGas: 7_000_000_000n, maxPriorityFeePerGas: 2_000_000n };
+    };
+    const spies = install({ client });
+    await submit();
+    assert.equal(feeReads, 2);
+    assert.equal(spies.signedTxs[0].tx.maxFeePerGas, 7_000_000_000n);
+    assert.equal(spies.signedTxs[0].tx.maxPriorityFeePerGas, 2_000_000n);
+  });
+
   it("writes the 0600 pending receipt with the documented keys at the documented path", async () => {
     install({ client: stubClient() });
     await submit({ safe: { name: "treasury", address: SAFE, signers: ["owner-1"], executor: "relayer" } });
@@ -516,6 +545,20 @@ describe("submitSafeCalls Path B: propose", () => {
     const { value: result } = await submit();
     assert.equal(service.posts.length, 1);
     assert.equal(result.status, "proposed");
+  });
+
+  it("a propose error whose follow-up GET also fails is reported as outcome unknown, with no receipt", async () => {
+    const service = await startTxService({
+      onPost: () => ({ status: 400, store: false, body: { detail: "bad" } }),
+      getTxStatus: 503,
+    });
+    install({ client: twoOfThree(), txServiceUrl: service.baseUrl });
+    await assert.rejects(
+      submit(),
+      (err) => err.code === "safe_tx_service_error" && /outcome is unknown/i.test(err.suggestion) && /zerion safe queue/.test(err.suggestion)
+    );
+    assert.equal(service.posts.length, 1);
+    assert.throws(() => statSync(receiptPath(BASE.safeTxHash)), { code: "ENOENT" });
   });
 
   it("a propose error the service did not store fails with safe_tx_service_error and writes no receipt", async () => {

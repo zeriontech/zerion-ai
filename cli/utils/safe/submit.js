@@ -14,7 +14,7 @@ import { selectNonce, isStale } from "./nonce.js";
 import { buildSafeTxMessage, toSafeTypedData, hashSafeTx, assertHashMatches, ZERO_ADDRESS } from "./safe-tx.js";
 import { encodeSignatures, preApprovedSignature } from "./signatures.js";
 import { signSafeTxAsOwner } from "./owner-sign.js";
-import { writePendingReceipt } from "./pending-store.js";
+import { pendingReceiptPath, writePendingReceipt } from "./pending-store.js";
 
 const SAFE_EXEC_ABI = parseAbi([
   "function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)",
@@ -127,7 +127,7 @@ async function assertExecutorGas({ client, safeAddress, executor, call }) {
       { suggestion: "Fund the executor, or retry with --propose-only to collect signatures in the Safe app." }
     );
   }
-  return { fees, gasLimit };
+  return { gasLimit };
 }
 
 async function execute({ client, chain, chainIdNum, safeAddress, message, safeTxHash, signatures, executor, preflight, timeout }) {
@@ -154,7 +154,10 @@ async function execute({ client, chain, chainIdNum, safeAddress, message, safeTx
     data,
     fallback: preflight.gasLimit,
   });
-  const nonce = await client.getTransactionCount({ address: executor.address, blockTag: "pending" });
+  const [nonce, fees] = await Promise.all([
+    client.getTransactionCount({ address: executor.address, blockTag: "pending" }),
+    client.estimateFeesPerGas(),
+  ]);
   const tx = {
     type: "eip1559",
     chainId: chainIdNum,
@@ -162,8 +165,8 @@ async function execute({ client, chain, chainIdNum, safeAddress, message, safeTx
     value: 0n,
     data,
     gas,
-    maxFeePerGas: preflight.fees.maxFeePerGas,
-    maxPriorityFeePerGas: preflight.fees.maxPriorityFeePerGas,
+    maxFeePerGas: fees.maxFeePerGas,
+    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
     nonce,
   };
 
@@ -357,14 +360,21 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
     status = "proposed";
   }
 
-  writePendingReceipt({
-    safeAddress,
-    chainId: chainIdNum,
-    safeTxHash,
-    typedData,
-    signatures: Object.fromEntries(entries.map(({ owner, signature }) => [getAddress(owner), signature])),
-    status,
-  });
+  try {
+    writePendingReceipt({
+      safeAddress,
+      chainId: chainIdNum,
+      safeTxHash,
+      typedData,
+      signatures: Object.fromEntries(entries.map(({ owner, signature }) => [getAddress(owner), signature])),
+      status,
+    });
+  } catch (err) {
+    process.stderr.write(
+      `WARNING: the Safe transaction was ${status}, but its local receipt could not be written to ` +
+        `${pendingReceiptPath({ safeAddress, chainId: chainIdNum, safeTxHash })}: ${err.message}\n`
+    );
+  }
 
   return {
     chain,
