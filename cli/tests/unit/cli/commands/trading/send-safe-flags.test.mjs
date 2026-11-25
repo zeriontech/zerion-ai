@@ -162,7 +162,7 @@ describe("send refuses Safe-only flags on a non-Safe wallet", () => {
     for (const [flag, value] of SAFE_ONLY_FLAGS) {
       it(`${wallet}: --${flag} exits 1 with safe_only_flag before any network request, signature or broadcast`, async () => {
         const { code, error, stdout, stderr } = await run(["ETH", AMOUNT], {
-          wallet, to: RECIPIENT, chain: "base", [flag]: value,
+          wallet, to: RECIPIENT, chain: "base", timeout: "1", [flag]: value,
         });
         assert.equal(code, 1, stderr);
         assert.equal(error?.code, "safe_only_flag");
