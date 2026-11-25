@@ -431,17 +431,26 @@ async function verifyHashes(client, hashes) {
   return { reverted: false };
 }
 
+export const MAX_REJECTION_REASON_LENGTH = 500;
+
+function rejectionReason(msg) {
+  return typeof msg.reason === "string" && msg.reason.length > 0
+    ? { reason: msg.reason.slice(0, MAX_REJECTION_REASON_LENGTH) }
+    : {};
+}
+
 /**
  * Map a v2 `summary` callback's groups into the CLI's per-group result shape.
  * The web app reports each group's `outcome` ∈ completed|skipped|failed plus its
  * `hashes` (ADR-0004). A skipped group is a user cancel, surfaced as the CLI's
  * existing per-group `rejected` status so downstream reporting is unchanged.
- * The summary carries no error text, so it's merged from the streamed
- * group-failed events (`errorByGroup`, keyed by group index).
+ * The summary carries no error or rejection text, so both are merged from the
+ * streamed group-failed / group-skipped events (`errorByGroup` /
+ * `reasonByGroup`, keyed by group index).
  *
- * @returns {Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string }>}
+ * @returns {Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string, reason?:string }>}
  */
-function normalizeSummaryGroups(msg, errorByGroup) {
+function normalizeSummaryGroups(msg, errorByGroup, reasonByGroup) {
   const groups = Array.isArray(msg.groups) ? msg.groups : [];
   return groups.map((g) => {
     const status = g.outcome === "skipped" ? "rejected" : g.outcome || "completed";
@@ -449,6 +458,8 @@ function normalizeSummaryGroups(msg, errorByGroup) {
     if (g.hashes && g.hashes.length) out.hashes = g.hashes;
     const error = errorByGroup.get(g.group);
     if (error) out.error = error;
+    const reason = status === "rejected" ? reasonByGroup.get(g.group) : undefined;
+    if (reason) out.reason = reason;
     return out;
   });
 }
@@ -485,6 +496,7 @@ function summarizeBundleStatus(results) {
  *   hashes?: string[],
  *   failedIndex?: number,
  *   error?: string,
+ *   reason?: string,
  * }>}
  */
 export function signViaWebApp({ address, transactions, timeout = 300, client, onListening }) {
@@ -520,7 +532,7 @@ export function signViaWebApp({ address, transactions, timeout = 300, client, on
           break;
         }
         case "rejected":
-          finish({ status: "rejected" });
+          finish({ status: "rejected", ...rejectionReason(msg) });
           break;
         case "failed":
           finish({
@@ -556,7 +568,7 @@ export function signViaWebApp({ address, transactions, timeout = 300, client, on
  * @param {(info:{port:number,url:string}) => void} [args.onListening]
  * @returns {Promise<{
  *   status: 'completed'|'partial'|'failed'|'rejected'|'timeout'|'aborted',
- *   groups?: Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string }>,
+ *   groups?: Array<{ status:'completed'|'rejected'|'failed', hashes?:string[], error?:string, reason?:string }>,
  * }>}
  */
 export function signBundleViaWebApp({ address, groups, timeout = 300, onListening }) {
@@ -574,6 +586,7 @@ export function signBundleViaWebApp({ address, groups, timeout = 300, onListenin
   // not, so stash errors as they stream (keyed by group index) and merge them
   // into the summary's per-group results.
   const errorByGroup = new Map();
+  const reasonByGroup = new Map();
   return runCallbackSession({
     buildUrl: ({ port, token }) =>
       buildTransactionLink({ base: getWebAppBase(), address, version: 2, groups, port, token }),
@@ -592,9 +605,15 @@ export function signBundleViaWebApp({ address, groups, timeout = 300, onListenin
         case "group-completed":
           process.stderr.write(`Group ${(msg.group ?? 0) + 1}/${totalGroups} completed.\n`);
           break; // per-group progress
-        case "group-skipped":
-          process.stderr.write(`Group ${(msg.group ?? 0) + 1}/${totalGroups} skipped.\n`);
+        case "group-skipped": {
+          const { reason } = rejectionReason(msg);
+          if (reason) reasonByGroup.set(msg.group, reason);
+          process.stderr.write(
+            `Group ${(msg.group ?? 0) + 1}/${totalGroups} skipped` +
+            (reason ? `: ${reason}` : "") + ".\n"
+          );
           break; // per-group progress
+        }
         case "group-failed":
           if (msg.error) errorByGroup.set(msg.group, msg.error);
           process.stderr.write(
@@ -604,12 +623,15 @@ export function signBundleViaWebApp({ address, groups, timeout = 300, onListenin
           break; // per-group progress
         case "summary": {
           note();
-          const results = normalizeSummaryGroups(msg, errorByGroup);
+          const results = normalizeSummaryGroups(msg, errorByGroup, reasonByGroup);
           finish({ status: summarizeBundleStatus(results), groups: results });
           break;
         }
         case "rejected":
-          finish({ status: "rejected", groups: groups.map(() => ({ status: "rejected" })) });
+          finish({
+            status: "rejected",
+            groups: groups.map(() => ({ status: "rejected", ...rejectionReason(msg) })),
+          });
           break;
         case "failed":
           finish({
@@ -660,13 +682,14 @@ async function verifySignature({ client, address, message, signature }) {
  * signature. `message` is a request from toPersonalSignRequest /
  * toTypedDataSignRequest. Terminal callback events:
  *   completed — { event, token, signature }
- *   rejected  — { event, token }
+ *   rejected  — { event, token, reason? }
  *   failed    — { event, token, error? }
  *
  * @returns {Promise<{
  *   status: 'completed' | 'rejected' | 'failed' | 'timeout' | 'aborted',
  *   signature?: string,
  *   error?: string,
+ *   reason?: string,
  * }>}
  */
 export function signMessageViaWebApp({ address, message, timeout = 300, client, onListening }) {
@@ -696,7 +719,7 @@ export function signMessageViaWebApp({ address, message, timeout = 300, client, 
           break;
         }
         case "rejected":
-          finish({ status: "rejected" });
+          finish({ status: "rejected", ...rejectionReason(msg) });
           break;
         case "failed":
           finish({ status: "failed", error: msg.error });
@@ -722,6 +745,7 @@ export function reportHandoff(summary, result) {
   if (result.hashes) output.hashes = result.hashes;
   if (result.failedIndex != null) output.failedIndex = result.failedIndex;
   if (result.error) output.error = result.error;
+  if (result.reason) output.reason = result.reason;
 
   print(output);
 
@@ -748,6 +772,7 @@ export function reportMessageHandoff(summary, result) {
   };
   if (result.signature) output.signature = result.signature;
   if (result.error) output.error = result.error;
+  if (result.reason) output.reason = result.reason;
 
   print(output);
 

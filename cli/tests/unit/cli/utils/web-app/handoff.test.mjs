@@ -2,8 +2,12 @@
 // TransactionEVM field mapping, message-request shaping, and link construction.
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
+import { keccak256, toHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { signSafeTxAsOwner } from "#zerion/utils/safe/owner-sign.js";
 import {
   encodePayload,
   toTransactionEVM,
@@ -325,5 +329,96 @@ describe("buildMessageLink", () => {
     const payload = decodePayload(new URL(url).hash.replace(/^#msg=/, ""));
     assert.ok(!("port" in payload));
     assert.ok(!("token" in payload));
+  });
+});
+
+describe("signSafeTxAsOwner web-app links (pinned wire shapes)", () => {
+  const BASE = JSON.parse(
+    readFileSync(new URL("../../../../fixtures/safe/base-1.4.1-op0.json", import.meta.url), "utf8")
+  );
+  const OWNER = privateKeyToAccount(keccak256(toHex("zerion-safe-test-owner-1")));
+  const SAFE = "0xd2e580A552Cb7a6B87E45eDe8f0102698c476d7F";
+  const BASE_CHAIN_ID_HEX = "0x2105";
+
+  let stderrChunks;
+  let originalWrite;
+  let originalNoBrowser;
+
+  beforeEach(() => {
+    stderrChunks = [];
+    originalWrite = process.stderr.write;
+    originalNoBrowser = process.env.ZERION_NO_BROWSER;
+    process.env.ZERION_NO_BROWSER = "1";
+    process.stderr.write = (chunk) => {
+      stderrChunks.push(String(chunk));
+      return true;
+    };
+  });
+
+  afterEach(() => {
+    process.stderr.write = originalWrite;
+    if (originalNoBrowser === undefined) delete process.env.ZERION_NO_BROWSER;
+    else process.env.ZERION_NO_BROWSER = originalNoBrowser;
+  });
+
+  // Runs a real web-app session that times out at once, and returns the link it printed.
+  async function printedLink({ signMode, safeTxHash = BASE.safeTxHash }) {
+    await assert.rejects(
+      signSafeTxAsOwner({
+        typedData: BASE.typedData,
+        safeTxHash,
+        chainIdNum: 8453,
+        signer: { walletName: "owner", address: OWNER.address, readOnly: true },
+        route: "web-app",
+        signMode,
+        timeout: 0.05,
+      }),
+      (err) => err.code === "safe_sign_timeout"
+    );
+    const line = stderrChunks.join("").split("\n").find((l) => l.includes(`${CLI_MESSAGE_PATH}?`));
+    assert.ok(line, "expected a printed /cli/message link");
+    const url = new URL(line.trim());
+    return { url, payload: decodePayload(url.hash.replace(/^#msg=/, "")) };
+  }
+
+  function assertSession(payload) {
+    assert.equal(typeof payload.port, "number");
+    assert.match(payload.token, /^[0-9a-f]{32}$/);
+  }
+
+  it("typed: serializes to the pinned typedData request, addressed to the owner", async () => {
+    const { url, payload } = await printedLink({ signMode: "typed" });
+    assertSession(payload);
+    assert.deepEqual(payload, {
+      version: 1,
+      port: payload.port,
+      token: payload.token,
+      message: { kind: "typedData", chainId: BASE_CHAIN_ID_HEX, typedData: BASE.typedData },
+    });
+    assert.equal(url.searchParams.get("address"), OWNER.address);
+    assert.notEqual(url.searchParams.get("address").toLowerCase(), SAFE.toLowerCase());
+  });
+
+  it("hash: serializes to the pinned personal request over the lowercase safeTxHash, addressed to the owner", async () => {
+    const upperHash = `0x${BASE.safeTxHash.slice(2).toUpperCase()}`;
+    const { url, payload } = await printedLink({ signMode: "hash", safeTxHash: upperHash });
+    assertSession(payload);
+    assert.deepEqual(payload, {
+      version: 1,
+      port: payload.port,
+      token: payload.token,
+      message: {
+        kind: "personal",
+        raw: "0x81c02e13c21dc26f71f1c94dc233c1dc7bf12d8189b458daab9f07cac64da066",
+        chainId: BASE_CHAIN_ID_HEX,
+        safeTx: {
+          safeTxHash: "0x81c02e13c21dc26f71f1c94dc233c1dc7bf12d8189b458daab9f07cac64da066",
+          safe: SAFE,
+          chainId: 8453,
+        },
+      },
+    });
+    assert.equal(url.searchParams.get("address"), OWNER.address);
+    assert.notEqual(url.searchParams.get("address").toLowerCase(), SAFE.toLowerCase());
   });
 });

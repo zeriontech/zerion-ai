@@ -30,7 +30,24 @@ export function decideSigningRoute({ walletName, force = false, usdValue = null 
     return { route: "web-app", reason: "review forced (--review)" };
   }
 
-  const threshold = getReviewThreshold(walletName);
+  return routeByThreshold(getReviewThreshold(walletName), usdValue);
+}
+
+/**
+ * Safe-owner router: decideSigningRoute's triggers, with the read-only check on
+ * the signing owner and the Safe's review threshold, else the signer's.
+ */
+export function decideSafeSigningRoute({ safeName, signerName, force = false, usdValue = null }) {
+  if (isReadonlyWallet(signerName)) {
+    return { route: "web-app", reason: "read-only signer" };
+  }
+  if (force) {
+    return { route: "web-app", reason: "review forced (--review)" };
+  }
+  return routeByThreshold(getReviewThreshold(safeName) ?? getReviewThreshold(signerName), usdValue);
+}
+
+function routeByThreshold(threshold, usdValue) {
   if (threshold != null) {
     if (usdValue == null) {
       return {
