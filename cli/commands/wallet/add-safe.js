@@ -9,7 +9,7 @@ import { listTradingChainIds, resolveChain } from "../../utils/chain/catalog.js"
 import { getPublicClient } from "../../utils/trading/transaction.js";
 import { runWithConcurrency } from "../../utils/trading/consolidate.js";
 import { addSafe, getSafe } from "../../utils/safe/registry.js";
-import { readSafeState, assertSupportedVersion } from "../../utils/safe/contracts.js";
+import { readSafeState, assertSupportedVersion, SUPPORTED_SAFE_VERSIONS } from "../../utils/safe/contracts.js";
 import { getSafeChainInfo } from "../../utils/safe/chain-info.js";
 
 const PROBE_CONCURRENCY = 8;
@@ -87,6 +87,24 @@ async function probe(chain, safeAddress) {
     process.stderr.write(`Warning: could not read the Safe on ${chain}: ${err.shortMessage || err.message}\n`);
     return { chain, skipped: typeof err.code === "string" ? err.code : "probe_failed" };
   }
+}
+
+function noReadableChain(address, skipped) {
+  const isNoCode = (s) => s.reason === "no_code";
+  const isUnsupported = (s) => s.reason.startsWith("version_unsupported:");
+  if (!skipped.every((s) => isNoCode(s) || isUnsupported(s))) {
+    return {
+      code: "safe_unreadable",
+      message: `Could not read the Safe at ${address} on any supported chain (see skipped); nothing saved.`,
+    };
+  }
+  if (skipped.some(isUnsupported)) {
+    return {
+      code: "safe_version_unsupported",
+      message: `The Safe at ${address} has no supported version on any probed chain (supported: ${SUPPORTED_SAFE_VERSIONS.join(", ")}); nothing saved.`,
+    };
+  }
+  return { code: "safe_not_deployed", message: `No contract at ${address} on any probed chain; nothing saved.` };
 }
 
 async function targetChains(flags) {
@@ -171,8 +189,12 @@ export default async function walletAddSafe(args, flags) {
     }
   }
 
+  if (Object.keys(chains).length === 0) {
+    const { code, message } = noReadableChain(address, skipped);
+    fail(code, message, { skipped });
+  }
   if (!anySignerOwns) {
-    fail("safe_signer_not_owner", `No --signer is an owner of ${address} on any probed chain; nothing saved.`, {
+    fail("safe_signer_not_owner", `No --signer is an owner of ${address} on any chain that could be read; nothing saved.`, {
       signers: signers.map((s) => s.address),
       skipped,
     });

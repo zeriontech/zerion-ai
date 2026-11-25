@@ -32,6 +32,7 @@ let tmpHome;
 let safePath;
 let requests;
 let onchain;
+let safeConfigDown;
 const origHome = process.env.HOME;
 const originalFetch = globalThis.fetch;
 
@@ -98,10 +99,13 @@ async function stubFetch(url, init) {
   const href = String(url);
   requests.push(href);
   if (href.startsWith(SAFE_CONFIG)) {
-    const body = SAFE_CONFIG_BODIES[Number(href.slice(SAFE_CONFIG.length).replace(/\/$/, ""))];
+    const chainId = Number(href.slice(SAFE_CONFIG.length).replace(/\/$/, ""));
+    if (safeConfigDown.has(chainId)) return json(503, { detail: "Service Unavailable" });
+    const body = SAFE_CONFIG_BODIES[chainId];
     return body ? json(200, body) : json(404, { detail: "Not found." });
   }
   const chain = new URL(href).pathname.slice(1);
+  if (onchain[chain]?.rpcStatus) return json(onchain[chain].rpcStatus, { error: "upstream failure" });
   const { id, method, params } = JSON.parse(init.body);
   return json(200, { jsonrpc: "2.0", id, result: rpcResult(onchain[chain] ?? { code: "0x" }, method, params) });
 }
@@ -110,11 +114,14 @@ async function run(command, args, flags) {
   let stdout = "";
   let stderr = "";
   const saved = { out: process.stdout.write, err: process.stderr.write, exit: process.exit };
-  process.stdout.write = (chunk) => {
+  // The node:test reporter writes binary frames to stdout while a command awaits; only string writes are the command's.
+  process.stdout.write = (chunk, ...rest) => {
+    if (typeof chunk !== "string") return saved.out.call(process.stdout, chunk, ...rest);
     stdout += chunk;
     return true;
   };
-  process.stderr.write = (chunk) => {
+  process.stderr.write = (chunk, ...rest) => {
+    if (typeof chunk !== "string") return saved.err.call(process.stderr, chunk, ...rest);
     stderr += chunk;
     return true;
   };
@@ -166,6 +173,7 @@ after(() => {
 beforeEach(() => {
   requests = [];
   onchain = {};
+  safeConfigDown = new Set();
   rmSync(safePath, { force: true });
   globalThis.fetch = stubFetch;
 });
@@ -237,6 +245,59 @@ describe("wallet add-safe", () => {
     assert.equal(registry.getSafe("treasury"), null);
     assert.match(stderr, /signer "hot" \(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\) is not an owner of the Safe on base/);
     assert.match(stderr, /signer "hot" .* is not an owner of the Safe on ethereum/);
+  });
+
+  const unreadCases = [
+    {
+      label: "every chain has no code",
+      setup: () => ({ base: { code: "0x" }, ethereum: { code: "0x" } }),
+      code: "safe_not_deployed",
+      skipped: [{ chain: "base", reason: "no_code" }, { chain: "ethereum", reason: "no_code" }],
+    },
+    {
+      label: "safe-config answers 503 for the only owning chain",
+      setup: () => {
+        safeConfigDown.add(8453);
+        return { base: deployed("1.4.1", [HOT]), ethereum: { code: "0x" } };
+      },
+      code: "safe_unreadable",
+      skipped: [{ chain: "base", reason: "safe_chain_info_unavailable" }, { chain: "ethereum", reason: "no_code" }],
+    },
+    {
+      label: "the RPC answers 500 for the only owning chain",
+      setup: () => ({ base: { rpcStatus: 500 }, ethereum: { code: "0x" } }),
+      code: "safe_unreadable",
+      skipped: [{ chain: "base", reason: "probe_failed" }, { chain: "ethereum", reason: "no_code" }],
+    },
+    {
+      label: "every deployed chain runs an unsupported version",
+      setup: () => ({ base: deployed("1.1.1", [HOT]), ethereum: { code: "0x" } }),
+      code: "safe_version_unsupported",
+      skipped: [{ chain: "base", reason: "version_unsupported:1.1.1" }, { chain: "ethereum", reason: "no_code" }],
+    },
+  ];
+  for (const { label, setup, code: expectedCode, skipped } of unreadCases) {
+    it(`refuses with ${expectedCode}, not safe_signer_not_owner, when no chain could be read: ${label}`, async () => {
+      onchain = setup();
+
+      const { code, error } = await run(walletAddSafe, [SAFE], { name: "treasury", signer: "hot", chains: "base,ethereum" });
+
+      assert.equal(code, 1);
+      assert.equal(error.code, expectedCode);
+      assert.deepEqual(error.skipped, skipped);
+      assert.equal(existsSync(safePath), false);
+    });
+  }
+
+  it("keeps safe_signer_not_owner when one chain was read without the signer and another failed", async () => {
+    onchain = { base: deployed("1.4.1", [STRANGER]), ethereum: { rpcStatus: 500 } };
+
+    const { code, error } = await run(walletAddSafe, [SAFE], { name: "treasury", signer: "hot", chains: "base,ethereum" });
+
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_signer_not_owner");
+    assert.deepEqual(error.skipped, [{ chain: "ethereum", reason: "probe_failed" }]);
+    assert.equal(existsSync(safePath), false);
   });
 
   it("saves when at least one signer owns the Safe, warning for the signer that does not", async () => {
