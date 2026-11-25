@@ -2,6 +2,7 @@ import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue, getWalletOrigin, getWalletAddresses, getReviewThreshold } from "../../utils/config.js";
 import { listReadonly } from "../../utils/wallet/readonly.js";
+import { listSafes } from "../../utils/safe/registry.js";
 import { formatWalletList } from "../../utils/common/format.js";
 import { fromCaip2 } from "../../utils/chain/registry.js";
 
@@ -67,7 +68,19 @@ export default async function walletList(_args, flags) {
       policies: [],
     }));
 
-    const allWallets = [...keystoreWallets, ...readonlyWallets].map((w) => {
+    const safeWallets = listSafes().map((s) => ({
+      name: s.name,
+      evmAddress: s.address,
+      type: "safe",
+      signers: s.signers,
+      executor: s.executor,
+      chains: Object.fromEntries(
+        Object.entries(s.chains || {}).map(([chain, c]) => [chain, `${c.threshold}/${c.owners.length}`]),
+      ),
+      policies: [],
+    }));
+
+    const allWallets = [...keystoreWallets, ...readonlyWallets, ...safeWallets].map((w) => {
       const threshold = getReviewThreshold(w.name);
       return threshold != null ? { ...w, reviewThresholdUsd: threshold } : w;
     });

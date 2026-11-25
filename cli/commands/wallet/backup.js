@@ -3,6 +3,7 @@ import { printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { readPassphrase } from "../../utils/common/prompt.js";
 import { isReadonlyWallet } from "../../utils/wallet/readonly.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 export default async function walletBackup(args, flags) {
   const walletName = flags.wallet || args[0] || getConfigValue("defaultWallet");
@@ -18,6 +19,14 @@ export default async function walletBackup(args, flags) {
     printError("readonly_no_keys",
       `Read-only wallet "${walletName}" has no recovery phrase — it holds no key material.`,
       { suggestion: "Back up the original wallet wherever its keys actually live." }
+    );
+    process.exit(1);
+  }
+
+  if (isSafeWallet(walletName)) {
+    printError("safe_no_keys",
+      `Safe wallet "${walletName}" has no recovery phrase — it holds no key material.`,
+      { suggestion: "Back up the signer wallets that own the Safe." }
     );
     process.exit(1);
   }

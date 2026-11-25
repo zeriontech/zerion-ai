@@ -4,6 +4,7 @@ import { setConfigValue, getConfigValue, setWalletOrigin, getWalletAddresses } f
 import { readSecret, readPassphrase } from "../../utils/common/prompt.js";
 import { offerAgentToken } from "../../utils/wallet/offer-agent-token.js";
 import { WALLET_ORIGIN, PASSPHRASE_WARNING } from "../../utils/common/constants.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 export default async function walletImport(args, flags) {
   const name = flags.name || args[0] || `imported-${Date.now()}`;
@@ -24,6 +25,13 @@ export default async function walletImport(args, flags) {
 
   if (inputCount > 1) {
     printError("invalid_input", "Provide only one of --evm-key, --sol-key, or --mnemonic");
+    process.exit(1);
+  }
+
+  if (isSafeWallet(name)) {
+    printError("name_in_use", `A wallet named "${name}" already exists (Safe).`, {
+      suggestion: "Pick a different --name for the imported wallet.",
+    });
     process.exit(1);
   }
 

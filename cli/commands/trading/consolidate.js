@@ -171,7 +171,7 @@ export default async function consolidate(args, flags) {
     process.exit(1);
   }
 
-  const { walletName, address } = resolveWallet({ ...flags, chain });
+  const { walletName, address } = resolveWallet({ ...flags, chain }, [], { refuseSafe: "consolidate" });
 
   // Target token resolution. Symbol matching is unreliable (case, bridged
   // variants, collisions), so resolveTargetToken accepts only curated symbols
