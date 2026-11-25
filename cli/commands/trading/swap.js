@@ -43,7 +43,7 @@ export default async function swap(args, flags) {
 
   // Source wallet resolves against `chain` so Solana picks base58 and EVM
   // picks 0x.
-  const { walletName, address } = resolveWallet({ ...flags, chain });
+  const { walletName, address } = resolveWallet({ ...flags, chain }, [], { refuseSafe: "swap" });
 
   const chainCheck = await validateTradingChainAsync(chain, "trade");
   if (chainCheck.error) {

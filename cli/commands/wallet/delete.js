@@ -2,6 +2,7 @@ import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue, setConfigValue, unsetConfigValue, removeAgentTokensForWallet, removeWalletOrigin } from "../../utils/config.js";
 import { readPassphrase, readSecret } from "../../utils/common/prompt.js";
+import { isSafeWallet, removeSafe } from "../../utils/safe/registry.js";
 
 export default async function walletDelete(args, flags) {
   const walletName = flags.wallet || args[0];
@@ -11,6 +12,12 @@ export default async function walletDelete(args, flags) {
       suggestion: "Usage: zerion wallet delete <name>",
     });
     process.exit(1);
+  }
+
+  if (isSafeWallet(walletName)) {
+    removeSafe(walletName);
+    print({ deleted: walletName, type: "safe" });
+    return;
   }
 
   // Verify wallet exists

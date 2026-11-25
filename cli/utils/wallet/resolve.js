@@ -11,6 +11,7 @@ import { isEvmAddress, isSolanaAddress } from "../chain/address.js";
 import { printError } from "../common/output.js";
 import { resolveWatchAddress } from "./watchlist.js";
 import { getReadonly } from "./readonly.js";
+import { getSafe, safeUnsupportedCommandError } from "../safe/registry.js";
 
 const ENS_TIMEOUT_MS = 10_000;
 const ENS_RETRIES = 2;
@@ -87,6 +88,9 @@ export async function resolveAddress(input) {
  *     the chain. Only an *explicit* `--chain` can conflict; the `ethereum`
  *     default never does. Used by the analytics commands via
  *     `resolveAddressOrWallet`.
+ *
+ * `options.refuseSafe` names the calling command; a Safe wallet then exits with
+ * `safe_unsupported_command` before any Safe signer or chain check.
  */
 export function resolveWallet(flags, args = [], options = {}) {
   const forRead = options.purpose === "read";
@@ -142,6 +146,15 @@ export function resolveWallet(flags, args = [], options = {}) {
     return { walletName, address: ro.address, readOnly: true };
   }
 
+  const safe = getSafe(walletName);
+  if (safe) {
+    if (options.refuseSafe) {
+      const err = safeUnsupportedCommandError(walletName, options.refuseSafe);
+      fail(err.code, err.message, { suggestion: err.suggestion });
+    }
+    return resolveSafe(walletName, safe, flags, forRead ? explicitChain : chain, forRead);
+  }
+
   try {
     return { walletName, address: forRead
       ? readAddressFor(walletName, explicitChain)
@@ -156,6 +169,54 @@ export function resolveWallet(flags, args = [], options = {}) {
     });
     process.exit(1);
   }
+}
+
+function fail(code, message, details) {
+  printError(code, message, details);
+  process.exit(1);
+}
+
+function resolveSafe(walletName, safe, flags, comparedChain, forRead) {
+  if (comparedChain && isSolana(comparedChain)) {
+    fail("safe_chain_mismatch",
+      forRead
+        ? `Safe wallet "${walletName}" is an EVM account; there is nothing to read for it on Solana.`
+        : `Safe wallet "${walletName}" is an EVM account; it can't sign on Solana.`,
+      { suggestion: "Use an EVM --chain." });
+  }
+  if (forRead) return { walletName, address: safe.address };
+  const signerName = pickSafeSigner(walletName, safe, flags.signer);
+  return { walletName, address: safe.address, safe, signer: safeSignerAccount(walletName, signerName) };
+}
+
+function pickSafeSigner(walletName, safe, requested) {
+  const choices = safe.signers.join(", ");
+  if (requested !== undefined) {
+    if (!safe.signers.includes(requested)) {
+      fail("safe_signer_not_registered",
+        `"${requested}" is not a registered signer of Safe wallet "${walletName}".`,
+        { suggestion: `Pass --signer with one of: ${choices}`, signers: safe.signers });
+    }
+    return requested;
+  }
+  if (safe.signers.length === 1) return safe.signers[0];
+  fail("safe_signer_required",
+    `Safe wallet "${walletName}" has ${safe.signers.length} signers; pick one with --signer.`,
+    { suggestion: `Pass --signer with one of: ${choices}`, signers: safe.signers });
+}
+
+function safeSignerAccount(safeName, signerName) {
+  const ro = getReadonly(signerName);
+  if (ro) return { walletName: signerName, address: ro.address, readOnly: true };
+  let address;
+  try {
+    address = ows.getEvmAddress(signerName);
+  } catch {
+    fail("wallet_not_found", `Signer wallet "${signerName}" of Safe wallet "${safeName}" not found`, {
+      suggestion: "List wallets with: zerion wallet list",
+    });
+  }
+  return { walletName: signerName, address, readOnly: false };
 }
 
 function signAddressFor(walletName, chain) {

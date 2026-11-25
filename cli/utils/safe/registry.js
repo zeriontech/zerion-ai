@@ -65,3 +65,16 @@ export function getSafe(name) {
 export function isSafeWallet(name) {
   return getSafe(name) != null;
 }
+
+export function isSafeAddress(address) {
+  if (typeof address !== "string") return false;
+  const wanted = address.toLowerCase();
+  return load().some((e) => e.address.toLowerCase() === wanted);
+}
+
+export function safeUnsupportedCommandError(name, command) {
+  const err = new Error(`"${name}" is a Safe wallet, and \`zerion ${command}\` does not support Safe wallets.`);
+  err.code = "safe_unsupported_command";
+  err.suggestion = "Safe wallets support `zerion send` only. Use a keystore or read-only wallet for this command.";
+  return err;
+}

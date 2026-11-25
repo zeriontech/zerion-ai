@@ -3,6 +3,7 @@ import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { requireAgentToken, parseTimeout } from "../../utils/trading/guards.js";
 import { getReadonly } from "../../utils/wallet/readonly.js";
+import { isSafeWallet, safeUnsupportedCommandError } from "../../utils/safe/registry.js";
 import { decideMessageSigningRoute } from "../../utils/trading/signing-route.js";
 import { getPublicClient } from "../../utils/trading/transaction.js";
 import {
@@ -52,6 +53,12 @@ export default async function walletSignMessage(args, flags) {
     process.exit(1);
   }
   const caip2 = chainCheck.caip2;
+
+  if (isSafeWallet(walletName)) {
+    const err = safeUnsupportedCommandError(walletName, "wallet sign-message");
+    printError(err.code, err.message, { suggestion: err.suggestion });
+    process.exit(1);
+  }
 
   // Resolve the wallet BEFORE prompting for agent-token setup, so a typo'd
   // --wallet doesn't drag the user through token creation just to fail.
