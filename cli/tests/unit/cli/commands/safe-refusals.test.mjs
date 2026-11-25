@@ -1,5 +1,5 @@
-// Every signing command refuses a Safe wallet with safe_unsupported_command, before any quote, RPC call, link or
-// signature; `send` too, until Safe send lands. The chain catalog is a fixture, fetch throws on any URL, and no browser may open.
+// Every signing command but EVM `send` refuses a Safe wallet with safe_unsupported_command, before any quote, RPC call, link
+// or signature; `send` refuses it on Solana. The chain catalog is a fixture, fetch throws on any URL, and no browser may open.
 
 import assert from "node:assert/strict";
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
@@ -181,7 +181,7 @@ async function assertRefused(name, [args, flags]) {
 }
 
 describe("signing commands refuse a Safe wallet", () => {
-  for (const name of Object.keys(INVOCATIONS)) {
+  for (const name of Object.keys(INVOCATIONS).filter((n) => n !== "send")) {
     it(`${name} refuses a one-signer Safe`, () => assertRefused(name, INVOCATIONS[name]("solo")));
 
     it(`${name} refuses a two-signer Safe without --signer, not with safe_signer_required`, () =>
