@@ -26,6 +26,18 @@ const ERC20_TRANSFER_ABI = parseAbi([
 const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 
+const SAFE_ONLY_FLAGS = ["signer", "nonce", "propose-only", "sign-mode"];
+
+function refuseSafeOnlyFlags(flags, walletName) {
+  const passed = SAFE_ONLY_FLAGS.filter((name) => flags[name] !== undefined).map((name) => `--${name}`);
+  if (passed.length === 0) return;
+  printError("safe_only_flag",
+    `${passed.join(", ")} ${passed.length === 1 ? "applies" : "apply"} only to a Safe wallet, and "${walletName}" is not one.`,
+    { suggestion: "Drop the flag, or pass --wallet <safe> to send from a Safe." }
+  );
+  process.exit(1);
+}
+
 export default async function send(args, flags) {
   const [token, amount] = args;
   const to = flags.to;
@@ -91,6 +103,7 @@ export default async function send(args, flags) {
     [],
     { refuseSafe: flags.prepare ? "send --prepare" : undefined }
   );
+  if (!safe) refuseSafeOnlyFlags(flags, walletName);
 
   const chainCheck = await validateTradingChainAsync(chain, "send");
   if (chainCheck.error) {
@@ -359,6 +372,7 @@ async function sendOnSolana({ token, amount, to, flags }) {
   }
 
   const { walletName, address } = resolveWallet({ ...flags, chain: "solana" }, [], { refuseSafe: "send" });
+  refuseSafeOnlyFlags(flags, walletName);
   if (!address) {
     printError("no_solana_account", `Wallet "${walletName}" has no Solana account.`, {
       suggestion: "Pick a mnemonic-derived wallet or one imported with --sol-key.",

@@ -84,6 +84,10 @@ time. `--wallet` defaults to `defaultWallet`.
 | `--review` | Sign in the web app regardless of value. |
 | `--timeout <sec>` | Wait for the web app and for the execution receipt. |
 
+`--signer`, `--nonce`, `--propose-only` and `--sign-mode` are Safe-only. `send` from a keystore or
+read-only wallet refuses any of them with `safe_only_flag`, before any network read, signature or
+broadcast.
+
 ## 4. `send` from a Safe
 
 1. Resolve the Safe and its signer. Check the Safe's balance (native) or token balance (ERC-20).
@@ -197,6 +201,7 @@ Safe-specific:
 | `safe_signer_not_registered` | `--signer` names a wallet that is not one of the Safe's signers. |
 | `safe_chain_mismatch` | A Safe wallet used on Solana. |
 | `safe_unsupported_command` | A command that does not support Safe wallets (§2). |
+| `safe_only_flag` | `send` from a keystore or read-only wallet with `--signer`, `--nonce`, `--propose-only` or `--sign-mode` (§3). |
 | `safe_no_keys` | `export-key` or `backup` on a Safe. |
 | `safe_chain_info_unavailable` | safe-config could not be read (network error, non-404 status, bad JSON). |
 | `safe_api_key_missing` | A tx-service chain and no `SAFE_API_KEY` / `safeApiKey`. |
