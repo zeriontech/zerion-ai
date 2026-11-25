@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { concat, decodeFunctionData, getAddress, hashTypedData, keccak256, parseAbi, parseTransaction, toHex } from "viem";
+import { decodeFunctionData, getAddress, hashTypedData, keccak256, parseAbi, parseTransaction, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 // Public base vector (Safe 1.4.1 L2, USDC transfer at nonce 78); owner keys are synthetic test keys.
@@ -282,6 +282,12 @@ describe("submitSafeCalls pre-flight failures never reach the owner signer", () 
       setup: () => install({ client: stubClient({ owners: [OWNER.address, SECOND.address, THIRD.address], threshold: 2 }) }),
     },
     {
+      name: "Path C: a 2-of-3 whose executor is a second owner, with no tx-service",
+      code: "safe_threshold_unreachable_no_tx_service",
+      setup: () => install({ client: stubClient({ owners: [OWNER.address, SECOND.address, THIRD.address], threshold: 2 }) }),
+      run: () => submit({ safe: { name: "treasury", address: SAFE, signers: ["owner-1"], executor: "owner-2" } }),
+    },
+    {
       name: "executor cannot pay execTransaction gas",
       code: "safe_executor_insufficient_gas",
       setup: () => install({ client: stubClient({ balances: { [OWNER.address]: 0n } }) }),
@@ -345,24 +351,23 @@ describe("submitSafeCalls Path A: execute", () => {
     assert.equal(result.confirmations, "1/1");
   });
 
-  it("2-of-3 whose executor is a second owner adds its v=1 signature, sorted ascending by owner", async () => {
+  it("2-of-3 whose executor is a second owner proposes the signer's signature and does not execute", async () => {
+    const service = await startTxService();
     const client = stubClient({ owners: [OWNER.address, SECOND.address, THIRD.address], threshold: 2 });
-    install({ client });
+    const spies = install({ client, txServiceUrl: service.baseUrl });
     const { value: result } = await submit({
       safe: { name: "treasury", address: SAFE, signers: ["owner-1"], executor: "owner-2" },
     });
 
-    const ownerSignature = await OWNER.signTypedData(BASE.typedData);
-    const executorSignature = `0x${"0".repeat(24)}${SECOND.address.slice(2).toLowerCase()}${"0".repeat(64)}01`;
-    const ordered = BigInt(OWNER.address) < BigInt(SECOND.address)
-      ? [ownerSignature, executorSignature]
-      : [executorSignature, ownerSignature];
-    assert.equal(broadcastSignatures(client), concat(ordered).toLowerCase());
-    assert.equal(result.status, "executed");
-    assert.equal(result.confirmations, "2/2");
+    assert.equal(client.calls.broadcasts.length, 0);
+    assert.equal(spies.signedTxs.length, 0);
+    assert.equal(service.posts.length, 1);
+    assert.equal(service.posts[0].signature, await OWNER.signTypedData(BASE.typedData));
+    assert.equal(result.status, "proposed");
+    assert.equal(result.confirmations, "1/2");
   });
 
-  it("2-of-3 with an owner executor at threshold 1 still includes only the signer's signature", async () => {
+  it("1-of-3 with an owner executor executes with only the signer's signature", async () => {
     const client = stubClient({ owners: [OWNER.address, SECOND.address, THIRD.address], threshold: 1 });
     install({ client });
     const { value: result } = await submit({

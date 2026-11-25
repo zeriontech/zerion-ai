@@ -278,10 +278,7 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
   assertHashMatches(safeTxHash, await getOnchainSafeTxHash(client, safeAddress, message));
 
   const executor = resolveExecutor(safe.executor ?? signer.walletName, signer);
-  const executorPreApproves =
-    state.owners.some((owner) => isAddressEqual(owner, executor.address)) &&
-    !isAddressEqual(executor.address, signer.address);
-  let canExecute = !flags.proposeOnly && state.threshold <= 1 + (executorPreApproves ? 1 : 0);
+  let canExecute = !flags.proposeOnly && state.threshold <= 1;
   if (canExecute && nonce !== state.nonce) {
     if (!txService) {
       throw submitError(
@@ -338,9 +335,6 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
   let txHash;
   if (canExecute) {
     entries = [executionSignature(signed, executor)];
-    if (entries.length < state.threshold && executorPreApproves) {
-      entries.push({ owner: executor.address, signature: preApprovedSignature(executor.address) });
-    }
     txHash = await execute({
       client,
       chain,
