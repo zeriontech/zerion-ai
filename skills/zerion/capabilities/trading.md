@@ -18,6 +18,7 @@ For auth see the parent `SKILL.md` (Setup + Authentication). **All trading needs
 - "Swap X for Y" / "convert tokens" / "trade"
 - "Bridge X to chain Y" (cross-chain)
 - "Send tokens to address" (native ETH/SOL or ERC-20)
+- "Send from my Safe" / "propose a Safe transaction" / "what's pending on my Safe?"
 
 For balance checks before trading → `capabilities/analyze.md`. For setting up an agent token → `capabilities/agent-management.md`. For off-chain signing (permits, EIP-712) → `capabilities/sign.md`. To sign several actions together → `capabilities/bundle.md`.
 
@@ -199,6 +200,68 @@ zerion send SOL 0.1 --to 2Nsnn… --chain solana   # explicit form
 
 Recipients accepted: 0x address (EVM), ENS name (resolved at send time), Solana base58 pubkey. SPL token sends on Solana are not yet supported via the CLI — convert to SOL first with `zerion swap solana <amount> <token> SOL`.
 
+### Send from a Safe
+
+A **Safe wallet** (`capabilities/wallet.md` § Safe wallets) can `send` native tokens and ERC-20s on EVM
+chains — nothing else. One run collects **one** owner signature, from a registered signer:
+
+```bash
+zerion send USDC 10 --to 0x... --chain base --wallet treasury                    # single signer
+zerion send ETH 0.1 --to 0x... --chain base --wallet treasury --signer ledger    # pick one of several signers
+zerion send ETH 0.1 --to 0x... --chain base --wallet treasury --propose-only     # never execute, only propose
+zerion send ETH 0.1 --to 0x... --chain base --wallet treasury --nonce next       # use the Safe's on-chain nonce
+zerion send ETH 0.1 --to 0x... --chain base --wallet treasury --nonce 42         # replace the queued tx at nonce 42
+zerion send ETH 0.1 --to 0x... --chain base --wallet treasury --review --sign-mode hash   # sign the safeTxHash in the browser
+```
+
+What happens:
+
+- **Executes** when that one signature meets the Safe's threshold (a **1-of-N** Safe), the nonce is the
+  Safe's on-chain nonce, and `--propose-only` is not set. The executor (`--executor` at `add-safe`, else the
+  signer) sends `execTransaction` and pays the gas; the Safe pays only the amount sent.
+- **Proposes** otherwise, to the chain's Safe Transaction Service; the other owners confirm and execute in
+  the Safe app (`link` in the output). The CLI never co-signs with the executor and cannot confirm or execute
+  someone else's proposal yet.
+- **Refuses before signing** on a chain with no Safe Transaction Service when it can't execute
+  (`safe_threshold_unreachable_no_tx_service`).
+- On a chain that has a Safe Transaction Service, **every** Safe send needs your Safe API key, even one that
+  executes (the next nonce is read from the service's queue): `zerion config set safeApiKey <key>` or
+  `SAFE_API_KEY`. Missing → `safe_api_key_missing`, before any signing.
+- The signer signs on the usual route: locally with **its** agent token, or in the web app when it is a
+  read-only wallet, `--review` is passed, or the value is over the review threshold (the Safe's, else the
+  signer's). The signer's agent-token policies run on the transfer itself, on both routes.
+- `--sign-mode hash` (web app only) signs the safeTxHash with eth_sign — use it when the wallet can't sign
+  EIP-712 typed data. The default is `typed`.
+- Default nonce: one past the highest pending proposal, or the on-chain nonce if none. If the service returns a
+  full page of 100 pending proposals, pass `--nonce` yourself (`safe_queue_truncated`).
+- There is **no simulation** in the CLI. The web-app review shows Zerion's Safe simulation on ethereum, base,
+  arbitrum, optimism and polygon; elsewhere a failing transfer is caught only when it reverts at execution
+  (atomically — no funds move, the executor loses the gas).
+
+Output: the usual `send` summary plus a `safe` object —
+`{ chain, safe, safeTxHash, nonce, status: "executed"|"proposed", confirmations: "1/<threshold>", link, txHash?, signedVia, signMode, route }`.
+`txHash` is present only when executed. Each successful run also writes a local receipt under
+`~/.zerion/safe-pending/<safe>/<chainId>/`.
+
+**Refused on a Safe wallet** (`safe_unsupported_command`): `swap`, `bridge`, `consolidate`, `bundle`, any
+`--prepare`, `sign-message`, `sign-typed-data`, and `send` on Solana.
+
+### Safe info & queue (read-only)
+
+```bash
+zerion safe info --wallet treasury                 # every chain cached at add-safe time
+zerion safe info --wallet treasury --chain base    # version, owners, threshold, nonce, guard, modules, tx-service
+zerion safe queue --wallet treasury --chain base   # pending Safe transactions
+```
+
+- `safe queue` reads the Safe Transaction Service from the Safe's **on-chain nonce** up (needs the Safe API
+  key) and merges local receipts. Each entry has `confirmations` (`k/threshold`), `stale` (nonce below the
+  on-chain nonce — it can never execute), `conflict` (two entries share a nonce), `source`
+  (`tx-service`/`local`/`both`) and the decoded `call` (`native`, `erc20-transfer`, or `raw`).
+- A full page of 100 sets `truncated: true` on that chain (and warns on stderr): more may be pending.
+- A chain that can't be read becomes `{ chain, error }`; the command still exits 0. Parse each row.
+- `--wallet` defaults to `defaultWallet`; a non-Safe wallet → `not_a_safe`.
+
 ## Token search (resolve symbols → addresses)
 
 ```bash
@@ -250,3 +313,16 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `slippage_exceeded` | Price moved beyond `--slippage` | Increase slippage or retry |
 | `tx_timeout` | Confirmation didn't land within `--timeout` | Bump timeout, check tx hash on explorer |
 | `invalid_destination` | Cross-chain destination missing or wrong format | Pass `--to-wallet <name>` or `--to-address <addr>` matching the `--to-chain` format |
+| `safe_unsupported_command` | A Safe wallet used with anything but EVM `send` | Use a keystore or read-only wallet |
+| `safe_signer_required` / `safe_signer_not_registered` | Safe has several signers and no `--signer`, or `--signer` isn't one of them | Pass `--signer` with a registered signer |
+| `safe_signer_not_owner` | The signer is no longer an owner of the Safe on this chain | `zerion safe info --chain <chain>`; use a current owner |
+| `safe_api_key_missing` | Chain has a Safe Transaction Service and no Safe API key is set | `zerion config set safeApiKey <key>` or `SAFE_API_KEY` |
+| `safe_threshold_unreachable_no_tx_service` | Run can't execute and the chain has no Safe Transaction Service | Not supported for multi-owner Safes on this chain yet |
+| `safe_nonce_stale` | The nonce is below the Safe's on-chain nonce (requested, or used while signing) | Retry without `--nonce`, or `--nonce next` |
+| `safe_nonce_not_executable` | `--nonce` ahead of the chain where no Safe Transaction Service exists | `--nonce next` |
+| `safe_queue_truncated` | 100+ pending proposals, so the next nonce is unknown | Pass `--nonce <n>` or `--nonce next` |
+| `safe_executor_insufficient_gas` | The executor can't pay for `execTransaction` | Fund the executor, or `--propose-only` |
+| `safe_sign_rejected` / `safe_sign_failed` | The owner rejected or the wallet failed in the web app (`reason` in the message) | For typed-data trouble, retry with `--review --sign-mode hash` |
+| `sign_mode_requires_review` | `--sign-mode hash` on the local route | Add `--review` |
+| `safe_execute_failed` | `execTransaction` reverted, or the web-app execution didn't complete | Check balances and `zerion safe queue` |
+| `safe_tx_service_error` | The Safe Transaction Service failed; for a proposal the outcome may be unknown | `zerion safe queue` before retrying |
