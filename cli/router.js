@@ -36,6 +36,10 @@ function printUsage() {
       "wallet sync --wallet <name>": "Sync wallet to Zerion app via QR code",
       "wallet sync --all": "Sync all wallets to Zerion app",
     },
+    safe: {
+      "safe info [--wallet <safe>] [--chain <chain>]": "Fresh on-chain state of a Safe wallet per chain (--chain, else every registered chain): version, owners, threshold, nonce, guard, modules, tx-service URL and app prefix. Read-only",
+      "safe queue [--wallet <safe>] [--chain <chain>]": "Pending Safe transactions per chain, from the Safe Transaction Service (needs safeApiKey) merged with local receipts: confirmations, stale and conflicting nonces, and the decoded call. Read-only",
+    },
     signing: {
       "sign-message <message> --chain <chain>": "Sign an EIP-191 (EVM) or raw (Solana) message",
       "sign-message <message> --encoding hex": "Treat message as hex bytes",

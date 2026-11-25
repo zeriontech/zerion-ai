@@ -77,6 +77,17 @@ describe("CLI routing", () => {
       assert.equal(code, 1);
       assert.equal(parseJSON(stderr).error.code, "missing_args");
     });
+
+    for (const action of ["info", "queue"]) {
+      it(`safe ${action} is listed in usage and dispatched to its handler`, async () => {
+        const help = parseJSON((await run([])).stdout);
+        assert.ok(Object.keys(help.safe).some((usage) => usage.startsWith(`safe ${action} `)));
+
+        const { code, stderr } = await run(["safe", action], { HOME: "/tmp/zerion-test-nonexistent" });
+        assert.equal(code, 1);
+        assert.equal(parseJSON(stderr).error.code, "no_wallet");
+      });
+    }
   });
 
   describe("error routing", () => {

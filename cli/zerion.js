@@ -52,6 +52,13 @@ registerSingle("sign-message", walletSignMessage);
 registerSingle("sign-typed-data", walletSignTypedData);
 registerSingle("watch", watch);
 
+// --- Safe (read-only multisig views) ---
+
+import safeInfo from "./commands/safe/info.js";
+import safeQueue from "./commands/safe/queue.js";
+register("safe", "info", safeInfo);
+register("safe", "queue", safeQueue);
+
 // --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---
 
 import positions from "./commands/analytics/positions.js";
