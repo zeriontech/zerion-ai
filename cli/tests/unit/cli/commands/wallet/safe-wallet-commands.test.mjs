@@ -73,6 +73,8 @@ before(async () => {
     exportKey: (await import("#zerion/commands/wallet/export-key.js")).default,
     backup: (await import("#zerion/commands/wallet/backup.js")).default,
     setReviewThreshold: (await import("#zerion/commands/wallet/set-review-threshold.js")).default,
+    create: (await import("#zerion/commands/wallet/create.js")).default,
+    import: (await import("#zerion/commands/wallet/import.js")).default,
   };
   registry = await import("#zerion/utils/safe/registry.js");
   ows = await import("#zerion/utils/wallet/keystore.js");
@@ -158,4 +160,20 @@ describe("Safe wallets in the wallet commands", () => {
     const listed = await run(commands.list, [], { search: "vault" });
     assert.equal(listed.output.wallets[0].reviewThresholdUsd, 5);
   });
+});
+
+describe("keystore wallet names a Safe already uses", () => {
+  for (const [label, command, flags] of [
+    ["wallet create", "create", { name: "vault" }],
+    ["wallet import", "import", { name: "vault", "evm-key": true }],
+  ]) {
+    it(`${label} refuses the name with name_in_use before asking for a passphrase`, async () => {
+      const { code, error, stderr } = await run(commands[command], [], flags);
+
+      assert.equal(code, 1);
+      assert.equal(error.code, "name_in_use");
+      assert.doesNotMatch(stderr, /passphrase/i);
+      assert.deepEqual(ows.listWallets().map((w) => w.name), ["ks"]);
+    });
+  }
 });

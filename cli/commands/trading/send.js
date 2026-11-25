@@ -78,7 +78,7 @@ export default async function send(args, flags) {
     return sendOnSolana({ token, amount, to, flags });
   }
 
-  const { walletName, address } = resolveWallet({ ...flags, chain });
+  const { walletName, address } = resolveWallet({ ...flags, chain }, [], { refuseSafe: "send" });
 
   const chainCheck = await validateTradingChainAsync(chain, "send");
   if (chainCheck.error) {
@@ -291,7 +291,7 @@ async function sendOnSolana({ token, amount, to, flags }) {
     process.exit(1);
   }
 
-  const { walletName, address } = resolveWallet({ ...flags, chain: "solana" });
+  const { walletName, address } = resolveWallet({ ...flags, chain: "solana" }, [], { refuseSafe: "send" });
   if (!address) {
     printError("no_solana_account", `Wallet "${walletName}" has no Solana account.`, {
       suggestion: "Pick a mnemonic-derived wallet or one imported with --sol-key.",

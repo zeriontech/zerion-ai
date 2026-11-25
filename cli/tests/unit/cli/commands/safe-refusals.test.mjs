@@ -1,5 +1,5 @@
-// Every signing command other than `send` refuses a Safe wallet with safe_unsupported_command, before any quote,
-// RPC call, link or signature. The chain catalog is a fixture, fetch throws on any URL, and no browser may open.
+// Every signing command refuses a Safe wallet with safe_unsupported_command, before any quote, RPC call, link or
+// signature; `send` too, until Safe send lands. The chain catalog is a fixture, fetch throws on any URL, and no browser may open.
 
 import assert from "node:assert/strict";
 import { describe, it, before, after, beforeEach, afterEach } from "node:test";
@@ -12,6 +12,7 @@ const SAFE = "0xd2e580A552Cb7a6B87E45eDe8f0102698c476d7F";
 const OTHER_SAFE = "0x87cc0d34f6111c8A7A4Bdf758a9a715A3675f941";
 const HOT = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const COLD = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+const SOL_RECIPIENT = "ebDDhKWSBXPirnzXgFWTTArfymyG4n5fpg1Y5UgwNRY";
 
 const TYPED_DATA = JSON.stringify({
   domain: { name: "Test", version: "1", chainId: 8453 },
@@ -76,6 +77,9 @@ function bundleGroup(walletName, address) {
 const SAFES = { solo: SAFE, duo: OTHER_SAFE };
 
 const INVOCATIONS = {
+  send: (wallet, chain = "base") => chain === "solana"
+    ? [["SOL", "0.01"], { wallet, to: SOL_RECIPIENT, chain }]
+    : [["ETH", "0.01"], { wallet, to: COLD, chain }],
   swap: (wallet, chain = "base") => [[chain, "1", "USDC", "ETH"], { wallet }],
   bridge: (wallet, chain = "base") => [[chain, "USDC", "1", "arbitrum", "USDC"], { wallet }],
   consolidate: (wallet, chain = "base") => [[chain, "USDC"], { wallet }],
@@ -127,6 +131,7 @@ before(async () => {
   process.env.HOME = tmpHome;
   process.env.ZERION_NO_BROWSER = "1";
   commands = {
+    send: (await import("#zerion/commands/trading/send.js")).default,
     swap: (await import("#zerion/commands/trading/swap.js")).default,
     bridge: (await import("#zerion/commands/trading/bridge.js")).default,
     consolidate: (await import("#zerion/commands/trading/consolidate.js")).default,
@@ -184,7 +189,7 @@ describe("signing commands refuse a Safe wallet", () => {
   }
 
   // consolidate validates the chain before the wallet, and sign-typed-data refuses Solana as evm_only, for every wallet.
-  for (const name of ["swap", "bridge", "sign-message"]) {
+  for (const name of ["send", "swap", "bridge", "sign-message"]) {
     it(`${name} refuses a Safe on Solana, not with safe_chain_mismatch`, () =>
       assertRefused(name, INVOCATIONS[name]("solo", "solana")));
   }
