@@ -195,6 +195,7 @@ function reportRow(group, result) {
   };
   if (result.hashes && result.hashes.length) row.hashes = result.hashes;
   if (result.error) row.error = result.error;
+  if (result.reason) row.reason = result.reason;
   return row;
 }
 

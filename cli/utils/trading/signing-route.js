@@ -30,7 +30,32 @@ export function decideSigningRoute({ walletName, force = false, usdValue = null 
     return { route: "web-app", reason: "review forced (--review)" };
   }
 
-  const threshold = getReviewThreshold(walletName);
+  return routeByThreshold(getReviewThreshold(walletName), usdValue);
+}
+
+/**
+ * Safe-owner router: the same triggers as decideSigningRoute, with the read-only
+ * check on the signing owner and the review threshold read from the Safe's name
+ * first, falling back to the signer's only when the Safe has none.
+ *
+ * @param {object} args
+ * @param {string} args.safeName - registry name of the Safe (threshold lookup)
+ * @param {string} args.signerName - resolved owner wallet name (read-only + fallback threshold)
+ * @param {boolean} [args.force] - caller forced review (--review)
+ * @param {number|null} [args.usdValue] - USD value of the SafeTx, or null if unknown
+ * @returns {{ route: 'local'|'web-app', reason: string }}
+ */
+export function decideSafeSigningRoute({ safeName, signerName, force = false, usdValue = null }) {
+  if (isReadonlyWallet(signerName)) {
+    return { route: "web-app", reason: "read-only signer" };
+  }
+  if (force) {
+    return { route: "web-app", reason: "review forced (--review)" };
+  }
+  return routeByThreshold(getReviewThreshold(safeName) ?? getReviewThreshold(signerName), usdValue);
+}
+
+function routeByThreshold(threshold, usdValue) {
   if (threshold != null) {
     if (usdValue == null) {
       return {

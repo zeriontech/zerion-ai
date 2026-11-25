@@ -10,6 +10,7 @@ import { join } from "node:path";
 
 let decideSigningRoute;
 let decideMessageSigningRoute;
+let decideSafeSigningRoute;
 let setReviewThreshold;
 let addReadonly;
 let tmpHome;
@@ -18,7 +19,7 @@ const origHome = process.env.HOME;
 before(async () => {
   tmpHome = mkdtempSync(join(tmpdir(), "zerion-route-"));
   process.env.HOME = tmpHome;
-  ({ decideSigningRoute, decideMessageSigningRoute } = await import("#zerion/utils/trading/signing-route.js"));
+  ({ decideSigningRoute, decideMessageSigningRoute, decideSafeSigningRoute } = await import("#zerion/utils/trading/signing-route.js"));
   ({ setReviewThreshold } = await import("#zerion/utils/config.js"));
   ({ addReadonly } = await import("#zerion/utils/wallet/readonly.js"));
 });
@@ -88,4 +89,55 @@ describe("decideMessageSigningRoute", () => {
     setReviewThreshold("capped-msg", 1);
     assert.equal(decideMessageSigningRoute({ walletName: "capped-msg" }).route, "local");
   });
+});
+
+describe("decideSafeSigningRoute", () => {
+  const SAFE_THRESHOLD = 100;
+  // "both" runs with the signer's threshold above and below the Safe's, so a
+  // router that takes the min, the max or the signer's first fails one of them.
+  const THRESHOLD_SOURCES = [
+    { name: "none", safe: null, signer: null },
+    { name: "safe", safe: SAFE_THRESHOLD, signer: null },
+    { name: "signer", safe: null, signer: SAFE_THRESHOLD },
+    { name: "both (signer higher)", safe: SAFE_THRESHOLD, signer: SAFE_THRESHOLD * 10 },
+    { name: "both (signer lower)", safe: SAFE_THRESHOLD, signer: SAFE_THRESHOLD / 10 },
+  ];
+  const VALUES = [
+    { name: "below", usdValue: SAFE_THRESHOLD / 2 },
+    { name: "above", usdValue: SAFE_THRESHOLD * 2 },
+    { name: "null", usdValue: null },
+  ];
+
+  let caseIndex = 0;
+  for (const readOnly of [false, true]) {
+    for (const force of [false, true]) {
+      for (const source of THRESHOLD_SOURCES) {
+        for (const value of VALUES) {
+          const index = caseIndex++;
+          const effectiveThreshold = source.safe ?? source.signer;
+          const thresholdTrips =
+            effectiveThreshold != null && (value.usdValue == null || value.usdValue > effectiveThreshold);
+          const expected = readOnly || force || thresholdTrips ? "web-app" : "local";
+
+          it(`readOnly=${readOnly} force=${force} threshold=${source.name} value=${value.name} -> ${expected}`, () => {
+            const safeName = `route-safe-${index}`;
+            const signerName = `route-signer-${index}`;
+            if (readOnly) addReadonly(signerName, "0x1234567890abcdef1234567890abcdef12345678");
+            if (source.safe != null) setReviewThreshold(safeName, source.safe);
+            if (source.signer != null) setReviewThreshold(signerName, source.signer);
+
+            const { route, reason } = decideSafeSigningRoute({
+              safeName,
+              signerName,
+              force,
+              usdValue: value.usdValue,
+            });
+            assert.equal(route, expected);
+            assert.equal(typeof reason, "string");
+            assert.ok(reason.length > 0);
+          });
+        }
+      }
+    }
+  }
 });
