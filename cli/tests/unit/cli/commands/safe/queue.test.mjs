@@ -82,6 +82,21 @@ function rpcResult(method, params) {
   return encodeFunctionResult({ abi: TEST_ABI, functionName, result: results[functionName] });
 }
 
+// Pages like the service: unexecuted entries at nonce >= nonce__gte, ordered by nonce, `limit` per page, then `next`.
+function servicePage(url) {
+  const gte = Number(url.searchParams.get("nonce__gte") ?? 0);
+  const limit = Number(url.searchParams.get("limit") ?? 100);
+  const offset = Number(url.searchParams.get("offset") ?? 0);
+  const matching = queued.filter((tx) => Number(tx.nonce) >= gte).sort((a, b) => Number(a.nonce) - Number(b.nonce));
+  const nextUrl = new URL(url);
+  nextUrl.searchParams.set("offset", String(offset + limit));
+  return {
+    count: matching.length,
+    next: offset + limit < matching.length ? nextUrl.href : null,
+    results: matching.slice(offset, offset + limit),
+  };
+}
+
 async function stubFetch(url, init = {}) {
   const href = String(url);
   requests.push(href);
@@ -89,7 +104,7 @@ async function stubFetch(url, init = {}) {
     return json(200, { shortName: "base", transactionService: `${TX_SERVICE}/` });
   }
   if (href.startsWith(SAFE_CONFIG)) return json(404, { detail: "Not found." });
-  if (href.startsWith(`${TX_SERVICE}/`)) return json(200, { count: queued.length, results: queued });
+  if (href.startsWith(`${TX_SERVICE}/`)) return json(200, servicePage(new URL(href)));
   const { id, method, params } = JSON.parse(init.body);
   return json(200, { jsonrpc: "2.0", id, result: rpcResult(method, params) });
 }
@@ -225,11 +240,11 @@ describe("safe queue", () => {
     assert.equal(row.nonce, ONCHAIN_NONCE);
     assert.equal(row.txService, TX_SERVICE);
     assert.equal(row.error, undefined);
+    assert.equal(row.truncated, undefined);
 
     const summary = row.queue.map((e) => [e.safeTxHash, e.nonce, e.source, e.confirmations, e.stale, e.conflict]);
     assert.deepEqual(summary, [
       [localStaleHash, 3, "local", "1/2", true, false],
-      [hashOf(4), 4, "tx-service", "2/2", true, false],
       [sharedHash, 5, "both", "2/2", false, false],
       [hashOf(6), 6, "tx-service", "1/2", false, true],
       [hashOf(0x66), 6, "tx-service", "0/2", false, true],
@@ -239,11 +254,41 @@ describe("safe queue", () => {
       assert.equal(entry.stale, entry.nonce < ONCHAIN_NONCE, entry.safeTxHash);
       assert.equal(entry.conflict, row.queue.filter((other) => other.nonce === entry.nonce).length > 1, entry.safeTxHash);
     }
-    assert.deepEqual(row.queue[2].call, { kind: "native", to: COLD, value: "1000" });
+    assert.deepEqual(row.queue.find((e) => e.safeTxHash === sharedHash).call, { kind: "native", to: COLD, value: "1000" });
 
     const serviceCalls = requests.filter((r) => r.startsWith(TX_SERVICE));
     assert.equal(serviceCalls.length, 1);
-    assert.match(serviceCalls[0], new RegExp(`/api/v1/safes/${SAFE}/multisig-transactions/\\?executed=false&nonce__gte=0&`));
+    assert.match(serviceCalls[0], new RegExp(`/api/v1/safes/${SAFE}/multisig-transactions/\\?executed=false&nonce__gte=${ONCHAIN_NONCE}&`));
+  });
+
+  it("still lists the pending entry and its conflict partner behind more than a page of never-executed stale entries", async () => {
+    queued = Array.from({ length: 150 }, (_, i) => serviceTx(hashOf(0x1000 + i), { to: COLD, value: "1", nonce: i % ONCHAIN_NONCE }, 1));
+    queued.push(
+      serviceTx(hashOf(0xa), { to: COLD, value: "10", nonce: ONCHAIN_NONCE }, 1),
+      serviceTx(hashOf(0xb), { to: HOT, value: "11", nonce: ONCHAIN_NONCE }, 0),
+    );
+
+    const { code, output, stderr } = await run(safeQueue, [], { wallet: "treasury" });
+
+    assert.equal(code, 0, stderr);
+    const [row] = output.chains;
+    assert.deepEqual(row.queue.map((e) => [e.safeTxHash, e.nonce, e.stale, e.conflict]), [
+      [hashOf(0xa), ONCHAIN_NONCE, false, true],
+      [hashOf(0xb), ONCHAIN_NONCE, false, true],
+    ]);
+    assert.equal(row.truncated, undefined);
+  });
+
+  it("marks the row truncated and warns when the service returns a full page of pending entries", async () => {
+    queued = Array.from({ length: 120 }, (_, i) => serviceTx(hashOf(0x2000 + i), { to: COLD, value: "1", nonce: ONCHAIN_NONCE + i }, 1));
+
+    const { code, output, stderr } = await run(safeQueue, [], { wallet: "treasury" });
+
+    assert.equal(code, 0, stderr);
+    const [row] = output.chains;
+    assert.equal(row.truncated, true);
+    assert.equal(row.queue.length, 100);
+    assert.match(stderr, /Warning: .*base.* first 100/);
   });
 
   it("keeps local receipts and reports safe_api_key_missing when the chain has a service but no key is set", async () => {

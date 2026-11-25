@@ -12,6 +12,7 @@ const PENDING_DIR = join(CONFIG_DIR, "safe-pending");
 const ERC20_TRANSFER_ABI = parseAbi(["function transfer(address to, uint256 amount)"]);
 const ERC20_TRANSFER_SELECTOR = "0xa9059cbb";
 const ERC20_TRANSFER_DATA_LENGTH = 2 + 8 + 64 * 2;
+const TX_SERVICE_PAGE_SIZE = 100;
 
 export function decodeCall({ to, value, data, operation }) {
   const hex = data ? data.toLowerCase() : "0x";
@@ -129,10 +130,17 @@ async function queueRow(chain, safeAddress) {
     try {
       const apiKey = requireSafeApiKey({ txServiceUrl: chainInfo.txServiceUrl });
       remote = await createTxServiceClient({ baseUrl: chainInfo.txServiceUrl, apiKey })
-        .listQueued(safeAddress, { nonceGte: 0 });
+        .listQueued(safeAddress, { nonceGte: Number(state.nonce) });
     } catch (err) {
       row.error = errorOf(err);
     }
+  }
+  if (remote.length >= TX_SERVICE_PAGE_SIZE) {
+    row.truncated = true;
+    process.stderr.write(
+      `Warning: the Safe Transaction Service returned a full page for ${chain}; ` +
+      `only the first ${TX_SERVICE_PAGE_SIZE} pending entries from nonce ${state.nonce} are listed.\n`,
+    );
   }
   const local = readLocalReceipts(safeAddress, chainId);
   row.queue = toEntries(mergeQueue(remote, local, state.threshold), state.nonce);
