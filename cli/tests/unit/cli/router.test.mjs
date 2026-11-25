@@ -78,6 +78,13 @@ describe("CLI routing", () => {
       assert.equal(parseJSON(stderr).error.code, "missing_args");
     });
 
+    it("send from a Safe is listed in usage with its Safe flags", async () => {
+      const help = parseJSON((await run([])).stdout);
+      const usage = Object.keys(help.trading).find((u) => u.startsWith("send ") && u.includes("--wallet <safe>"));
+      assert.ok(usage);
+      for (const flag of ["--signer", "--nonce", "--propose-only", "--sign-mode"]) assert.ok(usage.includes(flag), flag);
+    });
+
     for (const action of ["info", "queue"]) {
       it(`safe ${action} is listed in usage and dispatched to its handler`, async () => {
         const help = parseJSON((await run([])).stdout);

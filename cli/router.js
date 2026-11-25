@@ -65,6 +65,7 @@ function printUsage() {
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <addr>": "Bridge to a raw destination address (chain-format must match)",
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --quote": "List every route and its price without executing — even a single route, which plain `bridge` would execute",
       "send <token> <amount> --to <addr> [--chain <chain>]": "Send native ETH/SOL or ERC-20 to an address (chain auto-detected from address format)",
+      "send <token> <amount> --to <addr> --chain <chain> --wallet <safe> [--signer <wallet>] [--nonce <n>|next] [--propose-only] [--sign-mode typed|hash]": "Send from a Safe wallet (EVM only): one signer signs the SafeTx, which executes when that signature meets a threshold of 1, else is proposed to the Safe Transaction Service (needs safeApiKey) — see capabilities/trading.md",
       "consolidate <chain> <to-token>": "Sweep all wallet positions on <chain> into <to-token> (dry-run by default; --execute to broadcast LOCALLY; --concurrency <n> for plan-phase quote concurrency, auto-picked by API-key tier)",
       "<send|swap|bridge|consolidate> ... --prepare": "Build + gate a command but emit a nonce-free prepared-group envelope to stdout instead of executing (for `zerion bundle`)",
       "bundle --group <envelope> [--group <envelope> ...]": "Sign several prepared groups together in one web-app handoff (or locally when all auto-sign); same signer address, per-group results",

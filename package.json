@@ -32,6 +32,7 @@
     "test:integration": "node --test --test-concurrency=1 'cli/tests/integration/**/*.test.mjs'",
     "test:integration:auth": "node --test cli/tests/integration/auth.test.mjs",
     "test:all": "node --test 'cli/tests/**/*.test.mjs'",
+    "test:fork": "node --test --test-concurrency=1 'cli/tests/fork/**/*.test.mjs'",
     "prepublishOnly": "npm test"
   },
   "imports": {
