@@ -246,6 +246,9 @@ Output: the usual `send` summary plus a `safe` object —
 **Refused on a Safe wallet** (`safe_unsupported_command`): `swap`, `bridge`, `consolidate`, `bundle`, any
 `--prepare`, `sign-message`, `sign-typed-data`, and `send` on Solana.
 
+**Safe-only flags** (`safe_only_flag`): `send` from a keystore or read-only wallet refuses `--signer`, `--nonce`,
+`--propose-only` and `--sign-mode` before reading the chain, signing or broadcasting.
+
 ### Safe info & queue (read-only)
 
 ```bash
@@ -314,6 +317,7 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `tx_timeout` | Confirmation didn't land within `--timeout` | Bump timeout, check tx hash on explorer |
 | `invalid_destination` | Cross-chain destination missing or wrong format | Pass `--to-wallet <name>` or `--to-address <addr>` matching the `--to-chain` format |
 | `safe_unsupported_command` | A Safe wallet used with anything but EVM `send` | Use a keystore or read-only wallet |
+| `safe_only_flag` | `--signer`, `--nonce`, `--propose-only` or `--sign-mode` on a `send` from a non-Safe wallet | Drop the flag, or `--wallet <safe>` |
 | `safe_signer_required` / `safe_signer_not_registered` | Safe has several signers and no `--signer`, or `--signer` isn't one of them | Pass `--signer` with a registered signer |
 | `safe_signer_not_owner` | The signer is no longer an owner of the Safe on this chain | `zerion safe info --chain <chain>`; use a current owner |
 | `safe_api_key_missing` | Chain has a Safe Transaction Service and no Safe API key is set | `zerion config set safeApiKey <key>` or `SAFE_API_KEY` |
