@@ -70,7 +70,7 @@ async function startStub({ onPost = () => ({ status: 201, store: true }), onGet 
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   state.baseUrl = `http://127.0.0.1:${server.address().port}`;
-  state.close = () => new Promise((resolve) => server.close(resolve));
+  state.close = () => new Promise((resolve) => (server.listening ? server.close(() => resolve()) : resolve()));
   return state;
 }
 
@@ -174,6 +174,7 @@ describe("tx-service retry backoff", () => {
 });
 
 describe("tx-service API key handling", () => {
+  let stub;
   let stderr;
   let originalWrite;
   beforeEach(() => {
@@ -184,8 +185,9 @@ describe("tx-service API key handling", () => {
       return originalWrite.call(process.stderr, chunk, ...rest);
     };
   });
-  afterEach(() => {
+  afterEach(async () => {
     process.stderr.write = originalWrite;
+    await stub?.close();
   });
 
   function assertNoKey(err) {
@@ -197,7 +199,7 @@ describe("tx-service API key handling", () => {
 
   it("every request sends the bearer key, and no failure path leaks it", async () => {
     const echo = ({ req }) => ({ detail: `bad auth: ${req.headers.authorization}` });
-    const stub = await startStub({
+    stub = await startStub({
       onPost: ({ req, body }) => {
         if (body.nonce === 400) return { status: 400, store: false, body: echo({ req }) };
         return { status: 503, store: false, body: echo({ req }) };
@@ -253,10 +255,11 @@ describe("tx-service reads", () => {
   afterEach(() => stub?.close());
 
   it("getTransaction returns null on 404 and listQueued maps the queue page", async () => {
+    let queueSearch;
     stub = await startStub({
       onGet: ({ url }) => {
         if (!url.pathname.startsWith(`/api/v1/safes/${SAFE}/multisig-transactions/`)) return null;
-        assert.equal(url.search, "?executed=false&nonce__gte=78&ordering=nonce&limit=100");
+        queueSearch = url.search;
         return {
           status: 200,
           body: {
@@ -290,6 +293,7 @@ describe("tx-service reads", () => {
         confirmationsRequired: 2,
       },
     ]);
+    assert.equal(queueSearch, "?executed=false&nonce__gte=78&ordering=nonce&limit=100");
   });
 });
 
