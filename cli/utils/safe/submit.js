@@ -9,6 +9,7 @@ import { estimateGasWithFallback, NATIVE_TRANSFER_GAS, ERC20_TRANSFER_GAS } from
 import { signViaWebApp, toTransactionEVM } from "../web-app/handoff.js";
 import { getSafeChainInfo } from "./chain-info.js";
 import { readSafeState, assertSupportedVersion, getOnchainSafeTxHash } from "./contracts.js";
+import { getSafeApiKey } from "../config.js";
 import { requireSafeApiKey, createTxServiceClient, QUEUE_PAGE_LIMIT } from "./tx-service.js";
 import { selectNonce, isStale } from "./nonce.js";
 import { buildSafeTxMessage, toSafeTypedData, hashSafeTx, assertHashMatches, ZERO_ADDRESS } from "./safe-tx.js";
@@ -238,13 +239,14 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
   const chainIdNum = chainConfig.chainIdNum;
 
   const chainInfo = await deps.getSafeChainInfo(chainIdNum);
-  const apiKey = requireSafeApiKey(chainInfo);
-  const txService = chainInfo.txServiceUrl
-    ? deps.createTxServiceClient({ baseUrl: chainInfo.txServiceUrl, apiKey })
-    : null;
+  const apiKey = chainInfo.txServiceUrl ? getSafeApiKey() : null;
+  const apiKeyMissing = Boolean(chainInfo.txServiceUrl) && !apiKey;
+  if (apiKeyMissing && flags.proposeOnly) requireSafeApiKey(chainInfo);
+  const txService = apiKey ? deps.createTxServiceClient({ baseUrl: chainInfo.txServiceUrl, apiKey }) : null;
 
   const client = await deps.getPublicClient(chain);
   const state = await readSafeState(client, safeAddress);
+  if (apiKeyMissing && state.threshold > 1) requireSafeApiKey(chainInfo);
   assertSupportedVersion(state.version);
   if (!state.owners.some((owner) => isAddressEqual(owner, signer.address))) {
     throw submitError(
@@ -280,7 +282,7 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
   const executor = resolveExecutor(safe.executor ?? signer.walletName, signer);
   let canExecute = !flags.proposeOnly && state.threshold <= 1;
   if (canExecute && nonce !== state.nonce) {
-    if (!txService) {
+    if (!chainInfo.txServiceUrl) {
       throw submitError(
         "safe_nonce_not_executable",
         `Nonce ${nonce} is ahead of the Safe's on-chain nonce ${state.nonce}, so it cannot execute now, ` +
@@ -288,6 +290,7 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
         { suggestion: "Retry with --nonce next." }
       );
     }
+    if (apiKeyMissing) requireSafeApiKey(chainInfo);
     process.stderr.write(
       `Nonce ${nonce} is ahead of the Safe's on-chain nonce ${state.nonce}; proposing instead of executing.\n`
     );
@@ -298,6 +301,12 @@ export async function submitSafeCalls({ safe, signer, chain, calls, usdValue = n
       "safe_threshold_unreachable_no_tx_service",
       `Safe ${safeAddress} needs ${state.threshold} signatures, this run can collect fewer, ` +
         `and chain ${chain} has no Safe Transaction Service to collect the rest.`
+    );
+  }
+  if (apiKeyMissing) {
+    process.stderr.write(
+      `WARNING: no Safe API key is set, so queued proposals for Safe ${safeAddress} on ${chain} were not checked; ` +
+        `executing at the on-chain nonce ${nonce} invalidates any queued proposal with that nonce.\n`
     );
   }
 
