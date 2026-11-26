@@ -8,7 +8,9 @@ or read-only wallets that own the Safe) and an optional **executor** wallet that
 `execTransaction`. It shares one name namespace with the other wallet kinds, lives in
 `~/.zerion/safe-wallets.json` (mode 0600), and its per-chain data (version, owners, threshold,
 tx-service, app prefix) is a display cache only. Owners, threshold, version and nonce are re-read
-on-chain before every signature.
+on-chain before every signature. `wallet add-safe` takes the signers from `--signer`; without it,
+the signer is the one local EVM keystore or read-only wallet that owns the Safe on a chain it read,
+and several such wallets refuse with `safe_signer_ambiguous` so the user picks with `--signer`.
 
 In this phase a Safe can only `send`. Commands keep building one plain `{ to, value, data }` call,
 and for a Safe the orchestrator (`submitSafeCalls`, `cli/utils/safe/submit.js`) turns it into a
@@ -79,9 +81,13 @@ phase.
 
 The Safe Transaction Service requires an API key, and Zerion does not ship one. The user supplies
 it as `safeApiKey` (`zerion config set safeApiKey <key>`) or the `SAFE_API_KEY` environment
-variable, which wins. On a chain that has a tx-service, a missing key fails with
-`safe_api_key_missing` before any signing prompt, also when the run would execute, because the
-nonce is chosen from the service's queue.
+variable, which wins. On a chain that has a tx-service, a run that would propose (`--propose-only`,
+a threshold above 1, or a nonce ahead of the chain) fails with `safe_api_key_missing` before any
+signing prompt, and `safe queue` reports it on that chain's row. A run that will execute (threshold 1, no `--propose-only`)
+needs no key: it skips the queue read, executes at the on-chain nonce, and warns on stderr that
+queued proposals were not checked, since executing invalidates any queued proposal at that nonce.
+This narrows the original rule, which required the key on every run there, so that a 1-of-N Safe
+can send without a Safe account.
 
 ### Discovery through safe-config
 

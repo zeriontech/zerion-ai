@@ -88,6 +88,7 @@ A **Safe wallet** names a Safe multisig, the wallets that sign for it, and optio
 gas to execute:
 
 ```bash
+zerion wallet add-safe 0xSafe… --name treasury                                    # signer: the one local wallet that owns it
 zerion wallet add-safe 0xSafe… --name treasury --signer ledger                     # one signer
 zerion wallet add-safe 0xSafe… --name treasury --signer hot,ledger --executor hot  # several signers, gas paid by "hot"
 zerion wallet add-safe 0xSafe… --name treasury --signer hot --chains base,arbitrum # only read these chains
@@ -95,6 +96,10 @@ zerion wallet add-safe 0xSafe… --name treasury --signer hot --chains base,arbi
 
 - `--signer` takes one or more existing **EVM keystore or EVM read-only** wallets (comma-separated), and so
   does `--executor`; add them first. A signer that is a read-only wallet signs in the browser.
+- Without `--signer`, `add-safe` matches the Safe's owners on every chain it read against your EVM keystore
+  and read-only wallets. Exactly one match becomes the signer (named on stderr); several refuse with
+  `safe_signer_ambiguous` listing them in `candidates`, so re-run with `--signer`; none →
+  `safe_signer_not_owner`.
 - `add-safe` reads the Safe on every EVM trading chain (or `--chains`): version, owners, threshold, nonce,
   and whether the chain has a Safe Transaction Service. It saves the Safe only if at least one signer owns it
   on at least one readable chain, and warns on stderr for each chain where a signer is not an owner. Chains
@@ -111,7 +116,7 @@ zerion wallet add-safe 0xSafe… --name treasury --signer hot --chains base,arbi
 - Read commands (`portfolio`, `positions`, …) work with the Safe's name. Sending, `safe info` and
   `safe queue` → `capabilities/trading.md`.
 - Proposing to a Safe Transaction Service needs your own Safe API key:
-  `zerion config set safeApiKey <key>` (or `SAFE_API_KEY`, which wins).
+  `zerion config set safeApiKey <key>` (or `SAFE_API_KEY`, which wins). A 1-of-N send that executes does not.
 
 ## Review threshold — auto-sign small, ask a human for big
 
@@ -141,7 +146,7 @@ zerion wallet set-review-threshold trading-bot off     # always auto-sign (the d
 |-----------|------|-------|
 | `wallet list`, `wallet fund` | **Agent** | Read-only. Safe to invoke autonomously. |
 | `wallet add` | **Agent** | Address-only, no secrets. Safe to invoke, but understand it makes every signature go through the browser. |
-| `wallet add-safe` | **Agent** | No secrets, no prompts; reads the Safe on-chain. Its signers must already exist. |
+| `wallet add-safe` | **Agent** | No secrets, no prompts; reads the Safe on-chain. Its signers must already exist (named with `--signer`, or detected among your wallets). |
 | `wallet set-review-threshold` | **Agent** | Config-only. Safe to invoke; confirm the USD amount with the user first. |
 | `wallet create`, `wallet import`, `wallet backup`, `wallet export-key`, `wallet delete`, `wallet sync` | **Manual** | Require passphrase or interactive input. Humans must run these directly — agents must not call them. |
 
@@ -153,7 +158,7 @@ zerion wallet list --search <query>       # Filter by name or address
 zerion wallet list --limit <n> --offset <n>   # Paginate
 zerion wallet fund --wallet <name>        # Show EVM + Solana deposit addresses
 zerion wallet add <address|ens> --name <name>          # Add a read-only wallet (see above)
-zerion wallet add-safe <address|ens> --name <name> --signer <wallet>[,<wallet>…] [--executor <wallet>] [--chains <a,b>]   # Add a Safe wallet (see above)
+zerion wallet add-safe <address|ens> --name <name> [--signer <wallet>[,<wallet>…]] [--executor <wallet>] [--chains <a,b>]   # Add a Safe wallet (see above)
 zerion wallet set-review-threshold <wallet> <usd|off>   # Human-review ceiling (see above)
 ```
 
@@ -232,7 +237,8 @@ After step 1's agent-token prompt, the wallet is ready for autonomous trading vi
 | `bad_sol_key` | Invalid base58 keypair | Solana keys are base58, ≥87 chars |
 | `name_in_use` | Name already taken by another wallet kind (`wallet add`, `add-safe`, `create`, `import`), or `add-safe` reuses a Safe's name for another address | Pick another `--name` |
 | `safe_invalid_address` | `add-safe` value isn't a 0x address or `.eth` name | Check the address format |
-| `safe_signer_not_owner` | No `--signer` owns the Safe on any chain that could be read | Add the right owner wallet as `--signer` |
+| `safe_signer_not_owner` | No `--signer` (or, without `--signer`, none of your EVM wallets) owns the Safe on any chain that could be read | Add the right owner wallet, then pass it as `--signer` |
+| `safe_signer_ambiguous` | No `--signer`, and several of your EVM wallets own the Safe (`candidates`) | Re-run with `--signer <wallet>` |
 | `safe_not_deployed` | No contract at the address on any chain read | Check the address and `--chains` |
 | `safe_version_unsupported` | Safe older than 1.3.0 (or unknown version) on every chain read | Not supported |
 | `safe_unreadable` | The Safe could not be read on any chain (RPC errors, timeouts) | Retry, or narrow with `--chains` |

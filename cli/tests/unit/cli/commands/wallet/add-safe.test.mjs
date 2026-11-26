@@ -33,6 +33,7 @@ let safePath;
 let requests;
 let onchain;
 let safeConfigDown;
+let ksAddress;
 const origHome = process.env.HOME;
 const originalFetch = globalThis.fetch;
 
@@ -162,7 +163,7 @@ before(async () => {
   addReadonly("hot", HOT);
   addReadonly("cold", COLD);
   addReadonly("sol-ro", "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM");
-  ows.createWallet("ks-wallet");
+  ksAddress = ows.createWallet("ks-wallet").evmAddress;
 });
 
 after(() => {
@@ -356,6 +357,55 @@ describe("wallet add-safe", () => {
       assert.deepEqual(requests, []);
     });
   }
+});
+
+describe("wallet add-safe without --signer", () => {
+  for (const [kind, signer, owner] of [
+    ["read-only", "hot", () => HOT],
+    ["keystore", "ks-wallet", () => ksAddress],
+  ]) {
+    it(`uses the one local ${kind} wallet that owns the Safe as its signer and says so`, async () => {
+      onchain = { base: deployed("1.4.1", [owner(), STRANGER], 2), ethereum: { code: "0x" } };
+
+      const { code, output, stderr } = await run(walletAddSafe, [SAFE], { name: "treasury", chains: "base,ethereum" });
+
+      assert.equal(code, 0, stderr);
+      assert.deepEqual(output.safe.signers, [signer]);
+      assert.deepEqual(registry.getSafe("treasury").signers, [signer]);
+      assert.match(stderr, new RegExp(`Signer: "${signer}" \\(${owner()}\\) owns the Safe, so it is the signer`));
+    });
+  }
+
+  it("refuses with safe_signer_ambiguous listing every local owner, across chains, and saves nothing", async () => {
+    onchain = { base: deployed("1.4.1", [HOT, STRANGER], 2), ethereum: deployed("1.3.0", [COLD, ksAddress], 2) };
+
+    const { code, error } = await run(walletAddSafe, [SAFE], { name: "treasury", chains: "base,ethereum" });
+
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_signer_ambiguous");
+    assert.deepEqual([...error.candidates].sort(), ["cold", "hot", "ks-wallet"]);
+    assert.match(error.suggestion, /--signer/);
+    assert.equal(existsSync(safePath), false);
+  });
+
+  it("refuses with safe_signer_not_owner when no local wallet owns the Safe", async () => {
+    onchain = { base: deployed("1.4.1", [STRANGER]) };
+
+    const { code, error } = await run(walletAddSafe, [SAFE], { name: "treasury", chains: "base" });
+
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_signer_not_owner");
+    assert.deepEqual(error.signers, []);
+    assert.equal(existsSync(safePath), false);
+  });
+
+  it("keeps missing_signer for a --signer given with no wallet, before any chain read", async () => {
+    const { code, error } = await run(walletAddSafe, [SAFE], { name: "treasury", signer: true, chains: "base" });
+
+    assert.equal(code, 1);
+    assert.equal(error.code, "missing_signer");
+    assert.deepEqual(requests, []);
+  });
 });
 
 describe("wallet add name check", () => {

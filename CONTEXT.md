@@ -34,7 +34,7 @@ A first-class saved wallet ("my wallet") that has **no secret material** — jus
 _Distinct from_: **watch entry** — a watchlist address used only for tracking/lookups, never a wallet.
 
 **Safe wallet**:
-A saved wallet for a Safe multisig, added with `zerion wallet add-safe <address> --name <name> --signer <wallet>[,…] [--executor <wallet>]` and stored in `~/.zerion/safe-wallets.json`. It holds **no key material**: the Safe address, its **signers**, an optional **executor**, and a per-chain display cache (version, owners, threshold, tx-service, app prefix) that is never trusted for signing — owners, threshold, version and nonce are re-read on-chain before every signature. Shares one name namespace with keystore and read-only wallets. Only `send` (EVM) signs for it; every other signing command refuses with `safe_unsupported_command` (ADR-0007, `docs/prd/cli-safe.md`).
+A saved wallet for a Safe multisig, added with `zerion wallet add-safe <address> --name <name> [--signer <wallet>[,…]] [--executor <wallet>]` (without `--signer`, the one local EVM wallet that owns the Safe) and stored in `~/.zerion/safe-wallets.json`. It holds **no key material**: the Safe address, its **signers**, an optional **executor**, and a per-chain display cache (version, owners, threshold, tx-service, app prefix) that is never trusted for signing — owners, threshold, version and nonce are re-read on-chain before every signature. Shares one name namespace with keystore and read-only wallets. Only `send` (EVM) signs for it; every other signing command refuses with `safe_unsupported_command` (ADR-0007, `docs/prd/cli-safe.md`).
 _Distinct from_: **read-only wallet** — a read-only wallet is itself the signer (in the browser); a Safe wallet never signs, its **signers** do.
 
 **Signer**:
@@ -50,7 +50,7 @@ The EIP-712 message a Safe's owners sign: `{ to, value, data, operation, safeTxG
 The EIP-712 hash of a **SafeTx**. The CLI computes it locally and must match the Safe's on-chain `getTransactionHash` before anyone signs. It keys proposals on the **tx-service**, local receipts, and Safe app links.
 
 **Tx-service**:
-The Safe Transaction Service for a chain, where proposals wait for other owners' confirmations. Discovered from `https://safe-config.safe.global/api/v1/chains/<chainId>/`; some chains have none. Needs a user-supplied API key (`SAFE_API_KEY` env, else `safeApiKey` config).
+The Safe Transaction Service for a chain, where proposals wait for other owners' confirmations. Discovered from `https://safe-config.safe.global/api/v1/chains/<chainId>/`; some chains have none. Needs a user-supplied API key (`SAFE_API_KEY` env, else `safeApiKey` config) to propose or list the queue; a run that executes skips it without one.
 
 **Stale proposal**:
 A **SafeTx** whose nonce is below the Safe's on-chain nonce. It can never execute, so the CLI never signs, executes or proposes one (`safe_nonce_stale`), and `safe queue` marks it `stale: true`.

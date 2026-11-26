@@ -249,14 +249,6 @@ describe("submitSafeCalls pre-flight failures never reach the owner signer", () 
       run: () => submit({ calls: [{ ...CALL, data: "transfer(alice)" }] }),
     },
     {
-      name: "missing API key on a chain with a tx-service, even for a 1-of-1 that would execute",
-      code: "safe_api_key_missing",
-      setup: () => {
-        delete process.env.SAFE_API_KEY;
-        return install({ client: stubClient(), txServiceUrl: "http://127.0.0.1:9" });
-      },
-    },
-    {
       name: "signer no longer an owner",
       code: "safe_signer_not_owner",
       setup: () => install({ client: stubClient({ owners: [SECOND.address, THIRD.address] }) }),
@@ -313,6 +305,50 @@ describe("submitSafeCalls pre-flight failures never reach the owner signer", () 
     await submit();
     assert.deepEqual(spies.policies, [{ ...CALL, chain: "base", walletName: "owner-1" }]);
   });
+});
+
+describe("submitSafeCalls on a tx-service chain without a Safe API key", () => {
+  const QUEUED_AT_ONCHAIN_NONCE = [{ safeTxHash: `0x${"cd".repeat(32)}`, nonce: 78, confirmations: [] }];
+
+  for (const flags of [{}, { nonce: "78" }, { nonce: "next" }]) {
+    it(`a 1-of-1 with ${JSON.stringify(flags)} executes at the on-chain nonce without asking the service, and warns`, async () => {
+      delete process.env.SAFE_API_KEY;
+      const service = await startTxService({ queued: QUEUED_AT_ONCHAIN_NONCE });
+      const client = stubClient();
+      const spies = install({ client, txServiceUrl: service.baseUrl });
+
+      const { value: result, stderr } = await submit({ flags });
+
+      assert.equal(service.authHeaders.length, 0);
+      assert.equal(spies.signer.length, 1);
+      assert.equal(client.calls.broadcasts.length, 1);
+      assert.equal(result.status, "executed");
+      assert.equal(result.nonce, "78");
+      assert.equal(result.safeTxHash, BASE.safeTxHash);
+      assert.match(stderr, new RegExp(`WARNING: no Safe API key is set, so queued proposals for Safe ${SAFE} on base were not checked`));
+    });
+  }
+
+  const twoOfThree = () => stubClient({ owners: [OWNER.address, SECOND.address, THIRD.address], threshold: 2 });
+  for (const { name, client, flags } of [
+    { name: "a 1-of-1 with --propose-only", client: stubClient, flags: { proposeOnly: true } },
+    { name: "a 1-of-1 whose --nonce is ahead of the chain, so it would propose", client: stubClient, flags: { nonce: "80" } },
+    { name: "a 2-of-3", client: twoOfThree, flags: {} },
+    { name: "a 2-of-3 with --propose-only", client: twoOfThree, flags: { proposeOnly: true } },
+  ]) {
+    it(`${name} fails with safe_api_key_missing before signing`, async () => {
+      delete process.env.SAFE_API_KEY;
+      const service = await startTxService();
+      const stub = client();
+      const spies = install({ client: stub, txServiceUrl: service.baseUrl });
+
+      await assert.rejects(submit({ flags }), (err) => err.code === "safe_api_key_missing");
+
+      assert.equal(spies.signer.length, 0);
+      assert.equal(service.authHeaders.length, 0);
+      assert.equal(stub.calls.broadcasts.length, 0);
+    });
+  }
 });
 
 describe("submitSafeCalls Path A: execute", () => {
