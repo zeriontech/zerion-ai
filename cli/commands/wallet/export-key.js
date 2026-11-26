@@ -4,6 +4,7 @@ import { getConfigValue } from "../../utils/config.js";
 import { readPassphrase } from "../../utils/common/prompt.js";
 import { deriveEvmKey, deriveSolanaKey } from "../../utils/wallet/derive-keys.js";
 import { isReadonlyWallet } from "../../utils/wallet/readonly.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 /**
  * zerion wallet export-key --wallet <name> [--chain evm|solana|all] [--index N]
@@ -27,6 +28,14 @@ export default async function walletExportKey(args, flags) {
     printError("readonly_no_keys",
       `Read-only wallet "${walletName}" has no private key to export — it holds no key material.`,
       { suggestion: "Export keys from the original wallet wherever its keys actually live." }
+    );
+    process.exit(1);
+  }
+
+  if (isSafeWallet(walletName)) {
+    printError("safe_no_keys",
+      `Safe wallet "${walletName}" has no private key to export — it holds no key material.`,
+      { suggestion: "Export keys from the signer wallets that own the Safe." }
     );
     process.exit(1);
   }

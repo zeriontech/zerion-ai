@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, parseEther, parseUnits, formatEther, formatUnits } from "viem";
+import { encodeFunctionData, isAddress, parseAbi, parseEther, parseUnits, formatEther, formatUnits } from "viem";
 import { resolveToken } from "../../utils/trading/resolve-token.js";
 import { requireAgentToken, parseTimeout, handleTradingError, enforceExecutablePolicies } from "../../utils/trading/guards.js";
 import * as api from "../../utils/api/client.js";
@@ -16,6 +16,7 @@ import { formatSwapQuote } from "../../utils/common/format.js";
 import { validateTradingChainAsync } from "../../utils/common/validate.js";
 import { isSolana } from "../../utils/chain/registry.js";
 import { sendSolanaNative } from "../../utils/chain/solana-send.js";
+import { submitSafeCalls } from "../../utils/safe/submit.js";
 import { buildUnsignedSolanaTransfer, solanaReceiptAdapter } from "../../utils/chain/solana-handoff.js";
 
 const ERC20_TRANSFER_ABI = parseAbi([
@@ -24,6 +25,18 @@ const ERC20_TRANSFER_ABI = parseAbi([
 
 const EVM_ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
+
+const SAFE_ONLY_FLAGS = ["signer", "nonce", "propose-only", "sign-mode"];
+
+function refuseSafeOnlyFlags(flags, walletName) {
+  const passed = SAFE_ONLY_FLAGS.filter((name) => flags[name] !== undefined).map((name) => `--${name}`);
+  if (passed.length === 0) return;
+  printError("safe_only_flag",
+    `${passed.join(", ")} ${passed.length === 1 ? "applies" : "apply"} only to a Safe wallet, and "${walletName}" is not one.`,
+    { suggestion: "Drop the flag, or pass --wallet <safe> to send from a Safe." }
+  );
+  process.exit(1);
+}
 
 export default async function send(args, flags) {
   const [token, amount] = args;
@@ -54,6 +67,13 @@ export default async function send(args, flags) {
     process.exit(1);
   }
 
+  if (recipientIsEvm && !isAddress(to)) {
+    printError("invalid_address", `Invalid recipient address: ${to} has a wrong EIP-55 checksum`, {
+      suggestion: "Copy the address again, or pass it all-lowercase to skip the checksum.",
+    });
+    process.exit(1);
+  }
+
   const chain = flags.chain
     || (recipientIsSolana ? "solana" : null)
     || getConfigValue("defaultChain")
@@ -78,7 +98,12 @@ export default async function send(args, flags) {
     return sendOnSolana({ token, amount, to, flags });
   }
 
-  const { walletName, address } = resolveWallet({ ...flags, chain });
+  const { walletName, address, safe, signer } = resolveWallet(
+    { ...flags, chain },
+    [],
+    { refuseSafe: flags.prepare ? "send --prepare" : undefined }
+  );
+  if (!safe) refuseSafeOnlyFlags(flags, walletName);
 
   const chainCheck = await validateTradingChainAsync(chain, "send");
   if (chainCheck.error) {
@@ -124,6 +149,11 @@ export default async function send(args, flags) {
     // so read-only wallets (no keystore entry) resolve too.
     const walletAddress = address;
 
+    if (safe) {
+      await sendFromSafe({ safe, signer, chain, client, resolved, isNative, amount, amountParsed, to, summary, flags });
+      return;
+    }
+
     const [nonce, feeData] = await Promise.all([
       client.getTransactionCount({ address: walletAddress, blockTag: "pending" }),
       client.estimateFeesPerGas(),
@@ -167,8 +197,6 @@ export default async function send(args, flags) {
       nonce,
     };
 
-    const BALANCE_OF_ABI = parseAbi(["function balanceOf(address) view returns (uint256)"]);
-
     let tx;
     if (isNative) {
       tx = { ...baseTx, to, value: amountParsed, data: "0x", gas: nativeGas };
@@ -181,30 +209,9 @@ export default async function send(args, flags) {
         process.exit(1);
       }
 
-      // ERC-20 balance gate.
-      try {
-        const tokenBalance = await client.readContract({
-          address: tokenAddress,
-          abi: BALANCE_OF_ABI,
-          functionName: "balanceOf",
-          args: [walletAddress],
-        });
-        if (tokenBalance < amountParsed) {
-          printError("insufficient_balance",
-            `Insufficient ${resolved.symbol}: have ${formatUnits(tokenBalance, resolved.decimals)}, need ${amount}`,
-            { suggestion: `Check balance: zerion positions --chain ${chain}` }
-          );
-          process.exit(1);
-        }
-      } catch {
-        // If balanceOf fails (non-standard token), proceed and let gas estimation catch it
-      }
+      await gateErc20Balance({ client, tokenAddress, walletAddress, amountParsed, resolved, amount, chain });
 
-      const data = encodeFunctionData({
-        abi: ERC20_TRANSFER_ABI,
-        functionName: "transfer",
-        args: [to, amountParsed],
-      });
+      const data = encodeErc20Transfer(to, amountParsed);
 
       const gas = await estimateGasWithFallback({
         client,
@@ -279,6 +286,79 @@ export default async function send(args, flags) {
   }
 }
 
+const BALANCE_OF_ABI = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+
+function encodeErc20Transfer(to, amountParsed) {
+  return encodeFunctionData({
+    abi: ERC20_TRANSFER_ABI,
+    functionName: "transfer",
+    args: [to, amountParsed],
+  });
+}
+
+async function gateErc20Balance({ client, tokenAddress, walletAddress, amountParsed, resolved, amount, chain }) {
+  try {
+    const tokenBalance = await client.readContract({
+      address: tokenAddress,
+      abi: BALANCE_OF_ABI,
+      functionName: "balanceOf",
+      args: [walletAddress],
+    });
+    if (tokenBalance < amountParsed) {
+      printError("insufficient_balance",
+        `Insufficient ${resolved.symbol}: have ${formatUnits(tokenBalance, resolved.decimals)}, need ${amount}`,
+        { suggestion: `Check balance: zerion positions --chain ${chain}` }
+      );
+      process.exit(1);
+    }
+  } catch {
+    // If balanceOf fails (non-standard token), proceed and let gas estimation catch it
+  }
+}
+
+async function sendFromSafe({ safe, signer, chain, client, resolved, isNative, amount, amountParsed, to, summary, flags }) {
+  let call;
+  if (isNative) {
+    const balance = await client.getBalance({ address: safe.address });
+    if (balance < amountParsed) {
+      printError("insufficient_balance",
+        `Insufficient ${resolved.symbol} in Safe ${safe.address}: have ${formatEther(balance)}, need ${amount}`,
+        { suggestion: `Check balance: zerion portfolio --wallet ${safe.name} --chain ${chain}` }
+      );
+      process.exit(1);
+    }
+    call = { to, value: amountParsed, data: "0x" };
+  } else {
+    const tokenAddress = resolved.address;
+    if (!tokenAddress) {
+      printError("no_contract", `Cannot resolve ERC-20 contract for ${resolved.symbol} on ${chain}`, {
+        suggestion: `Try using the contract address directly: zerion send 0x... ${amount} --to ${to}`,
+      });
+      process.exit(1);
+    }
+    await gateErc20Balance({ client, tokenAddress, walletAddress: safe.address, amountParsed, resolved, amount, chain });
+    call = { to: tokenAddress, value: 0n, data: encodeErc20Transfer(to, amountParsed) };
+  }
+
+  const timeout = parseTimeout(flags.timeout);
+  const usdValue = await bundleSellUsd({ fungibleId: resolved.fungibleId, amount });
+  const result = await submitSafeCalls({
+    safe,
+    signer,
+    chain,
+    calls: [call],
+    usdValue,
+    flags: {
+      nonce: flags.nonce,
+      proposeOnly: Boolean(flags["propose-only"]),
+      signMode: flags["sign-mode"],
+      review: Boolean(flags.review),
+      timeout,
+    },
+  });
+  print({ ...summary, safe: result });
+}
+
 async function sendOnSolana({ token, amount, to, flags }) {
   const upperToken = token.toUpperCase();
   if (upperToken !== "SOL") {
@@ -291,7 +371,8 @@ async function sendOnSolana({ token, amount, to, flags }) {
     process.exit(1);
   }
 
-  const { walletName, address } = resolveWallet({ ...flags, chain: "solana" });
+  const { walletName, address } = resolveWallet({ ...flags, chain: "solana" }, [], { refuseSafe: "send" });
+  refuseSafeOnlyFlags(flags, walletName);
   if (!address) {
     printError("no_solana_account", `Wallet "${walletName}" has no Solana account.`, {
       suggestion: "Pick a mnemonic-derived wallet or one imported with --sol-key.",

@@ -1,13 +1,29 @@
 // Unit coverage for the prepared-group envelope: buildPreparedGroup shape +
 // defaults, and parsePreparedGroup validation of untrusted `--group` stdin.
+// The Safe registry is read from a temp HOME, set before the module loads.
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import {
+import { describe, it, after } from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const tmpHome = mkdtempSync(join(tmpdir(), "zerion-prepared-group-"));
+process.env.HOME = tmpHome;
+
+const {
   PREPARED_GROUP_KIND,
   buildPreparedGroup,
   parsePreparedGroup,
-} from "#zerion/utils/web-app/prepared-group.js";
+} = await import("#zerion/utils/web-app/prepared-group.js");
+const { addSafe } = await import("#zerion/utils/safe/registry.js");
+
+after(() => rmSync(tmpHome, { recursive: true, force: true }));
+
+// Public Safe 1.4.1 on Base from the Safe transaction-service golden vectors.
+const SAFE = "0xd2e580A552Cb7a6B87E45eDe8f0102698c476d7F";
+const SIGNER = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+addSafe({ name: "vault", address: SAFE, signers: ["hot"] });
 
 const EVM_TX = { evm: { to: "0xabc", value: "0x0", data: "0x" }, label: "Send 1 USDC" };
 
@@ -99,5 +115,27 @@ describe("parsePreparedGroup", () => {
 
   it("carries the group index into the error message", () => {
     assert.throws(() => parsePreparedGroup("bad", 2), /group #3/);
+  });
+
+  describe("Safe wallets", () => {
+    const envelope = (over) => JSON.stringify({ ...JSON.parse(valid), address: SIGNER, walletName: "main", ...over });
+
+    it("accepts an envelope that names no Safe", () => {
+      assert.equal(parsePreparedGroup(envelope({}), 0).walletName, "main");
+    });
+
+    it("refuses an envelope whose walletName is a Safe", () => {
+      assert.throws(
+        () => parsePreparedGroup(envelope({ walletName: "vault" }), 0),
+        (err) => err.code === "safe_unsupported_command" && /"vault" is a Safe wallet/.test(err.message),
+      );
+    });
+
+    it("refuses an envelope whose address is a registered Safe's, in any letter case", () => {
+      assert.throws(
+        () => parsePreparedGroup(envelope({ address: SAFE.toLowerCase() }), 0),
+        (err) => err.code === "safe_unsupported_command",
+      );
+    });
   });
 });

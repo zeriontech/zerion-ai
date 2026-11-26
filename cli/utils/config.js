@@ -61,6 +61,10 @@ export function getApiKey() {
   return process.env.ZERION_API_KEY || getConfigValue("apiKey");
 }
 
+export function getSafeApiKey() {
+  return process.env.SAFE_API_KEY || getConfigValue("safeApiKey") || null;
+}
+
 export function setWalletOrigin(walletName, origin) {
   const origins = getConfigValue("walletOrigins") || {};
   origins[walletName] = origin;

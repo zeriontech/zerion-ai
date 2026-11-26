@@ -31,8 +31,8 @@ const origHome = process.env.HOME;
 const origEnvToken = process.env.ZERION_AGENT_TOKEN;
 
 // An executable policy that only allows transactions to `allowed`.
-function allowlistPolicy(id, allowed) {
-  ows.createPolicy(id, id, [], join(POLICIES_DIR, "run-policies.mjs"), {
+function allowlistPolicy(id, allowed, rules = []) {
+  ows.createPolicy(id, id, rules, join(POLICIES_DIR, "run-policies.mjs"), {
     scripts: [join(POLICIES_DIR, "allowlist.mjs")],
     allowed_addresses: [allowed],
   });
@@ -197,6 +197,48 @@ describe("enforceExecutablePolicies", () => {
 
   it("refuses to guess a wallet: the signer must be named", async () => {
     await assert.rejects(() => guards.enforceExecutablePolicies(tx(ALLOWED_A)), /walletName is required/);
+  });
+
+  describe("skips the policies of a key OWS would refuse to sign with", () => {
+    // Each wallet has a live baseline key allowing only ALLOWED_B and a case key allowing only ALLOWED_A.
+    // A transaction to ALLOWED_B is denied exactly when the case key's script ran; one to ALLOWED_A is
+    // denied by the baseline script, which always runs.
+    const PAST = "2026-11-19T00:00:00Z";
+    const FUTURE = "2099-01-01T00:00:00Z";
+    const expiresAt = (timestamp) => [{ type: "expires_at", timestamp }];
+    const cases = [
+      { name: "a key past its own expiresAt", keyExpires: PAST, ran: false },
+      { name: "a key whose allowlist policy has a past expires_at rule", rules: expiresAt(PAST), ran: false },
+      { name: "a key with a second, rule-only policy whose expires_at is past", sibling: expiresAt(PAST), ran: false },
+      { name: "a revoked key", revoke: true, ran: false },
+      { name: "a key and a policy that both expire in the future", keyExpires: FUTURE, rules: expiresAt(FUTURE), ran: true },
+      { name: "a key and a policy with no expiry", ran: true },
+    ];
+
+    cases.forEach(({ name, keyExpires, rules = [], sibling, revoke, ran }, i) => {
+      it(`${ran ? "runs" : "skips"} ${name}`, async () => {
+        const wallet = `g-exp-${i}`;
+        const caseId = `exp-case-${i}`;
+        const baseId = `exp-base-${i}`;
+        ows.createWallet(wallet, "pass-exp");
+        ows.createAgentToken(`tok-base-${i}`, wallet, "pass-exp", undefined, [allowlistPolicy(baseId, ALLOWED_B)]);
+        const policyIds = [allowlistPolicy(caseId, ALLOWED_A, rules)];
+        if (sibling) {
+          ows.createPolicy(`exp-sibling-${i}`, `exp-sibling-${i}`, sibling, null, null);
+          policyIds.push(`exp-sibling-${i}`);
+        }
+        const { id } = ows.createAgentToken(`tok-case-${i}`, wallet, "pass-exp", keyExpires, policyIds);
+        if (revoke) ows.revokeAgentToken(id);
+
+        const toB = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_B, wallet)));
+        assert.equal(toB.exited, ran);
+        if (ran) assert.equal(toB.error.policy, caseId);
+
+        const toA = await runExpectingExit(() => guards.enforceExecutablePolicies(tx(ALLOWED_A, wallet)));
+        assert.equal(toA.exited, true);
+        assert.equal(toA.error.policy, baseId);
+      });
+    });
   });
 
   it("enforces nothing for a wallet with no agent token, or one outside the keystore", async () => {

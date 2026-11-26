@@ -2,6 +2,7 @@ import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { setReviewThreshold, getReviewThreshold } from "../../utils/config.js";
 import { getReadonly } from "../../utils/wallet/readonly.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 /**
  * zerion wallet set-review-threshold <wallet> <usd|off>
@@ -21,12 +22,12 @@ export default async function walletSetReviewThreshold(args, flags) {
     process.exit(1);
   }
 
-  // The wallet must exist as either a keystore wallet or a read-only wallet.
+  // The wallet must exist as a keystore, read-only or Safe wallet.
   const isKeystore = (() => {
     try { ows.getWallet(walletName); return true; } catch { return false; }
   })();
   const isReadonly = getReadonly(walletName) != null;
-  if (!isKeystore && !isReadonly) {
+  if (!isKeystore && !isReadonly && !isSafeWallet(walletName)) {
     printError("wallet_not_found", `Wallet "${walletName}" not found.`, {
       suggestion: "List wallets: zerion wallet list",
     });

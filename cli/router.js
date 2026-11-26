@@ -26,6 +26,7 @@ function printUsage() {
       "wallet import --name <name> --sol-key": "Import from Solana private key (interactive)",
       "wallet import --name <name> --mnemonic": "Import from seed phrase (all chains)",
       "wallet add <address|ens> --name <name>": "Add a read-only wallet — address only, no keys (0x, ENS, or Solana base58). Reads work normally; ALL signing hands off to the web app, so trades can't run unattended",
+      "wallet add-safe <address> --name <name> [--signer <wallet>[,<wallet>…]] [--executor <wallet>] [--chains <a,b>]": "Add a Safe multisig — no keys stored. Signers must be EVM keystore or read-only wallets that own the Safe; without --signer, the one local wallet that owns it is used (several: safe_signer_ambiguous). Probes the catalog's EVM chains (or --chains) and caches version, owners and threshold per chain",
       "wallet set-review-threshold <wallet> <usd|off>": "Route transactions whose sell-side value is over <usd> to the web app for human review instead of auto-signing ('off' clears it; fails closed when value is unknown)",
       "wallet list": "List all wallets (keystore + read-only)",
       "wallet fund": "Show deposit addresses for funding",
@@ -34,6 +35,10 @@ function printUsage() {
       "wallet delete <name>": "Permanently delete a wallet (requires passphrase)",
       "wallet sync --wallet <name>": "Sync wallet to Zerion app via QR code",
       "wallet sync --all": "Sync all wallets to Zerion app",
+    },
+    safe: {
+      "safe info [--wallet <safe>] [--chain <chain>]": "Fresh on-chain state of a Safe wallet per chain (--chain, else every registered chain): version, owners, threshold, nonce, guard, modules, tx-service URL and app prefix. Read-only",
+      "safe queue [--wallet <safe>] [--chain <chain>]": "Pending Safe transactions per chain, from the Safe Transaction Service (needs safeApiKey) merged with local receipts: confirmations, stale and conflicting nonces, and the decoded call. Read-only",
     },
     signing: {
       "sign-message <message> --chain <chain>": "Sign an EIP-191 (EVM) or raw (Solana) message",
@@ -60,6 +65,7 @@ function printUsage() {
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --to-address <addr>": "Bridge to a raw destination address (chain-format must match)",
       "bridge <from-chain> <from-token> <amount> <to-chain> <to-token> --quote": "List every route and its price without executing — even a single route, which plain `bridge` would execute",
       "send <token> <amount> --to <addr> [--chain <chain>]": "Send native ETH/SOL or ERC-20 to an address (chain auto-detected from address format)",
+      "send <token> <amount> --to <addr> --chain <chain> --wallet <safe> [--signer <wallet>] [--nonce <n>|next] [--propose-only] [--sign-mode typed|hash]": "Send from a Safe wallet (EVM only): one signer signs the SafeTx, which executes when that signature meets a threshold of 1 (no safeApiKey needed; without one the queue is not checked), else is proposed to the Safe Transaction Service (needs safeApiKey) — see capabilities/trading.md",
       "consolidate <chain> <to-token>": "Sweep all wallet positions on <chain> into <to-token> (dry-run by default; --execute to broadcast LOCALLY; --concurrency <n> for plan-phase quote concurrency, auto-picked by API-key tier)",
       "<send|swap|bridge|consolidate> ... --prepare": "Build + gate a command but emit a nonce-free prepared-group envelope to stdout instead of executing (for `zerion bundle`)",
       "bundle --group <envelope> [--group <envelope> ...]": "Sign several prepared groups together in one web-app handoff (or locally when all auto-sign); same signer address, per-group results",
@@ -88,7 +94,7 @@ function printUsage() {
     },
     other: {
       "chains": "List supported chains: Zerion id, EVM chain id (decimal + hex), trade/bridge/send support, and public RPC URLs (--json)",
-      "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage)",
+      "config set <key> <value>": "Set config (apiKey, defaultWallet, defaultChain, slippage, safeApiKey)",
       "config unset <key>": "Remove a config value (resets to default)",
       "config list": "Show current configuration",
     },

@@ -18,6 +18,8 @@ import { randomBytes } from "node:crypto";
 
 const EVM = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const SOL = "ebDDhKWSBXPirnzXgFWTTArfymyG4n5fpg1Y5UgwNRY";
+// Public Safe 1.4.1 on Base from the Safe transaction-service golden vectors.
+const SAFE = "0xd2e580A552Cb7a6B87E45eDe8f0102698c476d7F";
 
 let resolve;
 let ows;
@@ -32,6 +34,9 @@ before(async () => {
   const readonly = await import("#zerion/utils/wallet/readonly.js");
   readonly.addReadonly("ro-evm", EVM);
   readonly.addReadonly("ro-sol", SOL);
+  const registry = await import("#zerion/utils/safe/registry.js");
+  readonly.addReadonly("ro-evm-cold", "0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+  registry.addSafe({ name: "vault", address: SAFE.toLowerCase(), signers: ["ro-evm", "ro-evm-cold"] });
   ows = await import("#zerion/utils/wallet/keystore.js");
   config = await import("#zerion/utils/config.js");
   constants = await import("#zerion/utils/common/constants.js");
@@ -147,6 +152,15 @@ describe("resolveWallet — sign path is unchanged", () => {
     // guard must not become opt-in.
     const { exited } = runExpectingExit(() => resolve.resolveWallet({ wallet: "ro-sol" }, []));
     assert.ok(exited, "sign guard did not fire without an explicit purpose");
+  });
+});
+
+describe("resolveAddressOrWallet — Safe wallet", () => {
+  it("reads the Safe's own address, without picking a signer", async () => {
+    assert.deepEqual(
+      await resolve.resolveAddressOrWallet([], { wallet: "vault" }),
+      { walletName: "vault", address: SAFE },
+    );
   });
 });
 

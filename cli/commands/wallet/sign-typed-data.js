@@ -4,6 +4,7 @@ import { print, printError } from "../../utils/common/output.js";
 import { getConfigValue } from "../../utils/config.js";
 import { requireAgentToken, parseTimeout } from "../../utils/trading/guards.js";
 import { getReadonly } from "../../utils/wallet/readonly.js";
+import { isSafeWallet, safeUnsupportedCommandError } from "../../utils/safe/registry.js";
 import { decideMessageSigningRoute } from "../../utils/trading/signing-route.js";
 import { getPublicClient } from "../../utils/trading/transaction.js";
 import {
@@ -89,6 +90,12 @@ export default async function walletSignTypedData(args, flags) {
     printError("invalid_typed_data", "Typed data missing required fields", {
       suggestion: "Expected { domain, types, primaryType, message }",
     });
+    process.exit(1);
+  }
+
+  if (isSafeWallet(walletName)) {
+    const err = safeUnsupportedCommandError(walletName, "sign-typed-data");
+    printError(err.code, err.message, { suggestion: err.suggestion });
     process.exit(1);
   }
 

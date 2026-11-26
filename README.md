@@ -395,7 +395,7 @@ Track wallets by name without exposing addresses in commands.
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `zerion config set <key> <value>` | Set config (`apiKey`, `defaultWallet`, `defaultChain`, `slippage`) | `zerion config set defaultChain base` |
+| `zerion config set <key> <value>` | Set config (`apiKey`, `defaultWallet`, `defaultChain`, `slippage`, `safeApiKey`) | `zerion config set defaultChain base` |
 | `zerion config unset <key>` | Remove a config value (resets to default) | `zerion config unset defaultChain` |
 | `zerion config list` | Show current configuration | `zerion config list` |
 

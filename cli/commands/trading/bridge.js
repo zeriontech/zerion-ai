@@ -90,7 +90,7 @@ export default async function bridge(args, flags) {
   const slippage = parseSlippage(flags.slippage);
 
   // Source wallet resolves against fromChain — Solana sources get base58, EVM sources get 0x.
-  const { walletName, address } = resolveWallet({ ...flags, chain: fromChain });
+  const { walletName, address } = resolveWallet({ ...flags, chain: fromChain }, [], { refuseSafe: "bridge" });
 
   for (const c of [fromChain, toChain]) {
     const check = await validateTradingChainAsync(c, "bridge");

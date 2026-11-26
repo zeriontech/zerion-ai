@@ -4,9 +4,17 @@ import { setConfigValue, getConfigValue } from "../../utils/config.js";
 import { readPassphrase, readSecret } from "../../utils/common/prompt.js";
 import { PASSPHRASE_WARNING } from "../../utils/common/constants.js";
 import { offerAgentToken } from "../../utils/wallet/offer-agent-token.js";
+import { isSafeWallet } from "../../utils/safe/registry.js";
 
 export default async function walletCreate(args, flags) {
   const name = flags.name || args[0] || generateName();
+
+  if (isSafeWallet(name)) {
+    printError("name_in_use", `A wallet named "${name}" already exists (Safe).`, {
+      suggestion: "Pick a different --name for the new wallet.",
+    });
+    process.exit(1);
+  }
 
   try {
     process.stderr.write("A passphrase is required to encrypt your wallet.\n\n");

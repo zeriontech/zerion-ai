@@ -6,11 +6,25 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
+import { keccak256, recoverMessageAddress, recoverTypedDataAddress, toHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 process.env.ZERION_NO_BROWSER = "1";
 
-const { signViaWebApp, signBundleViaWebApp, signMessageViaWebApp } = await import("#zerion/utils/web-app/handoff.js");
+const {
+  signViaWebApp,
+  signBundleViaWebApp,
+  signMessageViaWebApp,
+  reportHandoff,
+  reportMessageHandoff,
+} = await import("#zerion/utils/web-app/handoff.js");
+const { signSafeTxAsOwner } = await import("#zerion/utils/safe/owner-sign.js");
 const { solanaReceiptAdapter, solanaMessageVerifier } = await import("#zerion/utils/chain/solana-handoff.js");
 const { ed25519 } = await import("@noble/curves/ed25519");
 const { PublicKey } = await import("@solana/web3.js");
@@ -425,5 +439,243 @@ describe("signMessageViaWebApp", () => {
     await pending;
     const warned = stderrChunks.some((c) => c.includes("did not echo this session's one-time token"));
     assert.ok(warned, "expected a token-mismatch explanation on stderr");
+  });
+});
+
+const REASON = "Cancelled in review";
+
+// Prints a handoff result the way send/swap/sign-message do, with stdout
+// captured and process.exit stubbed, and returns the printed JSON object.
+function printedReport(report, summary, result) {
+  const originalStdoutWrite = process.stdout.write;
+  const originalExit = process.exit;
+  let out = "";
+  process.stdout.write = (chunk) => {
+    out += String(chunk);
+    return true;
+  };
+  process.exit = () => {};
+  try {
+    report(summary, result);
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.exit = originalExit;
+  }
+  return JSON.parse(out);
+}
+
+describe("rejection reason reaches the printed result", () => {
+  it("signViaWebApp: a rejected reason is printed by reportHandoff, and none is printed without one", async () => {
+    let pending = signViaWebApp({ address: ADDRESS, transactions: TRANSACTIONS, timeout: 10 });
+    let port = await waitForPort();
+    await postEvent(port, { event: "rejected", reason: REASON });
+    const withReason = await pending;
+    assert.deepEqual(withReason, { status: "rejected", reason: REASON });
+    assert.equal(printedReport(reportHandoff, { action: "send" }, withReason).reason, REASON);
+
+    stderrChunks.length = 0;
+    pending = signViaWebApp({ address: ADDRESS, transactions: TRANSACTIONS, timeout: 10 });
+    port = await waitForPort();
+    await postEvent(port, { event: "rejected" });
+    const withoutReason = await pending;
+    assert.deepEqual(withoutReason, { status: "rejected" });
+    assert.ok(!("reason" in printedReport(reportHandoff, { action: "send" }, withoutReason)));
+  });
+
+  it("signMessageViaWebApp: a rejected reason is truncated to 500 chars and printed by reportMessageHandoff; an empty one is not", async () => {
+    const longReason = "r".repeat(600);
+    let pending = signMessageViaWebApp({ address: ADDRESS, message: MESSAGE, timeout: 10 });
+    let port = await waitForPort("/cli/message", "msg");
+    await postEvent(port, { event: "rejected", reason: longReason });
+    const withReason = await pending;
+    assert.deepEqual(withReason, { status: "rejected", reason: "r".repeat(500) });
+    assert.equal(printedReport(reportMessageHandoff, { wallet: "w" }, withReason).reason, "r".repeat(500));
+
+    stderrChunks.length = 0;
+    pending = signMessageViaWebApp({ address: ADDRESS, message: MESSAGE, timeout: 10 });
+    port = await waitForPort("/cli/message", "msg");
+    await postEvent(port, { event: "rejected", reason: "" });
+    const withoutReason = await pending;
+    assert.deepEqual(withoutReason, { status: "rejected" });
+    assert.ok(!("reason" in printedReport(reportMessageHandoff, { wallet: "w" }, withoutReason)));
+  });
+
+  it("signBundleViaWebApp: a whole-session rejection reason lands on every group", async () => {
+    const groups = [[{ evm: { to: "0xA", value: "0x0" } }], [{ evm: { to: "0xB", value: "0x0" } }]];
+    const pending = signBundleViaWebApp({ address: ADDRESS, groups, timeout: 10 });
+    const port = await waitForPort();
+    await postEvent(port, { event: "rejected", reason: REASON });
+    assert.deepEqual(await pending, {
+      status: "rejected",
+      groups: [
+        { status: "rejected", reason: REASON },
+        { status: "rejected", reason: REASON },
+      ],
+    });
+  });
+
+  describe("zerion bundle (web-app route, real CLI)", () => {
+    const BIN = fileURLToPath(import.meta.resolve("#zerion/zerion.js"));
+    let tmpHome;
+    let child;
+
+    beforeEach(() => {
+      tmpHome = mkdtempSync(join(tmpdir(), "zerion-bundle-reason-"));
+    });
+
+    afterEach(() => {
+      if (child && child.exitCode === null && child.signalCode === null) child.kill();
+      child = undefined;
+      rmSync(tmpHome, { recursive: true, force: true });
+    });
+
+    const envelope = (to) =>
+      JSON.stringify({
+        kind: "zerion-prepared-group",
+        version: 1,
+        ecosystem: "evm",
+        chain: "ethereum",
+        address: ADDRESS,
+        walletName: "read-only-owner",
+        route: "web-app",
+        summary: {},
+        outflows: [],
+        transactions: [
+          {
+            label: "Protocol call",
+            evm: { type: "0x2", from: ADDRESS, to, chainId: "0x1", gas: "0x5208", value: "0x0", data: "0x" },
+          },
+        ],
+      });
+
+    it("prints a group-skipped reason on that group's row and no reason on a group skipped without one", async () => {
+      const env = { ...process.env, HOME: tmpHome, ZERION_API_KEY: "zk_dev_unit_test", ZERION_NO_BROWSER: "1" };
+      delete env.ZERION_AGENT_TOKEN;
+      child = spawn(
+        "node",
+        [
+          BIN,
+          "bundle",
+          "--group",
+          envelope("0x00000000000000000000000000000000000000c3"),
+          "--group",
+          envelope("0x00000000000000000000000000000000000000c4"),
+          "--timeout",
+          "10",
+        ],
+        { env }
+      );
+      let stdout = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => stderrChunks.push(String(chunk)));
+      const exited = new Promise((resolve) => child.on("exit", resolve));
+
+      const port = await waitForPort();
+      await postEvent(port, { event: "group-skipped", group: 0, reason: REASON });
+      await postEvent(port, { event: "group-skipped", group: 1 });
+      await postEvent(port, {
+        event: "summary",
+        groups: [
+          { group: 0, outcome: "skipped", hashes: [] },
+          { group: 1, outcome: "skipped", hashes: [] },
+        ],
+      });
+      assert.equal(await exited, 0, stderrChunks.join(""));
+
+      const printed = JSON.parse(stdout);
+      assert.equal(printed.status, "rejected");
+      assert.equal(printed.groups[0].status, "rejected");
+      assert.equal(printed.groups[0].reason, REASON);
+      assert.equal(printed.groups[1].status, "rejected");
+      assert.ok(!("reason" in printed.groups[1]));
+    });
+  });
+});
+
+describe("signSafeTxAsOwner (web-app route)", () => {
+  const BASE = JSON.parse(
+    readFileSync(new URL("../fixtures/safe/base-1.4.1-op0.json", import.meta.url), "utf8")
+  );
+  const [OWNER, OTHER_OWNER] = [1, 2].map((n) =>
+    privateKeyToAccount(keccak256(toHex(`zerion-safe-test-owner-${n}`)))
+  );
+  const waitForMessagePort = () => waitForPort("/cli/message", "msg");
+
+  const sign = (signMode) =>
+    signSafeTxAsOwner({
+      typedData: BASE.typedData,
+      safeTxHash: BASE.safeTxHash,
+      chainIdNum: 8453,
+      signer: { walletName: "owner", address: OWNER.address, readOnly: true },
+      route: "web-app",
+      signMode,
+      timeout: 10,
+    });
+
+  it("typed: returns the owner's EIP-712 signature with v 27/28, recovering to the owner", async () => {
+    const walletSignature = await OWNER.signTypedData(BASE.typedData);
+    const pending = sign("typed");
+    await postEvent(await waitForMessagePort(), { event: "completed", signature: walletSignature });
+    const result = await pending;
+    assert.deepEqual(result, {
+      owner: OWNER.address,
+      signature: walletSignature,
+      signMode: "typed",
+      signedVia: "web-app",
+    });
+    assert.ok([27, 28].includes(parseInt(result.signature.slice(-2), 16)));
+    assert.equal(await recoverTypedDataAddress({ ...BASE.typedData, signature: result.signature }), OWNER.address);
+  });
+
+  it("hash: returns the owner's personal_sign over the safeTxHash with v shifted to 31/32", async () => {
+    const walletSignature = await OWNER.signMessage({ message: { raw: BASE.safeTxHash } });
+    const walletV = parseInt(walletSignature.slice(-2), 16);
+    const pending = sign("hash");
+    await postEvent(await waitForMessagePort(), { event: "completed", signature: walletSignature });
+    const result = await pending;
+    assert.equal(result.owner, OWNER.address);
+    assert.equal(result.signMode, "hash");
+    assert.equal(result.signedVia, "web-app");
+    assert.equal(result.signature, `${walletSignature.slice(0, 130)}${(walletV + 4).toString(16)}`);
+    assert.ok([31, 32].includes(parseInt(result.signature.slice(-2), 16)));
+    assert.equal(
+      await recoverMessageAddress({ message: { raw: BASE.safeTxHash }, signature: walletSignature }),
+      OWNER.address
+    );
+  });
+
+  for (const signMode of ["typed", "hash"]) {
+    it(`${signMode}: a signature from a different key fails with safe_signature_mismatch`, async () => {
+      const foreign =
+        signMode === "typed"
+          ? await OTHER_OWNER.signTypedData(BASE.typedData)
+          : await OTHER_OWNER.signMessage({ message: { raw: BASE.safeTxHash } });
+      const rejected = assert.rejects(sign(signMode), (err) => err.code === "safe_signature_mismatch");
+      await postEvent(await waitForMessagePort(), { event: "completed", signature: foreign });
+      await rejected;
+    });
+  }
+
+  it("a rejected callback with a reason yields safe_sign_rejected carrying it, suggesting --sign-mode hash", async () => {
+    const rejected = assert.rejects(sign("typed"), (err) => {
+      assert.equal(err.code, "safe_sign_rejected");
+      assert.equal(err.reason, REASON);
+      assert.match(err.suggestion, /--sign-mode hash/);
+      return true;
+    });
+    await postEvent(await waitForMessagePort(), { event: "rejected", reason: REASON });
+    await rejected;
+  });
+
+  it("a rejected callback without a reason yields safe_sign_rejected with no reason", async () => {
+    const rejected = assert.rejects(sign("typed"), (err) => {
+      assert.equal(err.code, "safe_sign_rejected");
+      assert.ok(!("reason" in err));
+      return true;
+    });
+    await postEvent(await waitForMessagePort(), { event: "rejected" });
+    await rejected;
   });
 });

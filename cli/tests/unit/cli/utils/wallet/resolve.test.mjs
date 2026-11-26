@@ -16,9 +16,18 @@ const RO_EVM = "resolve-test-ro-evm";
 const RO_SOL = "resolve-test-ro-sol";
 const EVM = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 const SOL = "ebDDhKWSBXPirnzXgFWTTArfymyG4n5fpg1Y5UgwNRY";
+// Public Safes from the Safe transaction-service golden vectors (1.4.1 on Base, 1.3.0 on Ethereum).
+const SAFE = "0xd2e580A552Cb7a6B87E45eDe8f0102698c476d7F";
+const OTHER_SAFE = "0x87cc0d34f6111c8A7A4Bdf758a9a715A3675f941";
+const SAFE_ONE = "resolve-test-safe-one";
+const SAFE_TWO = "resolve-test-safe-two";
+const SAFE_RO = "resolve-test-safe-ro";
 
 let resolveDestination;
+let resolveWallet;
+let registry;
 let ows;
+let multiEvm;
 let tmpHome;
 const origHome = process.env.HOME;
 
@@ -26,11 +35,15 @@ before(async () => {
   tmpHome = mkdtempSync(join(tmpdir(), "zerion-resolve-dest-"));
   process.env.HOME = tmpHome;
   ows = await import("#zerion/utils/wallet/keystore.js");
-  ({ resolveDestination } = await import("#zerion/utils/wallet/resolve.js"));
+  ({ resolveDestination, resolveWallet } = await import("#zerion/utils/wallet/resolve.js"));
+  registry = await import("#zerion/utils/safe/registry.js");
   const readonly = await import("#zerion/utils/wallet/readonly.js");
-  ows.createWallet(MULTI);  // mnemonic-derived → has both EVM + Solana
+  multiEvm = ows.createWallet(MULTI).evmAddress;  // mnemonic-derived → has both EVM + Solana
   readonly.addReadonly(RO_EVM, EVM);
   readonly.addReadonly(RO_SOL, SOL);
+  registry.addSafe({ name: SAFE_ONE, address: SAFE.toLowerCase(), signers: [MULTI] });
+  registry.addSafe({ name: SAFE_TWO, address: OTHER_SAFE, signers: [MULTI, RO_EVM] });
+  registry.addSafe({ name: SAFE_RO, address: SAFE, signers: [RO_EVM] });
 });
 
 after(() => {
@@ -180,5 +193,100 @@ describe("resolveDestination — read-only wallets", () => {
       resolveDestination({ fallbackWallet: "resolve-test-missing", targetChain: "base" }),
       /Destination wallet "resolve-test-missing" not found/,
     );
+  });
+});
+
+class Exited extends Error {
+  constructor(code) {
+    super(`process.exit(${code})`);
+    this.code = code;
+  }
+}
+
+function runExpectingExit(fn) {
+  const origExit = process.exit;
+  const origWrite = process.stderr.write;
+  let stderr = "";
+  process.stderr.write = (chunk, ...rest) => {
+    if (typeof chunk !== "string") return origWrite.call(process.stderr, chunk, ...rest);
+    stderr += chunk;
+    return true;
+  };
+  process.exit = (code) => { throw new Exited(code); };
+  try {
+    fn();
+    return { exited: false };
+  } catch (err) {
+    if (!(err instanceof Exited)) throw err;
+    return { exited: true, code: err.code, error: JSON.parse(stderr).error };
+  } finally {
+    process.exit = origExit;
+    process.stderr.write = origWrite;
+  }
+}
+
+describe("resolveWallet — Safe wallets on the sign path", () => {
+  it("returns the Safe address, its registry entry and its only keystore signer", () => {
+    const result = resolveWallet({ wallet: SAFE_ONE, chain: "base" });
+    assert.deepEqual(result, {
+      walletName: SAFE_ONE,
+      address: SAFE,
+      safe: registry.getSafe(SAFE_ONE),
+      signer: { walletName: MULTI, address: multiEvm, readOnly: false },
+    });
+  });
+
+  it("marks a read-only signer readOnly", () => {
+    const result = resolveWallet({ wallet: SAFE_RO });
+    assert.deepEqual(result.signer, { walletName: RO_EVM, address: EVM, readOnly: true });
+    assert.equal(result.address, SAFE);
+  });
+
+  it("uses --signer to pick among several signers", () => {
+    const result = resolveWallet({ wallet: SAFE_TWO, signer: RO_EVM, chain: "base" });
+    assert.equal(result.address, OTHER_SAFE);
+    assert.deepEqual(result.signer, { walletName: RO_EVM, address: EVM, readOnly: true });
+  });
+
+  it("refuses several signers without --signer with safe_signer_required, listing them", () => {
+    const { exited, code, error } = runExpectingExit(() => resolveWallet({ wallet: SAFE_TWO, chain: "base" }));
+    assert.ok(exited);
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_signer_required");
+    assert.match(error.suggestion, new RegExp(`${MULTI}, ${RO_EVM}`));
+  });
+
+  it("refuses a --signer outside safe.signers with safe_signer_not_registered, even with one signer", () => {
+    const { code, error } = runExpectingExit(() => resolveWallet({ wallet: SAFE_ONE, signer: RO_EVM }));
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_signer_not_registered");
+  });
+
+  it("refuses a Solana chain with safe_chain_mismatch before signer selection", () => {
+    const { code, error } = runExpectingExit(() => resolveWallet({ wallet: SAFE_TWO, chain: "solana" }));
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_chain_mismatch");
+  });
+});
+
+describe("resolveWallet — Safe wallets on the read path", () => {
+  it("returns only { walletName, address }, with no signer selection", () => {
+    assert.deepEqual(
+      resolveWallet({ wallet: SAFE_TWO }, [], { purpose: "read" }),
+      { walletName: SAFE_TWO, address: OTHER_SAFE },
+    );
+    assert.deepEqual(
+      resolveWallet({ wallet: SAFE_TWO, chain: "base" }, [], { purpose: "read" }),
+      { walletName: SAFE_TWO, address: OTHER_SAFE },
+    );
+  });
+
+  it("conflicts only with an explicit Solana --chain", () => {
+    const { code, error } = runExpectingExit(() =>
+      resolveWallet({ wallet: SAFE_ONE, chain: "solana" }, [], { purpose: "read" }),
+    );
+    assert.equal(code, 1);
+    assert.equal(error.code, "safe_chain_mismatch");
+    assert.match(error.message, /nothing to read/);
   });
 });

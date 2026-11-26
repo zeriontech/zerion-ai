@@ -16,6 +16,8 @@
  * only prints this envelope (compact JSON) to stdout. See docs/prd/cli-bundle.md.
  */
 
+import { isSafeWallet, isSafeAddress, safeUnsupportedCommandError } from "../safe/registry.js";
+
 export const PREPARED_GROUP_KIND = "zerion-prepared-group";
 export const PREPARED_GROUP_VERSION = 1;
 
@@ -114,6 +116,8 @@ export function parsePreparedGroup(raw, index) {
     err.code = "invalid_group";
     throw err;
   }
+  const safeName = isSafeWallet(obj.walletName) ? obj.walletName : isSafeAddress(obj.address) ? obj.address : null;
+  if (safeName) throw safeUnsupportedCommandError(safeName, "bundle");
   if (obj.ecosystem !== "evm" && obj.ecosystem !== "solana") {
     const err = new Error(`--group${where} has an invalid ecosystem "${obj.ecosystem}".`);
     err.code = "invalid_group";

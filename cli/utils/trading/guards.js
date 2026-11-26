@@ -72,6 +72,39 @@ export async function requireAgentToken(context = "", targetWallet) {
   return freshToken;
 }
 
+function loadPolicyOrExit(pid) {
+  try {
+    return getPolicy(pid);
+  } catch {
+    // Fail-closed: if a policy can't be loaded, block the transaction
+    printError("policy_unavailable", `Policy "${pid}" could not be loaded — blocking transaction`, {
+      suggestion: "Check policies: zerion agent list-policies",
+    });
+    process.exit(1);
+  }
+}
+
+function isPast(timestamp, now) {
+  return Boolean(timestamp) && Date.parse(timestamp) < now;
+}
+
+function hasExpiredRule(policy, now) {
+  return (policy.rules || []).some((rule) => rule.type === "expires_at" && isPast(rule.timestamp, now));
+}
+
+function livePolicies(walletId) {
+  const now = Date.now();
+  const policies = new Map();
+  for (const token of listAgentTokens()) {
+    // A key may cover several wallets (`ows key create --wallet a --wallet b`).
+    if (!token.walletIds?.includes(walletId) || isPast(token.expiresAt, now)) continue;
+    const tokenPolicies = (token.policyIds || []).map((pid) => [pid, policies.get(pid) ?? loadPolicyOrExit(pid)]);
+    if (tokenPolicies.some(([, policy]) => hasExpiredRule(policy, now))) continue;
+    for (const [pid, policy] of tokenPolicies) policies.set(pid, policy);
+  }
+  return policies;
+}
+
 /**
  * Enforce executable policies attached to the signing wallet's agent tokens.
  * OWS enforces native rules (allowed_chains, expires_at) but does NOT run
@@ -81,7 +114,9 @@ export async function requireAgentToken(context = "", targetWallet) {
  * policies of **every live key** for the signing wallet (fail-closed): the
  * signing token may be the config-saved one, a ZERION_AGENT_TOKEN override, or
  * a key created outside the CLI, and a policy must never be skipped because a
- * different key for the same wallet happens to be newer.
+ * different key for the same wallet happens to be newer. A key past its own
+ * `expiresAt`, or holding any policy with a past `expires_at` rule, is not live:
+ * OWS refuses every signature with it, so its policies are skipped.
  *
  * @param {{ to: string, value: string|bigint, data: string, chain: string, walletName: string }} txInfo
  *   - `walletName` is the wallet that signs (name or OWS id). Required: policies
@@ -100,13 +135,8 @@ export async function enforceExecutablePolicies(txInfo) {
     return;
   }
 
-  const policyIds = [...new Set(
-    listAgentTokens()
-      // A key may cover several wallets (`ows key create --wallet a --wallet b`).
-      .filter((t) => t.walletIds?.includes(walletId))
-      .flatMap((t) => t.policyIds || [])
-  )];
-  if (policyIds.length === 0) return;
+  const policies = livePolicies(walletId);
+  if (policies.size === 0) return;
 
   const ctx = {
     transaction: {
@@ -116,17 +146,7 @@ export async function enforceExecutablePolicies(txInfo) {
     },
   };
 
-  for (const pid of policyIds) {
-    let policy;
-    try {
-      policy = getPolicy(pid);
-    } catch {
-      // Fail-closed: if a policy can't be loaded, block the transaction
-      printError("policy_unavailable", `Policy "${pid}" could not be loaded — blocking transaction`, {
-        suggestion: "Check policies: zerion agent list-policies",
-      });
-      process.exit(1);
-    }
+  for (const [pid, policy] of policies) {
     const scripts = policy.config?.scripts || [];
     for (const script of scripts) {
       const resolved = resolve(script);

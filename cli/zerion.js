@@ -26,6 +26,7 @@ if (process.argv.includes("--pretty") || (process.stdout.isTTY && !process.argv.
 import walletCreate from "./commands/wallet/create.js";
 import walletImport from "./commands/wallet/import.js";
 import walletAdd from "./commands/wallet/add.js";
+import walletAddSafe from "./commands/wallet/add-safe.js";
 import walletSetReviewThreshold from "./commands/wallet/set-review-threshold.js";
 import walletList from "./commands/wallet/list.js";
 import walletFund from "./commands/wallet/fund.js";
@@ -39,6 +40,7 @@ import watch from "./commands/wallet/watch.js";
 register("wallet", "create", walletCreate);
 register("wallet", "import", walletImport);
 register("wallet", "add", walletAdd);
+register("wallet", "add-safe", walletAddSafe);
 register("wallet", "set-review-threshold", walletSetReviewThreshold);
 register("wallet", "list", walletList);
 register("wallet", "fund", walletFund);
@@ -49,6 +51,13 @@ register("wallet", "sync", walletSync);
 registerSingle("sign-message", walletSignMessage);
 registerSingle("sign-typed-data", walletSignTypedData);
 registerSingle("watch", watch);
+
+// --- Safe (read-only multisig views) ---
+
+import safeInfo from "./commands/safe/info.js";
+import safeQueue from "./commands/safe/queue.js";
+register("safe", "info", safeInfo);
+register("safe", "queue", safeQueue);
 
 // --- Analytics (read-only queries: portfolio, positions, PnL, history, analyze) ---
 

@@ -68,6 +68,33 @@ describe("CLI routing", () => {
       assert.ok(json);
       assert.ok(Array.isArray(json.wallets));
     });
+
+    it("wallet add-safe is listed in usage and dispatched to its handler", async () => {
+      const help = parseJSON((await run([])).stdout);
+      assert.ok(Object.keys(help.wallet_management).some((usage) => usage.startsWith("wallet add-safe ")));
+
+      const { code, stderr } = await run(["wallet", "add-safe"], { HOME: "/tmp/zerion-test-nonexistent" });
+      assert.equal(code, 1);
+      assert.equal(parseJSON(stderr).error.code, "missing_args");
+    });
+
+    it("send from a Safe is listed in usage with its Safe flags", async () => {
+      const help = parseJSON((await run([])).stdout);
+      const usage = Object.keys(help.trading).find((u) => u.startsWith("send ") && u.includes("--wallet <safe>"));
+      assert.ok(usage);
+      for (const flag of ["--signer", "--nonce", "--propose-only", "--sign-mode"]) assert.ok(usage.includes(flag), flag);
+    });
+
+    for (const action of ["info", "queue"]) {
+      it(`safe ${action} is listed in usage and dispatched to its handler`, async () => {
+        const help = parseJSON((await run([])).stdout);
+        assert.ok(Object.keys(help.safe).some((usage) => usage.startsWith(`safe ${action} `)));
+
+        const { code, stderr } = await run(["safe", action], { HOME: "/tmp/zerion-test-nonexistent" });
+        assert.equal(code, 1);
+        assert.equal(parseJSON(stderr).error.code, "no_wallet");
+      });
+    }
   });
 
   describe("error routing", () => {
