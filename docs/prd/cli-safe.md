@@ -57,7 +57,7 @@ The decisions behind this contract are in [ADR-0007](../adr/0007-safe-accounts.m
 
 | Command | Behaviour |
 |---|---|
-| `wallet add-safe <address\|ens> --name <name> --signer <wallet>[,<wallet>…] [--executor <wallet>] [--chains <a,b>]` | Reads the Safe on each chain (`--chains`, else every EVM chain the catalog marks as tradable), 8 at a time with a 10 s timeout each: code, `VERSION()`, owners, threshold, nonce, plus tx-service and app-prefix discovery. Saves the Safe if at least one signer owns it on at least one readable chain, and warns per chain where a signer is not an owner. Signers and the executor must be EVM keystore or EVM read-only wallets. Re-adding the same address under the same name updates the entry. |
+| `wallet add-safe <address\|ens> --name <name> [--signer <wallet>[,<wallet>…]] [--executor <wallet>] [--chains <a,b>]` | Reads the Safe on each chain (`--chains`, else every EVM chain the catalog marks as tradable), 8 at a time with a 10 s timeout each: code, `VERSION()`, owners, threshold, nonce, plus tx-service and app-prefix discovery. Saves the Safe if at least one signer owns it on at least one readable chain, and warns per chain where a signer is not an owner. Signers and the executor must be EVM keystore or EVM read-only wallets. Without `--signer`, the owners on every read chain are matched against the local EVM keystore and read-only wallets: exactly one match becomes the signer (stderr `Signer: "<wallet>" (<address>) owns the Safe…`), several refuse with `safe_signer_ambiguous` and their names in `candidates`, none refuses with `safe_signer_not_owner`. Re-adding the same address under the same name updates the entry. |
 | `wallet list` | Safe entries have `type: "safe"`, `evmAddress`, `signers`, `executor`, and `chains` as `{ <chain>: "<threshold>/<owners>" }` from the cache. |
 | `wallet delete <safe>` | Removes the registry entry. No passphrase: there is no key material. Prints `{ deleted, type: "safe" }`. |
 | `wallet export-key`, `wallet backup` | Refuse a Safe with `safe_no_keys`. |
@@ -78,7 +78,7 @@ time. `--wallet` defaults to `defaultWallet`.
 | `--signer <wallet>` | Which registered signer signs. Required when the Safe has more than one. |
 | `--nonce <n>` | Use nonce `n`, replacing any queued transaction at `n` (stderr warning naming it). Below the on-chain nonce: `safe_nonce_stale`. |
 | `--nonce next` | Use the on-chain nonce. |
-| _(no `--nonce`)_ | `max(on-chain nonce, highest queued nonce + 1)`. |
+| _(no `--nonce`)_ | `max(on-chain nonce, highest queued nonce + 1)`; the on-chain nonce when there is no Safe API key (§4 step 5). |
 | `--propose-only` | Propose even when the run could execute. |
 | `--sign-mode typed\|hash` | `typed` (default): EIP-712. `hash`: eth_sign over the safeTxHash, web app only. |
 | `--review` | Sign in the web app regardless of value. |
@@ -92,11 +92,16 @@ broadcast.
 
 1. Resolve the Safe and its signer. Check the Safe's balance (native) or token balance (ERC-20).
 2. Validate the call and flags. Look up the chain's Safe services (§6). On a chain with a
-   tx-service, require the API key now, before any signing prompt.
-3. Read the Safe on-chain: code, version (supported only), owners, threshold, nonce. The signer
+   tx-service and no API key, `--propose-only` fails now with `safe_api_key_missing`, before any
+   signing prompt.
+3. Read the Safe on-chain: code, version (supported only), owners, threshold, nonce. With no API
+   key on a tx-service chain, a threshold above 1 fails with `safe_api_key_missing`. The signer
    must be a current owner.
 4. Run the signer wallet's executable policies on the inner call.
 5. Choose the nonce (§3). With no `--nonce`, a full queue page fails with `safe_queue_truncated`.
+   With no API key the queue is not read: the run uses the on-chain nonce (`--nonce` may only
+   equal it, since a nonce ahead of the chain would propose and fails with `safe_api_key_missing`)
+   and, once it is known to execute, warns on stderr that queued proposals were not checked.
 6. Build the SafeTx and compare its hash with the Safe's `getTransactionHash` (`safe_hash_mismatch`).
 7. Decide execute or propose. The run **executes** when `--propose-only` is not set, the
    threshold is at most 1 and the nonce is the on-chain nonce. With a nonce ahead of the chain it
@@ -196,7 +201,8 @@ Safe-specific:
 | `safe_not_deployed` | No contract at the address (`add-safe` on every chain; `send`; a `safe info` / `queue` row). |
 | `safe_version_unsupported` | Safe version is not 1.3.0, 1.4.1 or 1.5.0. |
 | `safe_unreadable` | `add-safe` could not read the Safe on any chain for other reasons. |
-| `safe_signer_not_owner` | No signer owns the Safe (`add-safe`), or the signer is not a current owner (`send`). |
+| `safe_signer_not_owner` | No signer owns the Safe (`add-safe`; without `--signer`, no local EVM wallet owns it), or the signer is not a current owner (`send`). |
+| `safe_signer_ambiguous` | `add-safe` without `--signer`, and several local EVM wallets own the Safe; `candidates` lists their names. |
 | `safe_signer_required` | The Safe has several signers and `--signer` is missing. |
 | `safe_signer_not_registered` | `--signer` names a wallet that is not one of the Safe's signers. |
 | `safe_chain_mismatch` | A Safe wallet used on Solana. |
@@ -204,7 +210,7 @@ Safe-specific:
 | `safe_only_flag` | `send` from a keystore or read-only wallet with `--signer`, `--nonce`, `--propose-only` or `--sign-mode` (§3). |
 | `safe_no_keys` | `export-key` or `backup` on a Safe. |
 | `safe_chain_info_unavailable` | safe-config could not be read (network error, non-404 status, bad JSON). |
-| `safe_api_key_missing` | A tx-service chain and no `SAFE_API_KEY` / `safeApiKey`. |
+| `safe_api_key_missing` | A tx-service chain, no `SAFE_API_KEY` / `safeApiKey`, and a `send` that would propose, or a `safe queue` row. A `send` that executes needs no key. |
 | `safe_tx_service_error` | The tx-service failed after retries, or a propose outcome is unknown. |
 | `safe_queue_truncated` | A full queue page with no `--nonce`, so the next free nonce cannot be known. |
 | `safe_nonce_stale` | The nonce is below the on-chain nonce (requested, or used while signing). |

@@ -224,16 +224,18 @@ What happens:
   someone else's proposal yet.
 - **Refuses before signing** on a chain with no Safe Transaction Service when it can't execute
   (`safe_threshold_unreachable_no_tx_service`).
-- On a chain that has a Safe Transaction Service, **every** Safe send needs your Safe API key, even one that
-  executes (the next nonce is read from the service's queue): `zerion config set safeApiKey <key>` or
-  `SAFE_API_KEY`. Missing → `safe_api_key_missing`, before any signing.
+- On a chain that has a Safe Transaction Service, a send that would **propose** (`--propose-only`, a threshold
+  above 1, or a `--nonce` ahead of the chain) needs your Safe API key: `zerion config set safeApiKey <key>` or
+  `SAFE_API_KEY`. Missing → `safe_api_key_missing`, before any signing. A 1-of-N send that **executes** needs
+  no key: without one it skips the service's queue, executes at the on-chain nonce, and warns on stderr that
+  queued proposals were not checked (executing invalidates any queued proposal at that nonce).
 - The signer signs on the usual route: locally with **its** agent token, or in the web app when it is a
   read-only wallet, `--review` is passed, or the value is over the review threshold (the Safe's, else the
   signer's). The signer's agent-token policies run on the transfer itself, on both routes.
 - `--sign-mode hash` (web app only) signs the safeTxHash with eth_sign — use it when the wallet can't sign
   EIP-712 typed data. The default is `typed`.
-- Default nonce: one past the highest pending proposal, or the on-chain nonce if none. If the service returns a
-  full page of 100 pending proposals, pass `--nonce` yourself (`safe_queue_truncated`).
+- Default nonce: one past the highest pending proposal, or the on-chain nonce if none (or if no Safe API key is
+  set). If the service returns a full page of 100 pending proposals, pass `--nonce` yourself (`safe_queue_truncated`).
 - There is **no simulation** in the CLI. The web-app review shows Zerion's Safe simulation on ethereum, base,
   arbitrum, optimism and polygon; elsewhere a failing transfer is caught only when it reverts at execution
   (atomically — no funds move, the executor loses the gas).
@@ -320,7 +322,7 @@ Use this to confirm a chain ID is supported before passing `--chain` / `--to-cha
 | `safe_only_flag` | `--signer`, `--nonce`, `--propose-only` or `--sign-mode` on a `send` from a non-Safe wallet | Drop the flag, or `--wallet <safe>` |
 | `safe_signer_required` / `safe_signer_not_registered` | Safe has several signers and no `--signer`, or `--signer` isn't one of them | Pass `--signer` with a registered signer |
 | `safe_signer_not_owner` | The signer is no longer an owner of the Safe on this chain | `zerion safe info --chain <chain>`; use a current owner |
-| `safe_api_key_missing` | Chain has a Safe Transaction Service and no Safe API key is set | `zerion config set safeApiKey <key>` or `SAFE_API_KEY` |
+| `safe_api_key_missing` | Chain has a Safe Transaction Service, no Safe API key is set, and the send would propose | `zerion config set safeApiKey <key>` or `SAFE_API_KEY` |
 | `safe_threshold_unreachable_no_tx_service` | Run can't execute and the chain has no Safe Transaction Service | Not supported for multi-owner Safes on this chain yet |
 | `safe_nonce_stale` | The nonce is below the Safe's on-chain nonce (requested, or used while signing) | Retry without `--nonce`, or `--nonce next` |
 | `safe_nonce_not_executable` | `--nonce` ahead of the chain where no Safe Transaction Service exists | `--nonce next` |

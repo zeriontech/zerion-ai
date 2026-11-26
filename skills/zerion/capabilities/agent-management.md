@@ -52,7 +52,8 @@ zerion agent use-token --wallet <wallet>   # Make <wallet> the default wallet (c
 Signing uses the token of the wallet that signs — the one named with `--wallet`, or the default
 wallet when the flag is omitted. Before signing, the CLI runs the executable policies of **every
 live token** for that wallet (fail-closed), so an older restrictive token keeps applying until it
-is revoked. `use-token` only changes which wallet is the default; you don't need it to sign from
+is revoked or expires. A token past its `--expires`, or with a policy whose `--expires` has passed,
+can no longer sign, so its policies stop applying. `use-token` only changes which wallet is the default; you don't need it to sign from
 another wallet.
 
 ## Token + policy management

@@ -219,7 +219,7 @@ non-zero; codes are in "Error codes" above):
 - **It signs with that wallet's own agent token**, whichever wallet is the default (a set
   `ZERION_AGENT_TOKEN` overrides it).
 - **Policies follow the signer**: every executable policy on every live agent token for that wallet
-  runs, so a restrictive older token keeps applying until it is revoked. On the web-app route they
+  runs, so a restrictive older token keeps applying until it is revoked or expires. On the web-app route they
   are the policies of the keystore wallets that hold the `address`; a read-only or unknown address
   has none. A `policy_denied` stops the run before a link forms or a transaction signs.
 
