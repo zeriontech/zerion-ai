@@ -6,8 +6,9 @@
  * Reads PolicyContext from stdin. The wallet library passes a transaction as
  * raw bytes, so the dispatcher decodes it first (see decode.mjs) and hands the
  * scripts `transaction.to` / `value` / `data`. For a Safe transaction (SafeTx
- * typed data) those are the call the Safe will execute; a SafeTx that cannot
- * be read that way is denied before any script runs.
+ * typed data, or a transaction calling `execTransaction`) those are the call
+ * the Safe will execute; one that cannot be read that way is denied before any
+ * script runs.
  *
  * Supports both:
  * - ESM modules that export a check(ctx) function (in-process, with timeout)
@@ -16,7 +17,7 @@
 
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { withDecodedSafeTx, withDecodedTransaction } from "./decode.mjs";
+import { withDecodedSafeExecution, withDecodedSafeTx, withDecodedTransaction } from "./decode.mjs";
 
 const POLICY_TIMEOUT_MS = 4000;
 
@@ -65,7 +66,8 @@ let input = "";
 process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", async () => {
   try {
-    const decoded = withDecodedSafeTx(withDecodedTransaction(JSON.parse(input)));
+    const execution = withDecodedSafeExecution(withDecodedTransaction(JSON.parse(input)));
+    const decoded = execution.denial ? execution : withDecodedSafeTx(execution.ctx);
     if (decoded.denial) {
       console.log(JSON.stringify(decoded.denial));
       return;

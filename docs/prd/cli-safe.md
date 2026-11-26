@@ -111,7 +111,9 @@ broadcast.
 10. Re-read the on-chain nonce; if it moved past ours, stop with `safe_nonce_stale`.
 11. Execute: the executor (default: the signer) sends `execTransaction`, locally with its agent
     token, or through the `/cli/transaction` web-app handoff when it is read-only. When the
-    executor is the signer, the signature is sent in its pre-approved form (v=1).
+    executor is the signer, the signature is sent in its pre-approved form (v=1). The executor's
+    OWS policies judge this `execTransaction` by its inner call, so an allowlist needs only the
+    recipient, not the Safe (ADR-0007).
     Or propose: POST to the tx-service, idempotently (ADR-0007).
 12. Write the local receipt (a failure only warns) and print the result.
 

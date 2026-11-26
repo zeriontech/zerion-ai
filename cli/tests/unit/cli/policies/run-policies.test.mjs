@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { encodeFunctionData, hashTypedData, parseAbi, serializeTransaction } from "viem";
-import { withDecodedSafeTx, withDecodedTransaction } from "#zerion/policies/decode.mjs";
+import { withDecodedSafeExecution, withDecodedSafeTx, withDecodedTransaction } from "#zerion/policies/decode.mjs";
 
 const POLICIES_DIR = dirname(fileURLToPath(import.meta.resolve("#zerion/policies/allowlist.mjs")));
 const DISPATCHER = join(POLICIES_DIR, "run-policies.mjs");
@@ -112,6 +112,33 @@ const dispatch = (ctx) => {
   return JSON.parse(child.stdout);
 };
 const approveCalldata = encodeFunctionData({ abi: ERC20, functionName: "approve", args: [OTHER, 1n] });
+
+// The same vector's message, sent as the raw transaction an owner broadcasts,
+// signed with a pre-validated (v=1) owner signature.
+const SAFE_ABI = parseAbi([
+  "function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)",
+  "function approveHash(bytes32 hashToApprove)",
+]);
+const PRE_APPROVED = `0x${ALLOWED.slice(2).padStart(64, "0")}${"0".repeat(64)}01`;
+const execCalldata = (message = {}) => {
+  const m = { ...VECTOR_MESSAGE, ...message };
+  return encodeFunctionData({
+    abi: SAFE_ABI,
+    functionName: "execTransaction",
+    args: [m.to, BigInt(m.value), m.data, m.operation, BigInt(m.safeTxGas), BigInt(m.baseGas), BigInt(m.gasPrice), m.gasToken, m.refundReceiver, PRE_APPROVED],
+  });
+};
+const approveHashCalldata = encodeFunctionData({
+  abi: SAFE_ABI,
+  functionName: "approveHash",
+  args: ["0x4ed44c58aca5627d11064962a41fb34a7910f4fb9db0f4f2c2144eebc840baef"],
+});
+const withWord = (calldata, index, word) => {
+  const start = 10 + index * 64;
+  return calldata.slice(0, start) + word + calldata.slice(start + 64);
+};
+const execContext = (calldata, policyConfig = { scripts: [] }, tx = {}) =>
+  owsContext({ to: SAFE, data: calldata, ...tx }, { policy_config: policyConfig });
 
 describe("withDecodedTransaction", () => {
   it("fills in to, value and data from the raw bytes", () => {
@@ -250,6 +277,111 @@ describe("run-policies dispatcher on a SafeTx", () => {
         name
       );
     }
+  });
+});
+
+describe("withDecodedSafeExecution", () => {
+  it("fills in to, value and data from the execTransaction calldata", () => {
+    const ctx = withDecodedTransaction(execContext(execCalldata()));
+    assert.deepEqual(withDecodedSafeExecution(ctx), {
+      ctx: {
+        ...ctx,
+        transaction: { ...ctx.transaction, to: USDC, value: "0", data: VECTOR_MESSAGE.data },
+      },
+    });
+  });
+
+  it("leaves other transactions and requests unchanged", () => {
+    for (const ctx of [
+      withDecodedTransaction(owsContext({ to: SAFE, data: `0x6a761203${execCalldata().slice(10)}` })),
+      withDecodedTransaction(owsContext({ to: SAFE, value: 1n })),
+      withDecodedTransaction(owsContext({ data: execCalldata() })),
+      withDecodedTransaction(execContext(approveHashCalldata, { scripts: [script("deny-approvals")] })),
+      safeTxContext(safeTxJson()),
+      { chain_id: "eip155:1", transaction: { raw_hex: "68656c6c6f" } },
+      {},
+    ]) {
+      assert.equal(withDecodedSafeExecution(ctx).ctx, ctx);
+    }
+  });
+});
+
+describe("run-policies dispatcher on a raw execTransaction", () => {
+  it("deny-transfers: denies an inner native transfer and allows an inner ERC-20 transfer or other call", () => {
+    const config = { scripts: [script("deny-transfers")] };
+    assert.deepEqual(dispatch(execContext(execCalldata({ to: OTHER, value: "1000000000000000000", data: "0x" }), config)), {
+      allow: false,
+      reason: "Raw native transfers are blocked by policy. Only DEX interactions allowed.",
+    });
+    assert.deepEqual(dispatch(execContext(execCalldata(), config)), { allow: true });
+    assert.deepEqual(dispatch(execContext(execCalldata({ to: OTHER, data: "0xabcdef01" }), config)), { allow: true });
+  });
+
+  it("allowlist: judges the inner recipient, not the Safe", () => {
+    const innerListed = { scripts: [script("allowlist")], allowed_addresses: [ALLOWED] };
+    const safeListed = { scripts: [script("allowlist")], allowed_addresses: [SAFE] };
+    assert.deepEqual(dispatch(execContext(execCalldata({ to: ALLOWED }), innerListed)), { allow: true });
+    assert.deepEqual(dispatch(execContext(execCalldata({ to: OTHER }), safeListed)), {
+      allow: false,
+      reason: `Recipient ${OTHER} is not in the allowlist. Only known DEX routers are permitted.`,
+    });
+  });
+
+  it("deny-approvals: denies an inner ERC-20 approve", () => {
+    const config = { scripts: [script("deny-approvals")] };
+    assert.deepEqual(dispatch(execContext(execCalldata({ data: approveCalldata }), config)), {
+      allow: false,
+      reason: "ERC-20 approval calls are blocked by policy (selector: 0x095ea7b3).",
+    });
+  });
+
+  it("denies an execTransaction it cannot read plainly, whatever scripts are configured", () => {
+    const valid = execCalldata();
+    const word = (n) => n.toString(16).padStart(64, "0");
+    const cases = [
+      ["operation 1", execCalldata({ operation: 1 }), {}, "operation is not 0"],
+      ["safeTxGas set", execCalldata({ safeTxGas: "1" }), {}, "safeTxGas is not 0"],
+      ["baseGas set", execCalldata({ baseGas: "1" }), {}, "baseGas is not 0"],
+      ["gasPrice set", execCalldata({ gasPrice: "1" }), {}, "gasPrice is not 0"],
+      ["non-zero gasToken", execCalldata({ gasToken: USDC }), {}, "gasToken is not the zero address"],
+      ["non-zero refundReceiver", execCalldata({ refundReceiver: OTHER }), {}, "refundReceiver is not the zero address"],
+      ["operation word out of uint8 range", withWord(valid, 3, word(256)), {}, "execTransaction calldata is not canonically encoded"],
+      ["data offset past the calldata", withWord(valid, 2, "f".repeat(64)), {}, "execTransaction calldata does not decode"],
+      ["truncated calldata", valid.slice(0, 200), {}, "execTransaction calldata does not decode"],
+      ["selector only", "0x6a761202", {}, "execTransaction calldata does not decode"],
+      ["to word with dirty high bits", withWord(valid, 0, "ff".repeat(12) + USDC.slice(2).toLowerCase()), {}, "execTransaction calldata is not canonically encoded"],
+      ["trailing bytes", `${valid}00`, {}, "execTransaction calldata is not canonically encoded"],
+      ["outer value", valid, { value: 1n }, "execTransaction is sent with a non-zero value"],
+      ["inner execTransaction", execCalldata({ to: OTHER, data: valid }), {}, "the inner call is itself execTransaction or approveHash"],
+      ["inner approveHash", execCalldata({ to: OTHER, data: approveHashCalldata }), {}, "the inner call is itself execTransaction or approveHash"],
+    ];
+    assert.deepEqual(dispatch(execContext(valid)), { allow: true });
+    for (const [name, calldata, tx, why] of cases) {
+      for (const config of [{ scripts: [] }, { scripts: [script("deny-approvals")] }]) {
+        assert.deepEqual(
+          dispatch(execContext(calldata, config, tx)),
+          { allow: false, reason: `SafeTx not evaluable by policy: ${why}` },
+          name
+        );
+      }
+    }
+  });
+});
+
+describe("run-policies dispatcher on a raw approveHash", () => {
+  const denial = { allow: false, reason: "SafeTx not evaluable by policy: approveHash commits to a call the policy cannot see" };
+
+  it("denies under deny-transfers and under allowlist, even with the Safe listed", () => {
+    assert.deepEqual(dispatch(execContext(approveHashCalldata, { scripts: [script("deny-transfers")] })), denial);
+    assert.deepEqual(dispatch(execContext(approveHashCalldata, { scripts: [script("allowlist")], allowed_addresses: [SAFE] })), denial);
+    assert.deepEqual(
+      dispatch(execContext(approveHashCalldata, { scripts: [script("deny-approvals"), script("deny-transfers")] })),
+      denial
+    );
+  });
+
+  it("keeps the deny-approvals-only decision", () => {
+    assert.deepEqual(dispatch(execContext(approveHashCalldata, { scripts: [script("deny-approvals")] })), { allow: true });
   });
 });
 
@@ -413,5 +545,16 @@ describe("policies at the OWS layer", () => {
       () => signSafeTx(tokens.denyTransfers, { to: OTHER, value: "1000000000000000000", data: "0x" }),
       /Raw native transfers are blocked/
     );
+  });
+
+  it("deny-transfers: denies a raw execTransaction whose inner call moves native value", () => {
+    denied(
+      () => sign(tokens.denyTransfers, { to: SAFE, data: execCalldata({ to: OTHER, value: "1000000000000000000", data: "0x" }) }),
+      /Raw native transfers are blocked/
+    );
+  });
+
+  it("allowlist: signs a raw execTransaction whose inner call goes to the only allowlisted address", () => {
+    signed(sign(tokens.allowlist, { to: SAFE, data: execCalldata({ to: ALLOWED, value: "1", data: "0x" }) }));
   });
 });

@@ -105,6 +105,17 @@ Executable policies judge the call the Safe will make:
   repeated key, an operation other than 0, a non-zero `gasPrice`, `gasToken` or
   `refundReceiver`, a `to` that is not an address, a `value` that is not a non-negative integer,
   or `data` that is not hex.
+- OWS policies judge a transaction calling a Safe's `execTransaction` by its inner call too. When
+  the executor signs `execTransaction`, the dispatcher (`withDecodedSafeExecution` in
+  `cli/policies/decode.mjs`) decodes the calldata and passes the inner `{ to, value, data }` to the
+  scripts. So an allowlist names the recipients of the Safe's calls, never the Safe itself. It
+  denies with `SafeTx not evaluable by policy: …` before any script runs when the calldata does not
+  decode or does not re-encode byte for byte. It also denies when the transaction sends value, when
+  the operation is not 0, when `safeTxGas`, `baseGas` or `gasPrice` is non-zero or `gasToken` or
+  `refundReceiver` is set, and when the inner call is itself `execTransaction` or `approveHash`.
+- A transaction calling `approveHash` is denied under any policy that runs `deny-transfers` or
+  `allowlist`, because the hash commits to a call the policy cannot read. Under `deny-approvals`
+  alone it is judged as before.
 
 ## Considered options
 
