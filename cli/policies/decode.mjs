@@ -8,10 +8,19 @@
  * that are not a transaction — is returned unchanged.
  *
  * Safe typed data (a SafeTx) is the exception: withDecodedSafeTx fills in the
- * call the Safe will execute, read from the JSON OWS signs.
+ * call the Safe will execute, read from the JSON OWS signs. For a transaction
+ * calling a Safe's `execTransaction`, withDecodedSafeExecution does the same
+ * from the calldata.
  */
 
-import { isAddress, isHex, parseTransaction, zeroAddress } from "viem";
+import { decodeFunctionData, encodeFunctionData, isAddress, isHex, parseAbi, parseTransaction, zeroAddress } from "viem";
+
+const EXEC_TRANSACTION = "0x6a761202";
+const APPROVE_HASH = "0xd4d9bdcd";
+const SAFE_EXEC_ABI = parseAbi([
+  "function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)",
+]);
+const SCRIPTS_DENYING_APPROVE_HASH = new Set(["deny-transfers.mjs", "allowlist.mjs"]);
 
 /**
  * @param {object} ctx - PolicyContext from OWS
@@ -53,10 +62,84 @@ export function withDecodedSafeTx(ctx) {
   if (ctx?.typed_data?.primary_type !== "SafeTx") return { ctx };
 
   const { call, problem } = readSafeTxCall(ctx.typed_data.raw_json);
-  if (problem) {
-    return { denial: { allow: false, reason: `SafeTx not evaluable by policy: ${problem}` } };
+  if (problem) return notEvaluable(problem);
+  return { ctx: { ...ctx, transaction: { ...ctx.transaction, ...call } } };
+}
+
+/**
+ * A transaction calling `execTransaction` is judged by the call the Safe will
+ * execute; one that cannot be read plainly is denied, and so is `approveHash`
+ * under a policy that judges recipients or value.
+ *
+ * @param {object} ctx - PolicyContext, after withDecodedTransaction
+ * @returns {{ ctx: object } | { denial: { allow: false, reason: string } }}
+ */
+export function withDecodedSafeExecution(ctx) {
+  const selector = callSelector(ctx?.transaction);
+  if (selector === APPROVE_HASH) {
+    return judgesRecipientOrValue(ctx.policy_config)
+      ? notEvaluable("approveHash commits to a call the policy cannot see")
+      : { ctx };
+  }
+  if (selector !== EXEC_TRANSACTION) return { ctx };
+
+  const { call, problem } = readExecTransactionCall(ctx.transaction);
+  if (problem) return notEvaluable(problem);
+  const innerSelector = callSelector(call);
+  if (innerSelector === EXEC_TRANSACTION || innerSelector === APPROVE_HASH) {
+    return notEvaluable("the inner call is itself execTransaction or approveHash");
   }
   return { ctx: { ...ctx, transaction: { ...ctx.transaction, ...call } } };
+}
+
+function notEvaluable(problem) {
+  return { denial: { allow: false, reason: `SafeTx not evaluable by policy: ${problem}` } };
+}
+
+function callSelector(tx) {
+  if (!tx?.to || typeof tx.data !== "string") return null;
+  return tx.data.slice(0, 10).toLowerCase();
+}
+
+function judgesRecipientOrValue(policyConfig) {
+  const scripts = Array.isArray(policyConfig?.scripts) ? policyConfig.scripts : [];
+  return scripts.some((script) => SCRIPTS_DENYING_APPROVE_HASH.has(String(script).split(/[\\/]/).pop()));
+}
+
+function readExecTransactionCall(tx) {
+  if (!isZeroUint(tx.value)) return { problem: "execTransaction is sent with a non-zero value" };
+  let args;
+  try {
+    ({ args } = decodeFunctionData({ abi: SAFE_EXEC_ABI, data: tx.data }));
+  } catch {
+    return { problem: "execTransaction calldata does not decode" };
+  }
+  if (reencodedExecTransaction(args) !== tx.data.toLowerCase()) {
+    return { problem: "execTransaction calldata is not canonically encoded" };
+  }
+  const [to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver] = args;
+  const problem =
+    executionProblem({ operation, gasPrice, gasToken, refundReceiver }) ??
+    (isZeroUint(safeTxGas) ? null : "safeTxGas is not 0") ??
+    (isZeroUint(baseGas) ? null : "baseGas is not 0");
+  if (problem) return { problem };
+  return { call: { to, value: value.toString(), data } };
+}
+
+function reencodedExecTransaction(args) {
+  try {
+    return encodeFunctionData({ abi: SAFE_EXEC_ABI, functionName: "execTransaction", args });
+  } catch {
+    return null;
+  }
+}
+
+function executionProblem({ operation, gasPrice, gasToken, refundReceiver }) {
+  if (!isZeroUint(operation)) return "operation is not 0";
+  if (!isZeroUint(gasPrice)) return "gasPrice is not 0";
+  if (!isZeroAddress(gasToken)) return "gasToken is not the zero address";
+  if (!isZeroAddress(refundReceiver)) return "refundReceiver is not the zero address";
+  return null;
 }
 
 function readSafeTxCall(rawJson) {
@@ -75,10 +158,8 @@ function readSafeTxCall(rawJson) {
   const repeated = firstRepeatedKey(rawJson);
   if (repeated !== null) return { problem: `raw_json repeats the key "${repeated}"` };
 
-  if (!isZeroUint(message.operation)) return { problem: "operation is not 0" };
-  if (!isZeroUint(message.gasPrice)) return { problem: "gasPrice is not 0" };
-  if (!isZeroAddress(message.gasToken)) return { problem: "gasToken is not the zero address" };
-  if (!isZeroAddress(message.refundReceiver)) return { problem: "refundReceiver is not the zero address" };
+  const problem = executionProblem(message);
+  if (problem) return { problem };
   if (typeof message.to !== "string" || !isAddress(message.to, { strict: false })) {
     return { problem: "to is not an address" };
   }
@@ -90,6 +171,7 @@ function readSafeTxCall(rawJson) {
 }
 
 function isUint(value) {
+  if (typeof value === "bigint") return value >= 0n;
   if (typeof value === "number") return Number.isSafeInteger(value) && value >= 0;
   return typeof value === "string" && /^[0-9]+$/.test(value);
 }
