@@ -1,7 +1,7 @@
 import * as ows from "../../utils/wallet/keystore.js";
 import { print, printError } from "../../utils/common/output.js";
 import { resolveAddress } from "../../utils/wallet/resolve.js";
-import { getReadonly } from "../../utils/wallet/readonly.js";
+import { getReadonly, listReadonly } from "../../utils/wallet/readonly.js";
 import { getWalletOrigin, getWalletAddresses } from "../../utils/config.js";
 import { isEvmAddress } from "../../utils/chain/address.js";
 import { isSolana } from "../../utils/chain/registry.js";
@@ -14,7 +14,7 @@ import { getSafeChainInfo } from "../../utils/safe/chain-info.js";
 
 const PROBE_CONCURRENCY = 8;
 const PROBE_TIMEOUT_MS = 10_000;
-const USAGE = "zerion wallet add-safe <address> --name <name> --signer <wallet>[,<wallet>…] [--executor <wallet>] [--chains <a,b>]";
+const USAGE = "zerion wallet add-safe <address> --name <name> [--signer <wallet>[,<wallet>…]] [--executor <wallet>] [--chains <a,b>]";
 
 function fail(code, message, details) {
   printError(code, message, details);
@@ -39,6 +39,31 @@ function evmAddressOf(walletName) {
   if (ro) return isEvmAddress(ro.address) ? ro.address : null;
   if (!isKeystoreWallet(walletName)) return null;
   return getWalletAddresses(ows.getWallet(walletName), getWalletOrigin(walletName)).evmAddress || null;
+}
+
+function localEvmWallets() {
+  const names = [...ows.listWallets().map((w) => w.name), ...listReadonly().map((r) => r.name)];
+  return names.map((walletName) => ({ walletName, address: evmAddressOf(walletName) })).filter((w) => w.address);
+}
+
+function detectSigner(address, chains, skipped) {
+  const owners = new Set(Object.values(chains).flatMap((cache) => cache.owners.map((o) => o.toLowerCase())));
+  const candidates = localEvmWallets().filter((w) => owners.has(w.address.toLowerCase()));
+  if (candidates.length > 1) {
+    const names = candidates.map((c) => c.walletName);
+    fail("safe_signer_ambiguous", `Several local wallets own ${address}: ${names.join(", ")}. Nothing saved.`, {
+      candidates: names,
+      skipped,
+      suggestion: `Re-run with --signer <wallet>[,<wallet>…], e.g. --signer ${names[0]}`,
+    });
+  }
+  if (candidates.length === 1) {
+    const [signer] = candidates;
+    process.stderr.write(
+      `Signer: "${signer.walletName}" (${signer.address}) owns the Safe, so it is the signer. Pass --signer to choose others.\n`,
+    );
+  }
+  return candidates;
 }
 
 function withTimeout(promise, ms) {
@@ -114,17 +139,18 @@ async function targetChains(flags) {
 }
 
 /**
- * zerion wallet add-safe <address> --name <name> --signer <wallet>[,…] [--executor <wallet>] [--chains a,b]
+ * zerion wallet add-safe <address> --name <name> [--signer <wallet>[,…]] [--executor <wallet>] [--chains a,b]
  */
 export default async function walletAddSafe(args, flags) {
   const input = args[0];
   const name = typeof flags.name === "string" ? flags.name : undefined;
+  const signerGiven = flags.signer !== undefined;
   const signerNames = splitList(flags.signer);
   const executorName = typeof flags.executor === "string" ? flags.executor : null;
 
   if (!input) fail("missing_args", `Usage: ${USAGE}`);
   if (!name) fail("missing_name", "A --name is required for the Safe wallet.", { example: USAGE });
-  if (signerNames.length === 0) fail("missing_signer", "At least one --signer wallet is required.", { example: USAGE });
+  if (signerGiven && signerNames.length === 0) fail("missing_signer", "At least one --signer wallet is required.", { example: USAGE });
 
   if (isKeystoreWallet(name) || getReadonly(name)) {
     fail("name_in_use", `A wallet named "${name}" already exists.`, {
@@ -153,10 +179,10 @@ export default async function walletAddSafe(args, flags) {
     });
   }
 
-  const signers = signerNames.map((walletName) => ({ walletName, address: evmAddressOf(walletName) }));
+  const namedSigners = signerNames.map((walletName) => ({ walletName, address: evmAddressOf(walletName) }));
   const executorAddress = executorName ? evmAddressOf(executorName) : null;
   const missing = [
-    ...signers.filter((s) => !s.address).map((s) => s.walletName),
+    ...namedSigners.filter((s) => !s.address).map((s) => s.walletName),
     ...(executorName && !executorAddress ? [executorName] : []),
   ];
   if (missing.length > 0) {
@@ -170,22 +196,11 @@ export default async function walletAddSafe(args, flags) {
 
   const chains = {};
   const skipped = [];
-  let anySignerOwns = false;
   for (const result of results) {
     if (result.skipped) {
       skipped.push({ chain: result.chain, reason: result.skipped });
-      continue;
-    }
-    chains[result.chain] = result.cache;
-    const owners = new Set(result.cache.owners.map((o) => o.toLowerCase()));
-    for (const signer of signers) {
-      if (owners.has(signer.address.toLowerCase())) {
-        anySignerOwns = true;
-      } else {
-        process.stderr.write(
-          `Warning: signer "${signer.walletName}" (${signer.address}) is not an owner of the Safe on ${result.chain}.\n`,
-        );
-      }
+    } else {
+      chains[result.chain] = result.cache;
     }
   }
 
@@ -193,13 +208,32 @@ export default async function walletAddSafe(args, flags) {
     const { code, message } = noReadableChain(address, skipped);
     fail(code, message, { skipped });
   }
+
+  const signers = signerGiven ? namedSigners : detectSigner(address, chains, skipped);
+  let anySignerOwns = false;
+  for (const [chain, cache] of Object.entries(chains)) {
+    const owners = new Set(cache.owners.map((o) => o.toLowerCase()));
+    for (const signer of signers) {
+      if (owners.has(signer.address.toLowerCase())) {
+        anySignerOwns = true;
+      } else {
+        process.stderr.write(
+          `Warning: signer "${signer.walletName}" (${signer.address}) is not an owner of the Safe on ${chain}.\n`,
+        );
+      }
+    }
+  }
+
   if (!anySignerOwns) {
-    fail("safe_signer_not_owner", `No --signer is an owner of ${address} on any chain that could be read; nothing saved.`, {
+    const message = signerGiven
+      ? `No --signer is an owner of ${address} on any chain that could be read; nothing saved.`
+      : `No local EVM keystore or read-only wallet is an owner of ${address} on any chain that could be read; nothing saved.`;
+    fail("safe_signer_not_owner", message, {
       signers: signers.map((s) => s.address),
       skipped,
     });
   }
 
-  addSafe({ name, address, signers: signerNames, executor: executorName, chains });
+  addSafe({ name, address, signers: signers.map((s) => s.walletName), executor: executorName, chains });
   print({ safe: getSafe(name), skipped });
 }
